@@ -3,43 +3,32 @@ const allowedUsers = [
   "sarahduatorrss@gmail.com"
 ];
 
-export default async function handler(request) {
+export default async function handler(req, res) {
 
-  if (request.method === "GET") {
-    return new Response(JSON.stringify({ status: "login endpoint alive" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+  if (req.method === "GET") {
+    return res.status(200).json({ status: "login endpoint alive" });
   }
 
-  if (request.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  let body;
-
-  try {
-    body = await request.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  let { email } = body;
+  const { email } = req.body;
 
   if (!email) {
-    return new Response(JSON.stringify({ error: "Email required" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return res.status(400).json({ error: "Email required" });
   }
 
-  email = email.trim().toLowerCase();
+  const cleanEmail = email.trim().toLowerCase();
 
-  if (!allowedUsers.includes(email)) {
-    return new Respo
+  if (!allowedUsers.includes(cleanEmail)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  res.setHeader(
+    "Set-Cookie",
+    `session=${cleanEmail}; HttpOnly; Path=/; Secure; SameSite=Strict`
+  );
+
+  return res.status(200).json({ success: true, email: cleanEmail });
+}
