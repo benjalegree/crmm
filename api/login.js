@@ -11,7 +11,17 @@ export default async function handler(request) {
     });
   }
 
-  const { email } = await request.json();
+  let { email } = await request.json();
+
+  if (!email) {
+    return new Response(JSON.stringify({ error: "Email required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Normalizamos el email
+  email = email.trim().toLowerCase();
 
   if (!allowedUsers.includes(email)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
