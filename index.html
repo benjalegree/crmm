@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>CRM MVP</title>
+  <meta charset="UTF-8">
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -67,18 +68,18 @@
 
 <script>
   const allowedUsers = [
-    "tuemail@dominio.com",
-    "emailcompañera@dominio.com"
+    "benjamin.alegre@psicofunnel.com",
+    "sarah@gmail.com"
   ];
 
-  const AIRTABLE_TOKEN = "PEGA_AQUI_TU_TOKEN_NUEVO";
-  const BASE_ID = "PEGA_AQUI_TU_BASE_ID";
-  const TABLE_NAME = "COMPANIES";
+  const AIRTABLE_TOKEN = "patLaMGyhphOgZpzU";
+  const BASE_ID = "appc1oiXDnnyrZ5v8";
+  const TABLE_NAME = "crm";
 
   let currentUser = null;
 
   function login() {
-    const email = document.getElementById("email").value;
+    const email = document.getElementById("email").value.trim();
 
     if (!allowedUsers.includes(email)) {
       document.getElementById("error").innerText = "Acceso no permitido";
@@ -99,30 +100,43 @@
   async function loadCompanies() {
     const filterFormula = `{Responsible Email}='${currentUser}'`;
 
-    const response = await fetch(
-      `https://api.airtable.com/v0/${BASE_ID}/${TABLE_NAME}?filterByFormula=${encodeURIComponent(filterFormula)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${AIRTABLE_TOKEN}`
+    try {
+      const response = await fetch(
+        `https://api.airtable.com/v0/${BASE_ID}/${TABLE_NAME}?filterByFormula=${encodeURIComponent(filterFormula)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_TOKEN}`
+          }
         }
+      );
+
+      const data = await response.json();
+
+      const tableBody = document.getElementById("companiesTable");
+      tableBody.innerHTML = "";
+
+      if (!data.records) {
+        tableBody.innerHTML = "<tr><td colspan='4'>Error cargando datos</td></tr>";
+        return;
       }
-    );
 
-    const data = await response.json();
-    const tableBody = document.getElementById("companiesTable");
-    tableBody.innerHTML = "";
+      data.records.forEach(record => {
+        const row = `
+          <tr>
+            <td>${record.fields["Company Name"] || ""}</td>
+            <td>${record.fields["Industry"] || ""}</td>
+            <td>${record.fields["Status"] || ""}</td>
+            <td>${record.fields["Country"] || ""}</td>
+          </tr>
+        `;
+        tableBody.innerHTML += row;
+      });
 
-    data.records.forEach(record => {
-      const row = `
-        <tr>
-          <td>${record.fields["Company Name"] || ""}</td>
-          <td>${record.fields["Industry"] || ""}</td>
-          <td>${record.fields["Status"] || ""}</td>
-          <td>${record.fields["Country"] || ""}</td>
-        </tr>
-      `;
-      tableBody.innerHTML += row;
-    });
+    } catch (error) {
+      console.error(error);
+      document.getElementById("companiesTable").innerHTML =
+        "<tr><td colspan='4'>Error de conexión</td></tr>";
+    }
   }
 </script>
 
