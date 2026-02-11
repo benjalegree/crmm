@@ -1,17 +1,14 @@
-export default async function handler(request) {
-  const cookie = request.headers.get("cookie");
+export default async function handler(req, res) {
+
+  const cookie = req.headers.cookie;
 
   if (!cookie || !cookie.includes("session=")) {
-    return new Response(JSON.stringify({ error: "Not authenticated" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const email = cookie.split("session=")[1];
+  const email = cookie
+    .split("session=")[1]
+    .split(";")[0];
 
-  return new Response(JSON.stringify({ email }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  return res.status(200).json({ email });
 }
