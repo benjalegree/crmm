@@ -25,10 +25,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  res.setHeader(
-    "Set-Cookie",
-    `session=${cleanEmail}; HttpOnly; Path=/; Secure; SameSite=Strict`
-  );
+res.setHeader(
+  "Set-Cookie",
+  `session=${cleanEmail}; HttpOnly; Path=/; SameSite=Lax`
+);
 
   return res.status(200).json({ success: true, email: cleanEmail });
 }
