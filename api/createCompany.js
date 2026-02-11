@@ -1,9 +1,6 @@
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  const { name, industry, country, responsibleEmail } = req.body;
+export async function POST(request) {
+  const body = await request.json();
+  const { name, industry, country, responsibleEmail } = body;
 
   const response = await fetch(
     `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Companies`,
@@ -31,5 +28,8 @@ export default async function handler(req, res) {
 
   const data = await response.json();
 
-  res.status(200).json(data);
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
