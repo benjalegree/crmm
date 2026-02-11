@@ -16,13 +16,17 @@ async function login() {
   const res = await fetch("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    credentials: "include",
+    body: JSON.stringify({ email })
   });
 
-  if (res.status === 200) {
+  const data = await res.json();
+
+  if (res.status === 200 && data.success) {
     window.location.href = "/dashboard.html";
   } else {
-    document.getElementById("msg").innerText = "No autorizado";
+    document.getElementById("msg").innerText =
+      data.error || "Error";
   }
 }
 </script>
