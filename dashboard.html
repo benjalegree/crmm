@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>CRM Dashboard</h1>
+<p id="user"></p>
+
+<script>
+async function checkAuth() {
+  const res = await fetch("/api/me");
+
+  if (res.status !== 200) {
+    window.location.href = "/login.html";
+    return;
+  }
+
+  const data = await res.json();
+  document.getElementById("user").innerText =
+    "Logueado como: " + data.email;
+}
+
+checkAuth();
+</script>
+
+</body>
+</html>
