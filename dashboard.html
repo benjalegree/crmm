@@ -7,7 +7,9 @@
 
 <script>
 async function checkAuth() {
-  const res = await fetch("/api/me");
+  const res = await fetch("/api/me", {
+    credentials: "include"
+  });
 
   if (res.status !== 200) {
     window.location.href = "/login.html";
