@@ -1,143 +1,30 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>CRM MVP</title>
-  <meta charset="UTF-8">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f7fa;
-      padding: 40px;
-    }
-    .login, .dashboard {
-      max-width: 900px;
-      margin: auto;
-    }
-    input {
-      padding: 10px;
-      margin: 10px 0;
-      width: 100%;
-    }
-    button {
-      padding: 10px 20px;
-      background: #1e293b;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    table {
-      width: 100%;
-      margin-top: 20px;
-      border-collapse: collapse;
-      background: white;
-    }
-    th, td {
-      padding: 12px;
-      border: 1px solid #ddd;
-      text-align: left;
-    }
-    th {
-      background: #e2e8f0;
-    }
-  </style>
-</head>
 <body>
 
-<div class="login" id="loginBox">
-  <h2>CRM Login</h2>
-  <input type="email" id="email" placeholder="Tu email">
-  <button onclick="login()">Entrar</button>
-  <p id="error" style="color:red;"></p>
-</div>
+<h1>Crear Empresa</h1>
 
-<div class="dashboard" id="dashboard" style="display:none;">
-  <h2>Mis Empresas</h2>
-  <button onclick="logout()">Cerrar sesión</button>
-  <table>
-    <thead>
-      <tr>
-        <th>Empresa</th>
-        <th>Industria</th>
-        <th>Status</th>
-        <th>País</th>
-      </tr>
-    </thead>
-    <tbody id="companiesTable"></tbody>
-  </table>
-</div>
+<input id="name" placeholder="Company Name">
+<input id="industry" placeholder="Industry">
+<input id="country" placeholder="Country">
+<input id="email" placeholder="Responsible Email">
+<button onclick="createCompany()">Guardar</button>
 
 <script>
-  const allowedUsers = [
-    "benjamin.alegre@psicofunnel.com",
-    "sarah@gmail.com"
-  ];
+async function createCompany() {
+  await fetch("/api/createCompany", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: document.getElementById("name").value,
+      industry: document.getElementById("industry").value,
+      country: document.getElementById("country").value,
+      responsibleEmail: document.getElementById("email").value,
+    }),
+  });
 
-  const AIRTABLE_TOKEN = "patLaMGyhphOgZpzU";
-  const BASE_ID = "appc1oiXDnnyrZ5v8";
-  const TABLE_NAME = "crm";
-
-  let currentUser = null;
-
-  function login() {
-    const email = document.getElementById("email").value.trim();
-
-    if (!allowedUsers.includes(email)) {
-      document.getElementById("error").innerText = "Acceso no permitido";
-      return;
-    }
-
-    currentUser = email;
-    document.getElementById("loginBox").style.display = "none";
-    document.getElementById("dashboard").style.display = "block";
-
-    loadCompanies();
-  }
-
-  function logout() {
-    location.reload();
-  }
-
-  async function loadCompanies() {
-    const filterFormula = `{Responsible Email}='${currentUser}'`;
-
-    try {
-      const response = await fetch(
-        `https://api.airtable.com/v0/${BASE_ID}/${TABLE_NAME}?filterByFormula=${encodeURIComponent(filterFormula)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${AIRTABLE_TOKEN}`
-          }
-        }
-      );
-
-      const data = await response.json();
-
-      const tableBody = document.getElementById("companiesTable");
-      tableBody.innerHTML = "";
-
-      if (!data.records) {
-        tableBody.innerHTML = "<tr><td colspan='4'>Error cargando datos</td></tr>";
-        return;
-      }
-
-      data.records.forEach(record => {
-        const row = `
-          <tr>
-            <td>${record.fields["Company Name"] || ""}</td>
-            <td>${record.fields["Industry"] || ""}</td>
-            <td>${record.fields["Status"] || ""}</td>
-            <td>${record.fields["Country"] || ""}</td>
-          </tr>
-        `;
-        tableBody.innerHTML += row;
-      });
-
-    } catch (error) {
-      console.error(error);
-      document.getElementById("companiesTable").innerHTML =
-        "<tr><td colspan='4'>Error de conexión</td></tr>";
-    }
-  }
+  alert("Empresa creada");
+}
 </script>
 
 </body>
