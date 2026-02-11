@@ -1,5 +1,6 @@
-export default async function handler(req, res) {
-  const { email } = req.query;
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const email = searchParams.get("email");
 
   const formula = `{Responsible Email}="${email}"`;
 
@@ -14,5 +15,8 @@ export default async function handler(req, res) {
 
   const data = await response.json();
 
-  res.status(200).json(data);
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
