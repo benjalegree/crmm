@@ -28,12 +28,14 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    const sorted = (data.records || []).sort((a, b) =>
+    const records = data.records || [];
+
+    records.sort((a, b) =>
       new Date(b.fields["Activity Date"]) -
       new Date(a.fields["Activity Date"])
     );
 
-    return res.status(200).json({ records: sorted });
+    return res.status(200).json({ records });
 
   } catch (err) {
     return res.status(500).json({ error: "Server error" });
