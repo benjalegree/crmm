@@ -7,6 +7,7 @@ import Companies from "./pages/Companies"
 import CompanyProfile from "./pages/CompanyProfile"
 import Leads from "./pages/Leads"
 import LeadProfile from "./pages/LeadProfile"
+import Pipeline from "./pages/Pipeline"
 
 export default function App() {
   return (
@@ -22,6 +23,8 @@ export default function App() {
 
         <Route path="/leads" element={<Layout><Leads /></Layout>} />
         <Route path="/leads/:id" element={<Layout><LeadProfile /></Layout>} />
+
+        <Route path="/pipeline" element={<Layout><Pipeline /></Layout>} />
 
       </Routes>
     </BrowserRouter>
