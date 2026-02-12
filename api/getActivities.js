@@ -6,12 +6,6 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const email = cookie
-    .split("session=")[1]
-    ?.split(";")[0]
-    ?.trim()
-    ?.toLowerCase();
-
   const url = new URL(req.url, `http://${req.headers.host}`);
   const contactId = url.searchParams.get("contactId");
 
@@ -21,7 +15,7 @@ export default async function handler(req, res) {
 
   try {
 
-    const formula = `AND({Related Contact}='${contactId}', {Owner Email}='${email}')`;
+    const formula = `FIND("${contactId}", ARRAYJOIN({Related Contact}))`;
 
     const response = await fetch(
       `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
@@ -34,7 +28,7 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    const sorted = data.records.sort((a, b) =>
+    const sorted = (data.records || []).sort((a, b) =>
       new Date(b.fields["Activity Date"]) -
       new Date(a.fields["Activity Date"])
     );
