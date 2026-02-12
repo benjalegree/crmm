@@ -4,16 +4,17 @@ import Layout from "./layout/Layout"
 import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
 import Companies from "./pages/Companies"
+import CompanyProfile from "./pages/CompanyProfile"
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* Login público */}
+        {/* Login */}
         <Route path="/" element={<Login />} />
 
-        {/* Dashboard / Overview */}
+        {/* Overview */}
         <Route
           path="/dashboard"
           element={
@@ -23,12 +24,22 @@ export default function App() {
           }
         />
 
-        {/* Companies */}
+        {/* Companies List */}
         <Route
           path="/companies"
           element={
             <Layout>
               <Companies />
+            </Layout>
+          }
+        />
+
+        {/* Company Profile */}
+        <Route
+          path="/companies/:id"
+          element={
+            <Layout>
+              <CompanyProfile />
             </Layout>
           }
         />
