@@ -6,6 +6,12 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
+  const email = cookie
+    .split("session=")[1]
+    ?.split(";")[0]
+    ?.trim()
+    ?.toLowerCase();
+
   const url = new URL(req.url, `http://${req.headers.host}`);
   const contactId = url.searchParams.get("contactId");
 
@@ -15,7 +21,8 @@ export default async function handler(req, res) {
 
   try {
 
-    const formula = `{Contact ID Lookup}='${contactId}'`;
+    // Traemos solo actividades del usuario
+    const formula = `{Owner Email}='${email}'`;
 
     const response = await fetch(
       `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
@@ -28,7 +35,13 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    const records = (data.records || []).sort((a, b) =>
+    // Filtramos en backend por contacto vinculado
+    const records = (data.records || []).filter(record => {
+      const related = record.fields["Related Contact"] || [];
+      return related.includes(contactId);
+    });
+
+    records.sort((a, b) =>
       new Date(b.fields["Activity Date"] || 0) -
       new Date(a.fields["Activity Date"] || 0)
     );
