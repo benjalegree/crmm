@@ -1,105 +1,104 @@
-import { useParams } from "react-router-dom"
 import { useEffect, useState } from "react"
+import { useParams } from "react-router-dom"
 
 export default function CompanyProfile() {
+
   const { id } = useParams()
   const [company, setCompany] = useState(null)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const load = async () => {
-      const res = await fetch(`/api/getCompany?id=${id}`, {
-        credentials: "include"
-      })
-      const data = await res.json()
-      setCompany(data)
-    }
-
-    load()
+    loadCompany()
   }, [id])
 
-  if (!company) return <p>Loading...</p>
+  const loadCompany = async () => {
+    const res = await fetch(`/api/crm?action=getCompany&id=${id}`, {
+      credentials: "include"
+    })
+
+    const data = await res.json()
+    setCompany(data)
+  }
+
+  const updateField = (field, value) => {
+    setCompany(prev => ({
+      ...prev,
+      fields: {
+        ...prev.fields,
+        [field]: value
+      }
+    }))
+  }
+
+  const saveChanges = async () => {
+
+    setLoading(true)
+
+    await fetch("/api/crm?action=updateCompany", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        id,
+        fields: {
+          "Company Name": company.fields["Company Name"],
+          Industry: company.fields.Industry,
+          Country: company.fields.Country,
+          Status: company.fields.Status,
+          "Responsible Email": company.fields["Responsible Email"]
+        }
+      })
+    })
+
+    setLoading(false)
+  }
+
+  if (!company) return <div>Loading...</div>
+
+  const f = company.fields
 
   return (
     <div>
-      <h1>{company.fields["Company Name"]}</h1>
+      <h1>{f["Company Name"]}</h1>
 
       <div style={card}>
-        <EditableField label="Industry" field="Industry" company={company} />
-        <EditableField label="Country" field="Country" company={company} />
-        <EditableStatus company={company} />
+
+        <label>Industry</label>
+        <input
+          value={f.Industry || ""}
+          onChange={e => updateField("Industry", e.target.value)}
+        />
+
+        <label>Country</label>
+        <input
+          value={f.Country || ""}
+          onChange={e => updateField("Country", e.target.value)}
+        />
+
+        <label>Status</label>
+        <select
+          value={f.Status || ""}
+          onChange={e => updateField("Status", e.target.value)}
+        >
+          <option>New</option>
+          <option>Contacted</option>
+          <option>Replied</option>
+          <option>Meeting Booked</option>
+          <option>Closed Won</option>
+          <option>Closed Lost</option>
+        </select>
+
+        <label>Responsible Email</label>
+        <input
+          value={f["Responsible Email"] || ""}
+          onChange={e => updateField("Responsible Email", e.target.value)}
+        />
+
+        <button onClick={saveChanges} disabled={loading}>
+          {loading ? "Saving..." : "Save Changes"}
+        </button>
+
       </div>
-    </div>
-  )
-}
-
-function EditableField({ label, field, company }) {
-  const [value, setValue] = useState(company.fields[field])
-
-  const save = async () => {
-    await fetch("/api/updateCompany", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        id: company.id,
-        field,
-        value
-      })
-    })
-  }
-
-  return (
-    <div style={row}>
-      <label>{label}</label>
-      <input
-        value={value || ""}
-        onChange={e => setValue(e.target.value)}
-        onBlur={save}
-        style={input}
-      />
-    </div>
-  )
-}
-
-function EditableStatus({ company }) {
-  const [status, setStatus] = useState(company.fields.Status)
-
-  const save = async (newStatus) => {
-    setStatus(newStatus)
-
-    await fetch("/api/updateCompany", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        id: company.id,
-        field: "Status",
-        value: newStatus
-      })
-    })
-  }
-
-  const options = [
-    "New",
-    "Contacted",
-    "Replied",
-    "Meeting Booked",
-    "Closed Won",
-    "Closed Lost"
-  ]
-
-  return (
-    <div style={row}>
-      <label>Status</label>
-      <select
-        value={status}
-        onChange={e => save(e.target.value)}
-        style={input}
-      >
-        {options.map(opt => (
-          <option key={opt}>{opt}</option>
-        ))}
-      </select>
     </div>
   )
 }
@@ -107,20 +106,10 @@ function EditableStatus({ company }) {
 const card = {
   marginTop: "30px",
   background: "#fff",
-  padding: "30px",
   borderRadius: "20px",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.05)"
-}
-
-const row = {
-  marginBottom: "20px",
+  padding: "30px",
   display: "flex",
-  flexDirection: "column"
-}
-
-const input = {
-  marginTop: "8px",
-  padding: "10px",
-  borderRadius: "10px",
-  border: "1px solid #ddd"
+  flexDirection: "column",
+  gap: "15px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.05)"
 }
