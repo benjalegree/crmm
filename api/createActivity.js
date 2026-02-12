@@ -20,15 +20,17 @@ export default async function handler(req, res) {
 
   try {
 
+    const cleanType = type.trim();
+
     const fields = {
-      "Activity Type": type,
+      "Activity Type": cleanType,
       "Related Contact": [contactId],
-      "Activity Date": new Date().toISOString(),
       "Owner Email": email,
-      "Notes": notes || ""
+      "Notes": notes ? notes.trim() : "",
+      "Activity Date": new Date().toISOString().split("T")[0]
     };
 
-    const airtableRes = await fetch(
+    const response = await fetch(
       `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Activities`,
       {
         method: "POST",
@@ -40,15 +42,11 @@ export default async function handler(req, res) {
       }
     );
 
-    const data = await airtableRes.json();
+    const data = await response.json();
 
-    if (!airtableRes.ok) {
-      return res.status(400).json(data);
-    }
-
-    return res.status(200).json(data);
+    return res.status(response.status).json(data);
 
   } catch (err) {
-    return res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: err.message });
   }
 }
