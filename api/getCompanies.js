@@ -1,6 +1,14 @@
-export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const email = searchParams.get("email");
+export default async function handler(req, res) {
+
+  const cookie = req.headers.cookie;
+
+  if (!cookie || !cookie.includes("session=")) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const email = cookie
+    .split("session=")[1]
+    .split(";")[0];
 
   const formula = `{Responsible Email}="${email}"`;
 
@@ -15,8 +23,5 @@ export async function GET(request) {
 
   const data = await response.json();
 
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  res.status(200).json(data);
 }
