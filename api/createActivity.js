@@ -32,7 +32,7 @@ export default async function handler(req, res) {
           fields: {
             "Activity Type": type,
             "Related Contact": [contactId],
-            "Related Company": companyId ? [companyId] : undefined,
+            "Related Company": companyId ? [companyId] : [],
             "Activity Date": new Date().toISOString(),
             "Owner Email": email,
             "Notes": notes || ""
