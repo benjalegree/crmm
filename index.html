@@ -1,31 +1,12 @@
 <!DOCTYPE html>
 <html>
-<body>
-
-<h1>Crear Empresa</h1>
-
-<input id="name" placeholder="Company Name">
-<input id="industry" placeholder="Industry">
-<input id="country" placeholder="Country">
-<input id="email" placeholder="Responsible Email">
-<button onclick="createCompany()">Guardar</button>
-
-<script>
-async function createCompany() {
-  await fetch("/api/createCompany", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: document.getElementById("name").value,
-      industry: document.getElementById("industry").value,
-      country: document.getElementById("country").value,
-      responsibleEmail: document.getElementById("email").value,
-    }),
-  });
-
-  alert("Empresa creada");
-}
-</script>
-
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>PsicoFunnel CRM</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script type="module" src="/src/main.jsx"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>
