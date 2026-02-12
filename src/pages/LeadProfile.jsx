@@ -8,6 +8,7 @@ export default function LeadProfile() {
   const [activities, setActivities] = useState([])
   const [newActivity, setNewActivity] = useState("")
   const [type, setType] = useState("Call")
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     loadLead()
@@ -28,6 +29,25 @@ export default function LeadProfile() {
     })
     const data = await res.json()
     setActivities(data.records || [])
+  }
+
+  const saveLead = async () => {
+    setSaving(true)
+
+    await fetch("/api/updateContact", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        id,
+        fields: {
+          Status: lead.fields.Status,
+          Notes: lead.fields.Notes
+        }
+      })
+    })
+
+    setSaving(false)
   }
 
   const addActivity = async () => {
@@ -54,12 +74,38 @@ export default function LeadProfile() {
 
   return (
     <div>
+
       <h1>{f["Full Name"]}</h1>
 
       <div style={card}>
-        <p><strong>Email:</strong> {f.Email}</p>
-        <p><strong>Position:</strong> {f.Position}</p>
-        <p><strong>Company:</strong> {f.Company}</p>
+
+        <label>Status</label>
+        <select
+          value={f.Status || ""}
+          onChange={e => setLead(prev => ({
+            ...prev,
+            fields: { ...prev.fields, Status: e.target.value }
+          }))}
+        >
+          <option>Not Contacted</option>
+          <option>Contacted</option>
+          <option>Replied</option>
+          <option>Meeting Booked</option>
+        </select>
+
+        <label>Permanent Notes</label>
+        <textarea
+          value={f.Notes || ""}
+          onChange={e => setLead(prev => ({
+            ...prev,
+            fields: { ...prev.fields, Notes: e.target.value }
+          }))}
+        />
+
+        <button onClick={saveLead}>
+          {saving ? "Saving..." : "Save Lead"}
+        </button>
+
       </div>
 
       <h2 style={{marginTop:"40px"}}>Activity Timeline</h2>
@@ -73,12 +119,12 @@ export default function LeadProfile() {
         </select>
 
         <input
-          placeholder="Add notes..."
+          placeholder="Activity notes..."
           value={newActivity}
           onChange={e => setNewActivity(e.target.value)}
         />
 
-        <button onClick={addActivity}>Add</button>
+        <button onClick={addActivity}>Add Activity</button>
       </div>
 
       {activities.map(a => (
@@ -97,7 +143,10 @@ const card = {
   background: "#fff",
   padding: "20px",
   borderRadius: "16px",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.05)"
+  boxShadow: "0 8px 20px rgba(0,0,0,0.05)",
+  display: "flex",
+  flexDirection: "column",
+  gap: "15px"
 }
 
 const activityBox = {
