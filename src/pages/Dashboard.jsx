@@ -1,66 +1,109 @@
 import { useEffect, useState } from "react"
 
 export default function Dashboard() {
-  const [user, setUser] = useState(null)
-  const [companies, setCompanies] = useState([])
+
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const init = async () => {
+    loadStats()
+  }, [])
 
-      const auth = await fetch("/api/me", {
-        credentials: "include"
-      })
-
-      if (auth.status !== 200) {
-        window.location.href = "/"
-        return
-      }
-
-      const userData = await auth.json()
-      setUser(userData.email)
-
-      const res = await fetch("/api/getCompanies", {
+  const loadStats = async () => {
+    try {
+      const res = await fetch("/api/getDashboardStats", {
         credentials: "include"
       })
 
       const data = await res.json()
-      setCompanies(data.records || [])
-    }
+      setStats(data)
+      setLoading(false)
 
-    init()
-  }, [])
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
+  }
+
+  if (loading) return <div>Loading dashboard...</div>
+  if (!stats) return <div>Error loading dashboard</div>
 
   return (
     <div>
-      <h1>Overview</h1>
-      <p>Logueado como: {user}</p>
+      <h1 style={title}>Dashboard</h1>
 
       <div style={grid}>
-        <Card title="Total Companies" value={companies.length} />
+
+        <Card label="Total Leads" value={stats.totalLeads} />
+        <Card label="New (7 days)" value={stats.newLeads} />
+
+        <Card label="Contacted" value={stats.contacted} />
+        <Card label="Replied" value={stats.replied} />
+        <Card label="Meetings Booked" value={stats.meetingBooked} />
+
+        <Card label="Closed Won" value={stats.closedWon} />
+        <Card label="Closed Lost" value={stats.closedLost} />
+
+        <Card 
+          label="Activities This Week" 
+          value={stats.activitiesThisWeek} 
+        />
+
+        <Card 
+          label="Upcoming Follow-ups" 
+          value={stats.upcomingFollowUps} 
+        />
+
+        <Card 
+          label="Overdue Follow-ups" 
+          value={stats.overdueFollowUps} 
+          highlight={stats.overdueFollowUps > 0}
+        />
+
       </div>
     </div>
   )
 }
 
-function Card({ title, value }) {
+function Card({ label, value, highlight }) {
   return (
-    <div style={card}>
-      <h3>{title}</h3>
-      <p style={{fontSize:"28px", fontWeight:"bold"}}>{value}</p>
+    <div style={{
+      ...card,
+      border: highlight ? "2px solid #ff3b30" : "1px solid #e5e5e5"
+    }}>
+      <div style={cardValue}>{value}</div>
+      <div style={cardLabel}>{label}</div>
     </div>
   )
 }
 
+const title = {
+  fontSize: "28px",
+  fontWeight: "600",
+  marginBottom: "30px"
+}
+
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-  gap: "20px",
-  marginTop: "30px"
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "20px"
 }
 
 const card = {
-  background: "#ffffff",
-  padding: "30px",
-  borderRadius: "20px",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.05)"
+  background: "#fff",
+  padding: "25px",
+  borderRadius: "16px",
+  boxShadow: "0 10px 25px rgba(0,0,0,0.05)",
+  textAlign: "center"
+}
+
+const cardValue = {
+  fontSize: "32px",
+  fontWeight: "700",
+  marginBottom: "10px"
+}
+
+const cardLabel = {
+  fontSize: "14px",
+  color: "#666"
 }
