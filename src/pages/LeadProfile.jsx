@@ -148,3 +148,27 @@ export default function LeadProfile() {
             <div>{activity.fields.Notes}</div>
             <small>{activity.fields["Activity Date"]}</small>
           </div>
+        ))}
+      </div>
+
+    </div>
+  )
+}
+
+const card = {
+  background: "#fff",
+  padding: "20px",
+  borderRadius: "20px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px"
+}
+
+const timelineCard = {
+  background: "#fff",
+  padding: "15px",
+  borderRadius: "15px",
+  marginBottom: "10px",
+  boxShadow: "0 5px 20px rgba(0,0,0,0.05)"
+}
