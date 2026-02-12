@@ -8,23 +8,83 @@ import CompanyProfile from "./pages/CompanyProfile"
 import Leads from "./pages/Leads"
 import LeadProfile from "./pages/LeadProfile"
 import Pipeline from "./pages/Pipeline"
+import Calendar from "./pages/Calendar"
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
 
+        {/* Login */}
         <Route path="/" element={<Login />} />
 
-        <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
+        {/* Dashboard */}
+        <Route
+          path="/dashboard"
+          element={
+            <Layout>
+              <Dashboard />
+            </Layout>
+          }
+        />
 
-        <Route path="/companies" element={<Layout><Companies /></Layout>} />
-        <Route path="/companies/:id" element={<Layout><CompanyProfile /></Layout>} />
+        {/* Companies */}
+        <Route
+          path="/companies"
+          element={
+            <Layout>
+              <Companies />
+            </Layout>
+          }
+        />
 
-        <Route path="/leads" element={<Layout><Leads /></Layout>} />
-        <Route path="/leads/:id" element={<Layout><LeadProfile /></Layout>} />
+        <Route
+          path="/companies/:id"
+          element={
+            <Layout>
+              <CompanyProfile />
+            </Layout>
+          }
+        />
 
-        <Route path="/pipeline" element={<Layout><Pipeline /></Layout>} />
+        {/* Leads */}
+        <Route
+          path="/leads"
+          element={
+            <Layout>
+              <Leads />
+            </Layout>
+          }
+        />
+
+        <Route
+          path="/leads/:id"
+          element={
+            <Layout>
+              <LeadProfile />
+            </Layout>
+          }
+        />
+
+        {/* Pipeline */}
+        <Route
+          path="/pipeline"
+          element={
+            <Layout>
+              <Pipeline />
+            </Layout>
+          }
+        />
+
+        {/* Calendar */}
+        <Route
+          path="/calendar"
+          element={
+            <Layout>
+              <Calendar />
+            </Layout>
+          }
+        />
 
       </Routes>
     </BrowserRouter>
