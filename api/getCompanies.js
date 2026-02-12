@@ -1,24 +1,9 @@
 export default async function handler(req, res) {
 
-  const cookie = req.headers.cookie;
-
-  if (!cookie || !cookie.includes("session=")) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-
-  const email = cookie
-    .split("session=")[1]
-    ?.split(";")[0]
-    ?.trim()
-    ?.toLowerCase();
-
   try {
 
-    // 👇 SOLO FILTRA SI EXISTE Owner Email
-    const formula = `{Owner Email}='${email}'`;
-
     const response = await fetch(
-      `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Companies?filterByFormula=${encodeURIComponent(formula)}`,
+      `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Companies`,
       {
         headers: {
           Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`
