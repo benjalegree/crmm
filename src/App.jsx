@@ -5,44 +5,23 @@ import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
 import Companies from "./pages/Companies"
 import CompanyProfile from "./pages/CompanyProfile"
+import Leads from "./pages/Leads"
+import LeadProfile from "./pages/LeadProfile"
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* Login */}
         <Route path="/" element={<Login />} />
 
-        {/* Overview */}
-        <Route
-          path="/dashboard"
-          element={
-            <Layout>
-              <Dashboard />
-            </Layout>
-          }
-        />
+        <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
 
-        {/* Companies List */}
-        <Route
-          path="/companies"
-          element={
-            <Layout>
-              <Companies />
-            </Layout>
-          }
-        />
+        <Route path="/companies" element={<Layout><Companies /></Layout>} />
+        <Route path="/companies/:id" element={<Layout><CompanyProfile /></Layout>} />
 
-        {/* Company Profile */}
-        <Route
-          path="/companies/:id"
-          element={
-            <Layout>
-              <CompanyProfile />
-            </Layout>
-          }
-        />
+        <Route path="/leads" element={<Layout><Leads /></Layout>} />
+        <Route path="/leads/:id" element={<Layout><LeadProfile /></Layout>} />
 
       </Routes>
     </BrowserRouter>
