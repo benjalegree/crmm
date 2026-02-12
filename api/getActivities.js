@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   try {
 
-    const formula = `FIND("${contactId}", ARRAYJOIN({Related Contact}))`;
+    const formula = `{Contact ID Lookup}='${contactId}'`;
 
     const response = await fetch(
       `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
@@ -28,11 +28,9 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    const records = data.records || [];
-
-    records.sort((a, b) =>
-      new Date(b.fields["Activity Date"]) -
-      new Date(a.fields["Activity Date"])
+    const records = (data.records || []).sort((a, b) =>
+      new Date(b.fields["Activity Date"] || 0) -
+      new Date(a.fields["Activity Date"] || 0)
     );
 
     return res.status(200).json({ records });
