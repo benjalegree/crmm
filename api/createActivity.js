@@ -12,7 +12,7 @@ export default async function handler(req, res) {
     ?.trim()
     ?.toLowerCase();
 
-  const { contactId, companyId, type, notes } = req.body;
+  const { contactId, type, notes } = req.body;
 
   if (!contactId || !type) {
     return res.status(400).json({ error: "Missing data" });
@@ -30,9 +30,8 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           fields: {
-            "Activity Type": type,
+            "Activity Type": type.trim(),
             "Related Contact": [contactId],
-            "Related Company": companyId ? [companyId] : [],
             "Activity Date": new Date().toISOString(),
             "Owner Email": email,
             "Notes": notes || ""
@@ -42,6 +41,10 @@ export default async function handler(req, res) {
     );
 
     const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(400).json(data);
+    }
 
     return res.status(200).json(data);
 
