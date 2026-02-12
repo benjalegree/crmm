@@ -8,20 +8,29 @@ export default async function handler(req, res) {
 
   const email = cookie
     .split("session=")[1]
-    .split(";")[0];
+    ?.split(";")[0]
+    ?.trim()
+    ?.toLowerCase();
 
-  const formula = `{Responsible Email}="${email}"`;
+  try {
 
-  const response = await fetch(
-    `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Companies?filterByFormula=${encodeURIComponent(formula)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`,
-      },
-    }
-  );
+    // 👇 SOLO FILTRA SI EXISTE Owner Email
+    const formula = `{Owner Email}='${email}'`;
 
-  const data = await response.json();
+    const response = await fetch(
+      `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Companies?filterByFormula=${encodeURIComponent(formula)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`
+        }
+      }
+    );
 
-  res.status(200).json(data);
+    const data = await response.json();
+
+    return res.status(200).json({ records: data.records || [] });
+
+  } catch (err) {
+    return res.status(500).json({ error: "Server error" });
+  }
 }
