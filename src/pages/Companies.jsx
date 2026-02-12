@@ -2,20 +2,29 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 export default function Companies() {
+
   const [companies, setCompanies] = useState([])
+  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
   useEffect(() => {
-    const load = async () => {
-      const res = await fetch("/api/getCompanies", {
-        credentials: "include"
-      })
-      const data = await res.json()
-      setCompanies(data.records || [])
-    }
-
-    load()
+    loadCompanies()
   }, [])
+
+  const loadCompanies = async () => {
+    setLoading(true)
+
+    const res = await fetch("/api/crm?action=getCompanies", {
+      credentials: "include"
+    })
+
+    const data = await res.json()
+
+    setCompanies(data.records || [])
+    setLoading(false)
+  }
+
+  if (loading) return <div>Loading companies...</div>
 
   return (
     <div>
