@@ -93,3 +93,12 @@ export default function LeadProfile() {
 }
 
 const card = {
+  background: "#fff",
+  padding: "30px",
+  borderRadius: "20px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
+  marginTop: "20px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "15px"
+}
