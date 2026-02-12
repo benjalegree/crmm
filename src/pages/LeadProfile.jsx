@@ -5,10 +5,13 @@ export default function LeadProfile() {
 
   const { id } = useParams()
   const [lead, setLead] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [activities, setActivities] = useState([])
+  const [newActivity, setNewActivity] = useState("")
+  const [type, setType] = useState("Call")
 
   useEffect(() => {
     loadLead()
+    loadActivities()
   }, [id])
 
   const loadLead = async () => {
@@ -19,35 +22,30 @@ export default function LeadProfile() {
     setLead(data)
   }
 
-  const updateField = (field, value) => {
-    setLead(prev => ({
-      ...prev,
-      fields: {
-        ...prev.fields,
-        [field]: value
-      }
-    }))
+  const loadActivities = async () => {
+    const res = await fetch(`/api/getActivities?contactId=${id}`, {
+      credentials: "include"
+    })
+    const data = await res.json()
+    setActivities(data.records || [])
   }
 
-  const saveChanges = async () => {
+  const addActivity = async () => {
 
-    setLoading(true)
-
-    await fetch("/api/updateContact", {
+    await fetch("/api/createActivity", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
-        id,
-        fields: {
-          Email: lead.fields.Email,
-          Position: lead.fields.Position,
-          Status: lead.fields.Status
-        }
+        contactId: id,
+        companyId: lead.fields.Company?.[0],
+        type,
+        notes: newActivity
       })
     })
 
-    setLoading(false)
+    setNewActivity("")
+    loadActivities()
   }
 
   if (!lead) return <div>Loading...</div>
@@ -59,46 +57,59 @@ export default function LeadProfile() {
       <h1>{f["Full Name"]}</h1>
 
       <div style={card}>
+        <p><strong>Email:</strong> {f.Email}</p>
+        <p><strong>Position:</strong> {f.Position}</p>
+        <p><strong>Company:</strong> {f.Company}</p>
+      </div>
 
-        <label>Email</label>
-        <input
-          value={f.Email || ""}
-          onChange={e => updateField("Email", e.target.value)}
-        />
+      <h2 style={{marginTop:"40px"}}>Activity Timeline</h2>
 
-        <label>Position</label>
-        <input
-          value={f.Position || ""}
-          onChange={e => updateField("Position", e.target.value)}
-        />
-
-        <label>Status</label>
-        <select
-          value={f.Status || ""}
-          onChange={e => updateField("Status", e.target.value)}
-        >
-          <option>Not Contacted</option>
-          <option>Contacted</option>
-          <option>Replied</option>
-          <option>Meeting Booked</option>
+      <div style={activityBox}>
+        <select value={type} onChange={e => setType(e.target.value)}>
+          <option>Call</option>
+          <option>Email</option>
+          <option>LinkedIn</option>
+          <option>Meeting</option>
         </select>
 
-        <button onClick={saveChanges} disabled={loading}>
-          {loading ? "Saving..." : "Save Changes"}
-        </button>
+        <input
+          placeholder="Add notes..."
+          value={newActivity}
+          onChange={e => setNewActivity(e.target.value)}
+        />
 
+        <button onClick={addActivity}>Add</button>
       </div>
+
+      {activities.map(a => (
+        <div key={a.id} style={timelineCard}>
+          <strong>{a.fields["Activity Type"]}</strong>
+          <div>{a.fields.Notes}</div>
+          <small>{new Date(a.fields["Activity Date"]).toLocaleString()}</small>
+        </div>
+      ))}
+
     </div>
   )
 }
 
 const card = {
   background: "#fff",
-  padding: "30px",
-  borderRadius: "20px",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
-  marginTop: "20px",
+  padding: "20px",
+  borderRadius: "16px",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.05)"
+}
+
+const activityBox = {
   display: "flex",
-  flexDirection: "column",
-  gap: "15px"
+  gap: "10px",
+  marginBottom: "20px"
+}
+
+const timelineCard = {
+  background: "#fff",
+  padding: "15px",
+  borderRadius: "16px",
+  marginBottom: "10px",
+  boxShadow: "0 6px 15px rgba(0,0,0,0.04)"
 }
