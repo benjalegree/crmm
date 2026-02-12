@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
   try {
 
-    // 1️⃣ Traer Contacts filtrados por responsable
+    // 1️⃣ Traer contactos filtrados por responsable
     const contactsResponse = await fetch(
       `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Contacts?filterByFormula={Responsible Email}='${email}'`,
       {
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
 
     const contactsData = await contactsResponse.json();
 
-    // 2️⃣ Traer Companies completas
+    // 2️⃣ Traer todas las empresas
     const companiesResponse = await fetch(
       `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Companies`,
       {
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
     const companiesData = await companiesResponse.json();
 
-    // 3️⃣ Crear mapa ID → Nombre
+    // 3️⃣ Crear mapa ID → Nombre real
     const companyMap = {};
     companiesData.records.forEach(company => {
       companyMap[company.id] = company.fields["Company Name"];
@@ -46,13 +46,14 @@ export default async function handler(req, res) {
 
     // 4️⃣ Reemplazar ID por nombre real
     const enrichedContacts = contactsData.records.map(contact => {
+
       const companyId = contact.fields.Company?.[0];
 
       return {
         ...contact,
         fields: {
           ...contact.fields,
-          CompanyName: companyMap[companyId] || null
+          Company: companyMap[companyId] || null
         }
       };
     });
