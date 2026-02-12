@@ -6,8 +6,8 @@ export default function LeadProfile() {
   const { id } = useParams()
   const [lead, setLead] = useState(null)
   const [activities, setActivities] = useState([])
-  const [newActivity, setNewActivity] = useState("")
   const [type, setType] = useState("Call")
+  const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -32,6 +32,7 @@ export default function LeadProfile() {
   }
 
   const saveLead = async () => {
+
     setSaving(true)
 
     await fetch("/api/updateContact", {
@@ -52,20 +53,26 @@ export default function LeadProfile() {
 
   const addActivity = async () => {
 
-    await fetch("/api/createActivity", {
+    const res = await fetch("/api/createActivity", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
         contactId: id,
-        companyId: lead.fields.Company?.[0],
         type,
-        notes: newActivity
+        notes: note
       })
     })
 
-    setNewActivity("")
-    loadActivities()
+    const data = await res.json()
+
+    if (res.ok) {
+      setNote("")
+      loadActivities()
+    } else {
+      alert("Error creating activity")
+      console.log(data)
+    }
   }
 
   if (!lead) return <div>Loading...</div>
@@ -119,9 +126,9 @@ export default function LeadProfile() {
         </select>
 
         <input
-          placeholder="Activity notes..."
-          value={newActivity}
-          onChange={e => setNewActivity(e.target.value)}
+          placeholder="What happened?"
+          value={note}
+          onChange={e => setNote(e.target.value)}
         />
 
         <button onClick={addActivity}>Add Activity</button>
@@ -131,7 +138,9 @@ export default function LeadProfile() {
         <div key={a.id} style={timelineCard}>
           <strong>{a.fields["Activity Type"]}</strong>
           <div>{a.fields.Notes}</div>
-          <small>{new Date(a.fields["Activity Date"]).toLocaleString()}</small>
+          <small>
+            {new Date(a.fields["Activity Date"]).toLocaleString()}
+          </small>
         </div>
       ))}
 
