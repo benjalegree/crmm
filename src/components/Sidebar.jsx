@@ -25,10 +25,12 @@ export default function Sidebar() {
               to={link.path}
               style={{
                 ...item,
-                background: active ? "#2563eb" : "transparent",
-                color: active ? "#fff" : "#6b7280",
+                background: active
+                  ? "linear-gradient(135deg,#145c43,#1e7a57)"
+                  : "transparent",
+                color: active ? "#ffffff" : "#145c43",
                 boxShadow: active
-                  ? "0 8px 20px rgba(37,99,235,0.25)"
+                  ? "0 8px 25px rgba(20,92,67,0.35)"
                   : "none"
               }}
             >
@@ -44,23 +46,24 @@ export default function Sidebar() {
 const sidebar = {
   width: "260px",
   padding: "50px 30px",
-  background: "white",
-  borderRight: "1px solid #e5e7eb"
+  background: "rgba(255,255,255,0.6)",
+  backdropFilter: "blur(20px)",
+  borderRight: "1px solid rgba(255,255,255,0.4)"
 }
 
 const logo = {
   fontSize: "20px",
   fontWeight: "700",
-  color: "#111827"
+  color: "#0f3d2e"
 }
 
 const item = {
   display: "block",
   padding: "14px 18px",
   marginBottom: "14px",
-  borderRadius: "14px",
+  borderRadius: "18px",
   textDecoration: "none",
   fontSize: "14px",
-  fontWeight: "500",
-  transition: "all 0.2s ease"
+  fontWeight: "600",
+  transition: "all 0.25s ease"
 }
