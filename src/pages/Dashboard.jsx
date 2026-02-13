@@ -124,16 +124,16 @@ const grid = {
 }
 
 const card = {
-  backdropFilter: "blur(30px)",
-  borderRadius: "26px",
-  padding: "35px",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
-  border: "1px solid rgba(255,255,255,0.6)",
+  backdropFilter: "blur(40px)",
+  borderRadius: "30px",
+  padding: "40px",
+  boxShadow: "0 25px 60px rgba(0,0,0,0.08)",
+  border: "1px solid rgba(255,255,255,0.9)",
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
-  minHeight: "140px",
-  transition: "all 0.25s ease"
+  minHeight: "160px",
+  transition: "all 0.3s ease"
 }
 
 const metricLabel = {
