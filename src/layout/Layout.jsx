@@ -14,8 +14,25 @@ export default function Layout({ children }) {
 const app = {
   display: "flex",
   minHeight: "100vh",
-  background: "#f6f9ff",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
+  background: `
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(30,122,87,0.15),
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 80% 80%,
+      rgba(15,61,46,0.15),
+      transparent 40%
+    ),
+    linear-gradient(
+      135deg,
+      #f4fbf8 0%,
+      #e8f5ef 50%,
+      #f4fbf8 100%
+    )
+  `
 }
 
 const content = {
