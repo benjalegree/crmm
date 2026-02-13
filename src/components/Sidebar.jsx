@@ -12,7 +12,7 @@ export default function Sidebar() {
   ]
 
   return (
-    <div style={wrapper}>
+    <div style={sidebarWrapper}>
       <div style={sidebar}>
         <div style={logo}>PsicoFunnel</div>
 
@@ -27,9 +27,9 @@ export default function Sidebar() {
                 style={{
                   ...item,
                   background: active
-                    ? "linear-gradient(135deg,#145c43,#1e7a57)"
+                    ? "rgba(20,92,67,0.8)"
                     : "transparent",
-                  color: active ? "#fff" : "#145c43",
+                  color: active ? "#ffffff" : "#0f3d2e",
                   boxShadow: active
                     ? "0 8px 25px rgba(20,92,67,0.35)"
                     : "none"
@@ -45,21 +45,23 @@ export default function Sidebar() {
   )
 }
 
-const wrapper = {
-  width: "280px",
+const sidebarWrapper = {
+  width: "300px",
+  padding: "40px 20px",
   display: "flex",
-  justifyContent: "center",
-  paddingTop: "40px"
+  justifyContent: "center"
 }
 
 const sidebar = {
-  width: "240px",
+  width: "260px",
+  height: "100%",
   padding: "40px 25px",
-  background: "rgba(255,255,255,0.55)",
-  backdropFilter: "blur(30px)",
-  borderRadius: "30px",
+  borderRadius: "32px",
+  background: "rgba(255,255,255,0.35)",
+  backdropFilter: "blur(40px)",
+  WebkitBackdropFilter: "blur(40px)",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 25px 60px rgba(15,61,46,0.15)"
+  boxShadow: "0 30px 60px rgba(15,61,46,0.15)"
 }
 
 const logo = {
