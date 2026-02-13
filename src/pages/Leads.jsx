@@ -13,7 +13,7 @@ export default function Leads() {
   const defaultColumns = [
     { key: "Full Name", label: "Name", visible: true },
     { key: "Position", label: "Position", visible: true },
-    { key: "Company", label: "Company", visible: true },
+    { key: "Company Name (Lookup)", label: "Company", visible: true },
     { key: "Email", label: "Email", visible: true },
     { key: "Numero de telefono", label: "Phone", visible: true },
     { key: "LinkedIn URL", label: "LinkedIn", visible: true },
@@ -141,6 +141,12 @@ export default function Leads() {
 
 function renderCell(fields, key) {
 
+  if (key === "Company Name (Lookup)") {
+    return Array.isArray(fields[key])
+      ? fields[key][0]
+      : fields[key]
+  }
+
   if (key === "LinkedIn URL" && fields["LinkedIn URL"]) {
     return (
       <a
@@ -177,12 +183,6 @@ function renderCell(fields, key) {
 
   if (key === "Status") {
     return <span style={statusStyle}>{fields.Status}</span>
-  }
-
-  if (key === "Company") {
-    return Array.isArray(fields.Company)
-      ? fields.Company[0]
-      : fields.Company
   }
 
   return fields[key]
