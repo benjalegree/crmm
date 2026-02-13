@@ -315,7 +315,6 @@ export default async function handler(req, res) {
     /* =====================================================
        CREATE ACTIVITY
     ====================================================== */
-
 if (action === "createActivity") {
 
   const { contactId, type, notes, nextFollowUp } = body
@@ -324,7 +323,7 @@ if (action === "createActivity") {
     return res.status(400).json({ error: "Missing required fields" })
   }
 
-  // 1️⃣ Obtener contacto primero
+  // 🔥 1️⃣ Obtener el contacto completo
   const contactRes = await fetch(
     `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
     { headers: AIRTABLE_HEADERS }
@@ -336,14 +335,15 @@ if (action === "createActivity") {
 
   const contactData = await contactRes.json()
 
+  // 🔥 2️⃣ Obtener el ID REAL de la empresa (campo Link)
   const linkedCompanyId =
     Array.isArray(contactData.fields.Company) &&
     contactData.fields.Company.length > 0
       ? contactData.fields.Company[0]
       : null
 
-  // 2️⃣ Crear actividad con empresa real
-  const response = await fetch(
+  // 🔥 3️⃣ Crear actividad correctamente
+  const activityRes = await fetch(
     `https://api.airtable.com/v0/${baseId}/Activities`,
     {
       method: "POST",
@@ -362,12 +362,14 @@ if (action === "createActivity") {
     }
   )
 
-  if (!response.ok) {
-    return res.status(response.status).json({ error: "Failed to create activity" })
+  const activityData = await activityRes.json()
+
+  if (!activityRes.ok) {
+    console.error("Airtable error:", activityData)
+    return res.status(activityRes.status).json(activityData)
   }
 
-  const data = await response.json()
-  return res.status(200).json(data)
+  return res.status(200).json(activityData)
 }
     /* =====================================================
        GET ACTIVITIES
