@@ -12,43 +12,54 @@ export default function Sidebar() {
   ]
 
   return (
-    <div style={sidebar}>
-      <div style={logo}>PsicoFunnel</div>
+    <div style={wrapper}>
+      <div style={sidebar}>
+        <div style={logo}>PsicoFunnel</div>
 
-      <div style={{ marginTop: "60px" }}>
-        {links.map(link => {
-          const active = location.pathname === link.path
+        <div style={{ marginTop: "50px" }}>
+          {links.map(link => {
+            const active = location.pathname === link.path
 
-          return (
-            <Link
-              key={link.path}
-              to={link.path}
-              style={{
-                ...item,
-                background: active
-                  ? "linear-gradient(135deg,#145c43,#1e7a57)"
-                  : "transparent",
-                color: active ? "#ffffff" : "#145c43",
-                boxShadow: active
-                  ? "0 8px 25px rgba(20,92,67,0.35)"
-                  : "none"
-              }}
-            >
-              {link.label}
-            </Link>
-          )
-        })}
+            return (
+              <Link
+                key={link.path}
+                to={link.path}
+                style={{
+                  ...item,
+                  background: active
+                    ? "linear-gradient(135deg,#145c43,#1e7a57)"
+                    : "transparent",
+                  color: active ? "#fff" : "#145c43",
+                  boxShadow: active
+                    ? "0 8px 25px rgba(20,92,67,0.35)"
+                    : "none"
+                }}
+              >
+                {link.label}
+              </Link>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
 }
 
+const wrapper = {
+  width: "280px",
+  display: "flex",
+  justifyContent: "center",
+  paddingTop: "40px"
+}
+
 const sidebar = {
-  width: "260px",
-  padding: "50px 30px",
-  background: "rgba(255,255,255,0.6)",
-  backdropFilter: "blur(20px)",
-  borderRight: "1px solid rgba(255,255,255,0.4)"
+  width: "240px",
+  padding: "40px 25px",
+  background: "rgba(255,255,255,0.55)",
+  backdropFilter: "blur(30px)",
+  borderRadius: "30px",
+  border: "1px solid rgba(255,255,255,0.4)",
+  boxShadow: "0 25px 60px rgba(15,61,46,0.15)"
 }
 
 const logo = {
