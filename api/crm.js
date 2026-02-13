@@ -101,24 +101,18 @@ export default async function handler(req, res) {
       })
     }
 
-    /* =====================================================
-       AUTH REQUIRED BELOW
-    ====================================================== */
-
     const email = requireAuth()
     if (!email) return
 
     /* =====================================================
-       GET COMPANIES (OWNERSHIP FILTERED)
+       GET COMPANIES
     ====================================================== */
 
     if (action === "getCompanies") {
       const formula = `{Responsible Email}="${email}"`
 
       const response = await fetch(
-        `https://api.airtable.com/v0/${baseId}/Companies?filterByFormula=${encodeURIComponent(
-          formula
-        )}`,
+        `https://api.airtable.com/v0/${baseId}/Companies?filterByFormula=${encodeURIComponent(formula)}`,
         { headers: AIRTABLE_HEADERS }
       )
 
@@ -131,7 +125,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       GET COMPANY (OWNERSHIP VERIFIED)
+       GET COMPANY
     ====================================================== */
 
     if (action === "getCompany") {
@@ -158,7 +152,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       UPDATE COMPANY (OWNERSHIP VERIFIED)
+       UPDATE COMPANY
     ====================================================== */
 
     if (action === "updateCompany") {
@@ -201,16 +195,14 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       GET CONTACTS (OWNERSHIP FILTERED)
+       GET CONTACTS
     ====================================================== */
 
     if (action === "getContacts") {
       const formula = `{Responsible Email}="${email}"`
 
       const response = await fetch(
-        `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(
-          formula
-        )}`,
+        `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(formula)}`,
         { headers: AIRTABLE_HEADERS }
       )
 
@@ -223,7 +215,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       GET CONTACT (OWNERSHIP VERIFIED)
+       GET CONTACT
     ====================================================== */
 
     if (action === "getContact") {
@@ -250,7 +242,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       UPDATE CONTACT (OWNERSHIP VERIFIED)
+       UPDATE CONTACT
     ====================================================== */
 
     if (action === "updateContact") {
@@ -293,7 +285,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       CREATE ACTIVITY (OWNER FORCED)
+       CREATE ACTIVITY
     ====================================================== */
 
     if (action === "createActivity") {
@@ -331,7 +323,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       GET ACTIVITIES (OWNERSHIP FILTERED)
+       GET ACTIVITIES
     ====================================================== */
 
     if (action === "getActivities") {
@@ -344,9 +336,7 @@ export default async function handler(req, res) {
       const formula = `AND(FIND("${contactId}", ARRAYJOIN({Related Contact})), {Owner Email}="${email}")`
 
       const response = await fetch(
-        `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(
-          formula
-        )}`,
+        `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
         { headers: AIRTABLE_HEADERS }
       )
 
@@ -366,32 +356,11 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       GET CALENDAR (OWNERSHIP FILTERED)
-    ====================================================== */
-
-    if (action === "getCalendar") {
-      const formula = `{Owner Email}="${email}"`
-
-      const response = await fetch(
-        `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(
-          formula
-        )}`,
-        { headers: AIRTABLE_HEADERS }
-      )
-
-      if (!response.ok) {
-        return res.status(response.status).json({ error: "Failed to fetch calendar" })
-      }
-
-      const data = await response.json()
-      return res.status(200).json(data)
-    }
-
-    /* =====================================================
-       DASHBOARD STATS (OWNERSHIP FILTERED)
+       DASHBOARD INTELIGENTE SaaS B2B
     ====================================================== */
 
     if (action === "getDashboardStats") {
+
       const contactsRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(
           `{Responsible Email}="${email}"`
@@ -399,42 +368,84 @@ export default async function handler(req, res) {
         { headers: AIRTABLE_HEADERS }
       )
 
-      const activitiesRes = await fetch(
-        `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(
-          `{Owner Email}="${email}"`
-        )}`,
-        { headers: AIRTABLE_HEADERS }
-      )
-
-      if (!contactsRes.ok || !activitiesRes.ok) {
-        return res.status(500).json({ error: "Failed to load dashboard data" })
+      if (!contactsRes.ok) {
+        return res.status(500).json({ error: "Failed to load contacts" })
       }
 
-      const contacts = await contactsRes.json()
-      const activities = await activitiesRes.json()
+      const contactsData = await contactsRes.json()
+      const contacts = contactsData.records || []
 
-      const totalLeads = contacts.records?.length || 0
+      const totalLeads = contacts.length
 
-      const calls =
-        activities.records?.filter(
-          r => r.fields["Activity Type"] === "Call"
-        ).length || 0
+      const activeLeads = contacts.filter(c =>
+        c.fields.Status !== "Closed Lost"
+      ).length
 
-      const emails =
-        activities.records?.filter(
-          r => r.fields["Activity Type"] === "Email"
-        ).length || 0
+      const meetingsBooked = contacts.filter(c =>
+        c.fields.Status === "Meeting Booked"
+      ).length
 
-      const meetings =
-        activities.records?.filter(
-          r => r.fields["Activity Type"] === "Meeting"
-        ).length || 0
+      const closedWon = contacts.filter(c =>
+        c.fields.Status === "Closed Won"
+      ).length
+
+      const conversionRate =
+        totalLeads > 0
+          ? ((closedWon / totalLeads) * 100).toFixed(1)
+          : 0
+
+      const winRate =
+        meetingsBooked > 0
+          ? ((closedWon / meetingsBooked) * 100).toFixed(1)
+          : 0
+
+      let atRiskLeads = 0
+      let coolingLeads = 0
+      let leadsWithoutFollowUp = 0
+      let totalDaysWithoutContact = 0
+      let countedLeads = 0
+
+      const now = new Date()
+
+      contacts.forEach(contact => {
+        const lastActivity = contact.fields["Last Activity Date"]
+        const nextFollowUp = contact.fields["Next Follow-up Date"]
+
+        if (!nextFollowUp) {
+          leadsWithoutFollowUp++
+        }
+
+        if (lastActivity) {
+          const diffTime = Math.abs(now - new Date(lastActivity))
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+          totalDaysWithoutContact += diffDays
+          countedLeads++
+
+          if (diffDays >= 7) {
+            atRiskLeads++
+          } else if (diffDays >= 5) {
+            coolingLeads++
+          }
+        }
+      })
+
+      const avgDaysWithoutContact =
+        countedLeads > 0
+          ? (totalDaysWithoutContact / countedLeads).toFixed(1)
+          : 0
 
       return res.status(200).json({
         totalLeads,
-        calls,
-        emails,
-        meetings
+        activeLeads,
+        meetingsBooked,
+        closedWon,
+        conversionRate,
+        winRate,
+        atRiskLeads,
+        coolingLeads,
+        leadsWithoutFollowUp,
+        avgDaysWithoutContact
       })
     }
 
