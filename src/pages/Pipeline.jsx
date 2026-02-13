@@ -1,126 +1,111 @@
 import { useEffect, useState } from "react"
-
-const STATUSES = [
-  "Not Contacted",
-  "Contacted",
-  "Replied",
-  "Meeting Booked"
-]
+import { useNavigate } from "react-router-dom"
 
 export default function Pipeline() {
 
   const [leads, setLeads] = useState([])
-  const [dragging, setDragging] = useState(null)
+  const navigate = useNavigate()
+
+  const statuses = [
+    "Not Contacted",
+    "Contacted",
+    "Replied",
+    "Meeting Booked",
+    "Closed Won",
+    "Closed Lost"
+  ]
 
   useEffect(() => {
     loadLeads()
   }, [])
 
   const loadLeads = async () => {
-    const res = await fetch("/api/getContacts", {
+
+    const res = await fetch("/api/crm?action=getContacts", {
       credentials: "include"
     })
+
     const data = await res.json()
+
     setLeads(data.records || [])
   }
 
-  const onDragStart = (lead) => {
-    setDragging(lead)
-  }
+  const updateStatus = async (leadId, newStatus) => {
 
-  const onDrop = async (status) => {
-    if (!dragging) return
-
-    const updated = leads.map(l =>
-      l.id === dragging.id
-        ? { ...l, fields: { ...l.fields, Status: status } }
-        : l
-    )
-
-    setLeads(updated)
-
-    await fetch("/api/updateContact", {
+    await fetch("/api/crm?action=updateContact", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
-        id: dragging.id,
-        fields: { Status: status }
+        id: leadId,
+        fields: { Status: newStatus }
       })
     })
 
-    setDragging(null)
+    loadLeads()
   }
 
   return (
-    <div style={container}>
-      {STATUSES.map(status => (
-        <div
-          key={status}
-          style={column}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => onDrop(status)}
-        >
-          <h3 style={columnTitle}>{status}</h3>
+    <div>
+      <h1>Pipeline</h1>
 
-          {leads
-            .filter(lead => lead.fields.Status === status)
-            .map(lead => (
-              <div
-                key={lead.id}
-                style={card}
-                draggable
-                onDragStart={() => onDragStart(lead)}
-              >
-                <div style={name}>{lead.fields["Full Name"]}</div>
-                <div style={company}>{lead.fields.Company}</div>
-              </div>
-            ))
-          }
+      <div style={board}>
+        {statuses.map(status => (
+          <div key={status} style={column}>
+            <h3>{status}</h3>
 
-        </div>
-      ))}
+            {leads
+              .filter(lead => lead.fields.Status === status)
+              .map(lead => (
+                <div key={lead.id} style={card}>
+                  <div
+                    style={{ cursor: "pointer" }}
+                    onClick={() => navigate(`/leads/${lead.id}`)}
+                  >
+                    <strong>{lead.fields["Full Name"]}</strong>
+                    <p>{lead.fields.Position}</p>
+                  </div>
+
+                  <select
+                    value={lead.fields.Status}
+                    onChange={e =>
+                      updateStatus(lead.id, e.target.value)
+                    }
+                  >
+                    {statuses.map(s => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
-const container = {
+const board = {
   display: "flex",
   gap: "20px",
-  height: "calc(100vh - 80px)",
+  marginTop: "30px",
   overflowX: "auto"
 }
 
 const column = {
-  flex: 1,
   minWidth: "250px",
   background: "#f5f5f7",
-  borderRadius: "20px",
-  padding: "20px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "15px"
-}
-
-const columnTitle = {
-  fontWeight: "600",
-  fontSize: "14px",
-  opacity: 0.7
+  padding: "15px",
+  borderRadius: "20px"
 }
 
 const card = {
-  background: "white",
+  background: "#fff",
   padding: "15px",
-  borderRadius: "16px",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.05)",
-  cursor: "grab"
-}
-
-const name = {
-  fontWeight: "600"
-}
-
-const company = {
-  fontSize: "12px",
-  opacity: 0.6
+  borderRadius: "15px",
+  marginBottom: "15px",
+  boxShadow: "0 5px 15px rgba(0,0,0,0.05)",
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px"
 }
