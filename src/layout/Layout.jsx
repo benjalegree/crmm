@@ -16,26 +16,26 @@ export default function Layout({ children }) {
 const background = {
   minHeight: "100vh",
   background: `
-    radial-gradient(circle at 20% 20%, rgba(120, 180, 255, 0.15), transparent 40%),
-    radial-gradient(circle at 80% 30%, rgba(150, 255, 200, 0.12), transparent 40%),
-    radial-gradient(circle at 50% 80%, rgba(200, 180, 255, 0.12), transparent 50%),
-    #f7f8fa
+    radial-gradient(circle at 15% 20%, rgba(0,122,255,0.25), transparent 40%),
+    radial-gradient(circle at 85% 30%, rgba(0,255,180,0.25), transparent 40%),
+    radial-gradient(circle at 50% 85%, rgba(160,100,255,0.25), transparent 50%),
+    linear-gradient(135deg, #f3f6fb, #eef2f8)
   `,
   fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
-  padding: "40px"
+  padding: "50px"
 }
 
 const container = {
   display: "flex",
-  gap: "30px"
+  gap: "40px"
 }
 
 const main = {
   flex: 1,
-  backdropFilter: "blur(30px)",
-  background: "rgba(255, 255, 255, 0.55)",
-  borderRadius: "28px",
-  padding: "50px",
-  boxShadow: "0 10px 40px rgba(0,0,0,0.05)",
-  border: "1px solid rgba(255,255,255,0.6)"
+  backdropFilter: "blur(40px)",
+  background: "rgba(255,255,255,0.35)",
+  borderRadius: "32px",
+  padding: "60px",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.08)",
+  border: "1px solid rgba(255,255,255,0.8)"
 }
