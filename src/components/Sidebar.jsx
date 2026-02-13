@@ -27,11 +27,11 @@ export default function Sidebar() {
                 style={{
                   ...item,
                   background: active
-                    ? "rgba(20,92,67,0.8)"
+                    ? "linear-gradient(135deg,#145c43,#1e7a57)"
                     : "transparent",
                   color: active ? "#ffffff" : "#0f3d2e",
                   boxShadow: active
-                    ? "0 8px 25px rgba(20,92,67,0.35)"
+                    ? "0 12px 30px rgba(20,92,67,0.4)"
                     : "none"
                 }}
               >
@@ -57,11 +57,14 @@ const sidebar = {
   height: "100%",
   padding: "40px 25px",
   borderRadius: "32px",
-  background: "rgba(255,255,255,0.35)",
+  background: "rgba(255,255,255,0.4)",
   backdropFilter: "blur(40px)",
   WebkitBackdropFilter: "blur(40px)",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 30px 60px rgba(15,61,46,0.15)"
+  boxShadow: `
+    0 30px 60px rgba(15,61,46,0.15),
+    inset 0 1px 0 rgba(255,255,255,0.6)
+  `
 }
 
 const logo = {
