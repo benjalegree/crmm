@@ -1,20 +1,12 @@
 export default async function handler(req, res) {
 
   const { action } = req.query
-
-  const body =
-    req.method === "POST"
-      ? typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : req.body
-      : {}
+  const body = req.body || {}
 
   const baseId = process.env.AIRTABLE_BASE_ID
   const token = process.env.AIRTABLE_TOKEN
 
-  /* =====================================================
-     LOGIN (NO REQUIERE SESIÓN)
-  ====================================================== */
+  /* ================= LOGIN ================= */
 
   if (action === "login") {
 
@@ -46,9 +38,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true })
   }
 
-  /* =====================================================
-     CHECK SESSION
-  ====================================================== */
+  /* ================= CHECK SESSION ================= */
 
   if (action === "me") {
 
@@ -70,9 +60,7 @@ export default async function handler(req, res) {
     })
   }
 
-  /* =====================================================
-     AUTH REQUIRED BELOW
-  ====================================================== */
+  /* ================= AUTH REQUIRED ================= */
 
   const cookie = req.headers.cookie
 
@@ -86,9 +74,7 @@ export default async function handler(req, res) {
     ?.trim()
     ?.toLowerCase()
 
-  /* =====================================================
-     GET COMPANIES
-  ====================================================== */
+  /* ================= GET COMPANIES ================= */
 
   if (action === "getCompanies") {
 
@@ -101,60 +87,11 @@ export default async function handler(req, res) {
       }
     )
 
-    if (!response.ok) {
-      return res.status(500).json({ error: "Airtable error" })
-    }
-
     const data = await response.json()
     return res.status(200).json(data)
   }
 
-  /* =====================================================
-     GET COMPANY
-  ====================================================== */
-
-  if (action === "getCompany") {
-
-    const { id } = req.query
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Companies/${id}`,
-      {
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     UPDATE COMPANY
-  ====================================================== */
-
-  if (action === "updateCompany") {
-
-    const { id, fields } = body
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Companies/${id}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ fields })
-      }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     GET CONTACTS
-  ====================================================== */
+  /* ================= GET CONTACTS ================= */
 
   if (action === "getContacts") {
 
@@ -171,28 +108,7 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =====================================================
-     GET CONTACT
-  ====================================================== */
-
-  if (action === "getContact") {
-
-    const { id } = req.query
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Contacts/${id}`,
-      {
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     UPDATE CONTACT
-  ====================================================== */
+  /* ================= UPDATE CONTACT ================= */
 
   if (action === "updateContact") {
 
@@ -214,9 +130,7 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =====================================================
-     CREATE ACTIVITY
-  ====================================================== */
+  /* ================= CREATE ACTIVITY ================= */
 
   if (action === "createActivity") {
 
@@ -247,97 +161,6 @@ export default async function handler(req, res) {
     const data = await response.json()
     return res.status(200).json(data)
   }
-
-  /* =====================================================
-     GET ACTIVITIES
-  ====================================================== */
-
-  if (action === "getActivities") {
-
-    const { contactId } = req.query
-
-    const formula = `FIND("${contactId}", ARRAYJOIN({Related Contact}))`
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
-      {
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    )
-
-    const data = await response.json()
-
-    const records = (data.records || []).sort(
-      (a, b) =>
-        new Date(b.fields["Activity Date"]) -
-        new Date(a.fields["Activity Date"])
-    )
-
-    return res.status(200).json({ records })
-  }
-
-  /* =====================================================
-     GET CALENDAR
-  ====================================================== */
-
-  if (action === "getCalendar") {
-
-    const formula = `{Owner Email}="${email}"`
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
-      {
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     DASHBOARD STATS
-  ====================================================== */
-
-  if (action === "getDashboardStats") {
-
-    const contactsRes = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Contacts`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const activitiesRes = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Activities`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const contacts = await contactsRes.json()
-    const activities = await activitiesRes.json()
-
-    const totalLeads = contacts.records?.length || 0
-
-    const calls = activities.records?.filter(
-      r => r.fields["Activity Type"] === "Call"
-    ).length || 0
-
-    const emails = activities.records?.filter(
-      r => r.fields["Activity Type"] === "Email"
-    ).length || 0
-
-    const meetings = activities.records?.filter(
-      r => r.fields["Activity Type"] === "Meeting"
-    ).length || 0
-
-    return res.status(200).json({
-      totalLeads,
-      calls,
-      emails,
-      meetings
-    })
-  }
-
-  return res.status(400).json({ error: "Invalid action" })
-}
 
   return res.status(400).json({ error: "Invalid action" })
 }
