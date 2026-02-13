@@ -10,18 +10,15 @@ export default function Leads() {
   const [sortDirection, setSortDirection] = useState("asc")
   const [showPanel, setShowPanel] = useState(false)
 
-  const defaultColumns = [
+  const [columns, setColumns] = useState([
     { key: "Full Name", label: "Name", visible: true },
     { key: "Position", label: "Position", visible: true },
     { key: "Company Name (Lookup)", label: "Company", visible: true },
     { key: "Email", label: "Email", visible: true },
     { key: "Numero de telefono", label: "Phone", visible: true },
     { key: "LinkedIn URL", label: "LinkedIn", visible: true },
-    { key: "CompanyWebsite", label: "Website", visible: true },
     { key: "Status", label: "Status", visible: true }
-  ]
-
-  const [columns, setColumns] = useState(defaultColumns)
+  ])
 
   useEffect(() => {
     fetch("/api/crm?action=getContacts", {
@@ -30,6 +27,14 @@ export default function Leads() {
       .then(res => res.json())
       .then(data => setLeads(data.records || []))
   }, [])
+
+  const toggleColumn = (key) => {
+    setColumns(cols =>
+      cols.map(c =>
+        c.key === key ? { ...c, visible: !c.visible } : c
+      )
+    )
+  }
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -40,13 +45,7 @@ export default function Leads() {
     }
   }
 
-  const toggleColumn = (key) => {
-    setColumns(cols =>
-      cols.map(c =>
-        c.key === key ? { ...c, visible: !c.visible } : c
-      )
-    )
-  }
+  const visibleColumns = columns.filter(c => c.visible)
 
   const filtered = leads.filter(lead =>
     filterStatus === "All" ? true : lead.fields.Status === filterStatus
@@ -54,19 +53,16 @@ export default function Leads() {
 
   const sorted = [...filtered].sort((a, b) => {
     if (!sortField) return 0
-
-    const aVal = a.fields[sortField] || ""
-    const bVal = b.fields[sortField] || ""
-
-    if (aVal < bVal) return sortDirection === "asc" ? -1 : 1
-    if (aVal > bVal) return sortDirection === "asc" ? 1 : -1
-    return 0
+    const aVal = getFieldValue(a.fields, sortField)
+    const bVal = getFieldValue(b.fields, sortField)
+    return sortDirection === "asc"
+      ? aVal.localeCompare(bVal)
+      : bVal.localeCompare(aVal)
   })
 
-  const visibleColumns = columns.filter(c => c.visible)
-
   return (
-    <div>
+    <div style={page}>
+
       <h1 style={title}>Leads</h1>
 
       <div style={topBar}>
@@ -78,39 +74,47 @@ export default function Leads() {
           <option>All</option>
           <option>Not Contacted</option>
           <option>Contacted</option>
-          <option>Replied</option>
           <option>Meeting Booked</option>
           <option>Closed Won</option>
           <option>Closed Lost</option>
         </select>
 
-        <button style={configButton} onClick={() => setShowPanel(!showPanel)}>
-          Columns
+        <button style={columnsBtn} onClick={() => setShowPanel(!showPanel)}>
+          Customize Columns
         </button>
       </div>
 
       {showPanel && (
-        <div style={panel}>
+        <div style={glassPanel}>
           {columns.map(col => (
-            <label key={col.key} style={panelItem}>
-              <input
-                type="checkbox"
-                checked={col.visible}
-                onChange={() => toggleColumn(col.key)}
-              />
-              {col.label}
-            </label>
+            <div key={col.key} style={panelItem}>
+              <span>{col.label}</span>
+              <div
+                style={{
+                  ...toggle,
+                  background: col.visible ? "#145c43" : "#dcdcdc"
+                }}
+                onClick={() => toggleColumn(col.key)}
+              >
+                <div
+                  style={{
+                    ...circle,
+                    transform: col.visible ? "translateX(18px)" : "translateX(2px)"
+                  }}
+                />
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      <div style={glassCard}>
-        <div style={{ ...row, fontWeight: "600", color: "#0f3d2e" }}>
+      <div style={tableGlass}>
+        <div style={{ ...row, fontWeight: 600 }}>
           {visibleColumns.map(col => (
             <div
               key={col.key}
+              style={headerCell}
               onClick={() => handleSort(col.key)}
-              style={{ cursor: "pointer" }}
             >
               {col.label}
             </div>
@@ -135,141 +139,152 @@ export default function Leads() {
   )
 }
 
-/* ======================= */
-/* CELL RENDERING */
-/* ======================= */
+/* ----------------------- */
+/* UTILITIES */
+/* ----------------------- */
+
+function getFieldValue(fields, key) {
+  const value = fields[key]
+  if (!value) return ""
+  if (Array.isArray(value)) return value[0] || ""
+  return value.toString()
+}
 
 function renderCell(fields, key) {
 
   if (key === "Company Name (Lookup)") {
-    return Array.isArray(fields[key])
-      ? fields[key][0]
-      : fields[key]
+    return getFieldValue(fields, key)
   }
 
   if (key === "LinkedIn URL" && fields["LinkedIn URL"]) {
     return (
-      <a
-        href={fields["LinkedIn URL"]}
-        target="_blank"
-        rel="noreferrer"
-        style={linkStyle}
-      >
+      <a href={fields["LinkedIn URL"]} target="_blank" rel="noreferrer" style={link}>
         Profile
-      </a>
-    )
-  }
-
-  if (key === "CompanyWebsite" && fields.CompanyWebsite) {
-    return (
-      <a
-        href={fields.CompanyWebsite}
-        target="_blank"
-        rel="noreferrer"
-        style={linkStyle}
-      >
-        Visit
       </a>
     )
   }
 
   if (key === "Numero de telefono" && fields["Numero de telefono"]) {
     return (
-      <a href={`tel:${fields["Numero de telefono"]}`} style={phoneStyle}>
+      <a href={`tel:${fields["Numero de telefono"]}`} style={link}>
         {fields["Numero de telefono"]}
       </a>
     )
   }
 
   if (key === "Status") {
-    return <span style={statusStyle}>{fields.Status}</span>
+    return <span style={status}>{fields.Status}</span>
   }
 
-  return fields[key]
+  return getFieldValue(fields, key)
 }
 
-/* ======================= */
+/* ----------------------- */
 /* STYLES */
-/* ======================= */
+/* ----------------------- */
+
+const page = {
+  width: "100%",
+  paddingBottom: "40px"
+}
 
 const title = {
-  fontSize: "30px",
-  fontWeight: "700",
+  fontSize: "28px",
+  fontWeight: 700,
   color: "#0f3d2e",
-  marginBottom: "20px"
+  marginBottom: "25px"
 }
 
 const topBar = {
   display: "flex",
   gap: "15px",
-  marginBottom: "20px"
+  marginBottom: "25px"
 }
 
 const select = {
-  padding: "10px 14px",
+  padding: "10px 16px",
   borderRadius: "14px",
-  background: "rgba(255,255,255,0.7)",
-  backdropFilter: "blur(20px)",
-  border: "1px solid rgba(0,0,0,0.06)"
+  border: "1px solid rgba(0,0,0,0.05)",
+  background: "rgba(255,255,255,0.6)",
+  backdropFilter: "blur(20px)"
 }
 
-const configButton = {
+const columnsBtn = {
   padding: "10px 18px",
   borderRadius: "14px",
+  border: "none",
   background: "#145c43",
   color: "#fff",
-  border: "none",
   cursor: "pointer"
 }
 
-const panel = {
-  marginBottom: "20px",
-  padding: "20px",
-  borderRadius: "20px",
+const glassPanel = {
+  padding: "25px",
+  marginBottom: "25px",
+  borderRadius: "24px",
   background: "rgba(255,255,255,0.6)",
-  backdropFilter: "blur(25px)",
-  display: "flex",
-  gap: "20px",
-  flexWrap: "wrap"
+  backdropFilter: "blur(30px)",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))",
+  gap: "20px"
 }
 
 const panelItem = {
-  fontSize: "14px",
-  color: "#145c43"
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center"
 }
 
-const glassCard = {
+const toggle = {
+  width: "42px",
+  height: "22px",
+  borderRadius: "20px",
+  position: "relative",
+  cursor: "pointer",
+  transition: "0.3s"
+}
+
+const circle = {
+  width: "18px",
+  height: "18px",
+  borderRadius: "50%",
+  background: "#fff",
+  position: "absolute",
+  top: "2px",
+  transition: "0.3s"
+}
+
+const tableGlass = {
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(35px)",
-  borderRadius: "26px",
+  borderRadius: "28px",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 20px 50px rgba(15,61,46,0.12)"
+  overflow: "hidden"
 }
 
 const row = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))",
-  padding: "18px 30px",
+  gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))",
+  padding: "18px 25px",
   borderBottom: "1px solid rgba(0,0,0,0.05)",
   alignItems: "center",
   cursor: "pointer"
 }
 
-const statusStyle = {
-  padding: "6px 12px",
+const headerCell = {
+  cursor: "pointer",
+  color: "#145c43"
+}
+
+const status = {
+  padding: "6px 14px",
   borderRadius: "14px",
   background: "#145c43",
   color: "#fff",
   fontSize: "12px"
 }
 
-const linkStyle = {
+const link = {
   color: "#145c43",
-  textDecoration: "none",
-  fontWeight: "500"
-}
-
-const phoneStyle = {
-  color: "#0f3d2e",
   textDecoration: "none"
 }
