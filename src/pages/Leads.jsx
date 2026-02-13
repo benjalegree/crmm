@@ -15,8 +15,8 @@ export default function Leads() {
     { key: "Position", label: "Position", visible: true },
     { key: "Company", label: "Company", visible: true },
     { key: "Email", label: "Email", visible: true },
-    { key: "Phone", label: "Phone", visible: true },
-    { key: "LinkedIn", label: "LinkedIn", visible: true },
+    { key: "Numero de telefono", label: "Phone", visible: true },
+    { key: "LinkedIn URL", label: "LinkedIn", visible: true },
     { key: "CompanyWebsite", label: "Website", visible: true },
     { key: "Status", label: "Status", visible: true }
   ]
@@ -105,7 +105,7 @@ export default function Leads() {
       )}
 
       <div style={glassCard}>
-        <div style={{ ...row, fontWeight: "600", color: "#145c43" }}>
+        <div style={{ ...row, fontWeight: "600", color: "#0f3d2e" }}>
           {visibleColumns.map(col => (
             <div
               key={col.key}
@@ -135,20 +135,55 @@ export default function Leads() {
   )
 }
 
+/* ======================= */
+/* CELL RENDERING */
+/* ======================= */
+
 function renderCell(fields, key) {
-  if (key === "LinkedIn" && fields.LinkedIn)
-    return <a href={fields.LinkedIn} target="_blank" rel="noreferrer">Profile</a>
 
-  if (key === "CompanyWebsite" && fields.CompanyWebsite)
-    return <a href={fields.CompanyWebsite} target="_blank" rel="noreferrer">Visit</a>
+  if (key === "LinkedIn URL" && fields["LinkedIn URL"]) {
+    return (
+      <a
+        href={fields["LinkedIn URL"]}
+        target="_blank"
+        rel="noreferrer"
+        style={linkStyle}
+      >
+        Profile
+      </a>
+    )
+  }
 
-  if (key === "Status")
+  if (key === "CompanyWebsite" && fields.CompanyWebsite) {
+    return (
+      <a
+        href={fields.CompanyWebsite}
+        target="_blank"
+        rel="noreferrer"
+        style={linkStyle}
+      >
+        Visit
+      </a>
+    )
+  }
+
+  if (key === "Numero de telefono" && fields["Numero de telefono"]) {
+    return (
+      <a href={`tel:${fields["Numero de telefono"]}`} style={phoneStyle}>
+        {fields["Numero de telefono"]}
+      </a>
+    )
+  }
+
+  if (key === "Status") {
     return <span style={statusStyle}>{fields.Status}</span>
+  }
 
-  if (key === "Company")
+  if (key === "Company") {
     return Array.isArray(fields.Company)
       ? fields.Company[0]
       : fields.Company
+  }
 
   return fields[key]
 }
@@ -158,7 +193,7 @@ function renderCell(fields, key) {
 /* ======================= */
 
 const title = {
-  fontSize: "32px",
+  fontSize: "30px",
   fontWeight: "700",
   color: "#0f3d2e",
   marginBottom: "20px"
@@ -173,9 +208,9 @@ const topBar = {
 const select = {
   padding: "10px 14px",
   borderRadius: "14px",
-  background: "rgba(255,255,255,0.6)",
+  background: "rgba(255,255,255,0.7)",
   backdropFilter: "blur(20px)",
-  border: "1px solid rgba(0,0,0,0.08)"
+  border: "1px solid rgba(0,0,0,0.06)"
 }
 
 const configButton = {
@@ -192,7 +227,7 @@ const panel = {
   padding: "20px",
   borderRadius: "20px",
   background: "rgba(255,255,255,0.6)",
-  backdropFilter: "blur(20px)",
+  backdropFilter: "blur(25px)",
   display: "flex",
   gap: "20px",
   flexWrap: "wrap"
@@ -205,7 +240,7 @@ const panelItem = {
 
 const glassCard = {
   background: "rgba(255,255,255,0.55)",
-  backdropFilter: "blur(30px)",
+  backdropFilter: "blur(35px)",
   borderRadius: "26px",
   border: "1px solid rgba(255,255,255,0.4)",
   boxShadow: "0 20px 50px rgba(15,61,46,0.12)"
@@ -213,7 +248,7 @@ const glassCard = {
 
 const row = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))",
   padding: "18px 30px",
   borderBottom: "1px solid rgba(0,0,0,0.05)",
   alignItems: "center",
@@ -226,4 +261,15 @@ const statusStyle = {
   background: "#145c43",
   color: "#fff",
   fontSize: "12px"
+}
+
+const linkStyle = {
+  color: "#145c43",
+  textDecoration: "none",
+  fontWeight: "500"
+}
+
+const phoneStyle = {
+  color: "#0f3d2e",
+  textDecoration: "none"
 }
