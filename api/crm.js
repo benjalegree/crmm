@@ -9,9 +9,12 @@ export default async function handler(req, res) {
         : req.body
       : {}
 
-  /* =========================
-     LOGIN (NO REQUIERE COOKIE)
-  ========================== */
+  const baseId = process.env.AIRTABLE_BASE_ID
+  const token = process.env.AIRTABLE_TOKEN
+
+  /* =====================================================
+     LOGIN (NO REQUIERE SESIÓN)
+  ====================================================== */
 
   if (action === "login") {
 
@@ -32,17 +35,44 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Not authorized" })
     }
 
+    const expires = new Date()
+    expires.setDate(expires.getDate() + 7)
+
     res.setHeader(
       "Set-Cookie",
-      `session=${normalized}; Path=/; HttpOnly; SameSite=Lax`
+      `session=${normalized}; Path=/; HttpOnly; SameSite=Lax; Expires=${expires.toUTCString()}`
     )
 
     return res.status(200).json({ success: true })
   }
 
-  /* =========================
+  /* =====================================================
+     CHECK SESSION
+  ====================================================== */
+
+  if (action === "me") {
+
+    const cookie = req.headers.cookie
+
+    if (!cookie || !cookie.includes("session=")) {
+      return res.status(401).json({ authenticated: false })
+    }
+
+    const email = cookie
+      .split("session=")[1]
+      ?.split(";")[0]
+      ?.trim()
+      ?.toLowerCase()
+
+    return res.status(200).json({
+      authenticated: true,
+      email
+    })
+  }
+
+  /* =====================================================
      AUTH REQUIRED BELOW
-  ========================== */
+  ====================================================== */
 
   const cookie = req.headers.cookie
 
@@ -56,12 +86,9 @@ export default async function handler(req, res) {
     ?.trim()
     ?.toLowerCase()
 
-  const baseId = process.env.AIRTABLE_BASE_ID
-  const token = process.env.AIRTABLE_TOKEN
-
-  /* =========================
+  /* =====================================================
      GET COMPANIES
-  ========================== */
+  ====================================================== */
 
   if (action === "getCompanies") {
 
@@ -74,13 +101,17 @@ export default async function handler(req, res) {
       }
     )
 
+    if (!response.ok) {
+      return res.status(500).json({ error: "Airtable error" })
+    }
+
     const data = await response.json()
     return res.status(200).json(data)
   }
 
-  /* =========================
+  /* =====================================================
      GET COMPANY
-  ========================== */
+  ====================================================== */
 
   if (action === "getCompany") {
 
@@ -97,9 +128,9 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =========================
+  /* =====================================================
      UPDATE COMPANY
-  ========================== */
+  ====================================================== */
 
   if (action === "updateCompany") {
 
@@ -121,9 +152,9 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =========================
+  /* =====================================================
      GET CONTACTS
-  ========================== */
+  ====================================================== */
 
   if (action === "getContacts") {
 
@@ -140,9 +171,9 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =========================
+  /* =====================================================
      GET CONTACT
-  ========================== */
+  ====================================================== */
 
   if (action === "getContact") {
 
@@ -159,9 +190,9 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =========================
+  /* =====================================================
      UPDATE CONTACT
-  ========================== */
+  ====================================================== */
 
   if (action === "updateContact") {
 
@@ -183,9 +214,9 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =========================
+  /* =====================================================
      CREATE ACTIVITY
-  ========================== */
+  ====================================================== */
 
   if (action === "createActivity") {
 
@@ -217,9 +248,9 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =========================
+  /* =====================================================
      GET ACTIVITIES
-  ========================== */
+  ====================================================== */
 
   if (action === "getActivities") {
 
@@ -245,9 +276,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ records })
   }
 
-  /* =========================
+  /* =====================================================
      GET CALENDAR
-  ========================== */
+  ====================================================== */
 
   if (action === "getCalendar") {
 
@@ -264,9 +295,9 @@ export default async function handler(req, res) {
     return res.status(200).json(data)
   }
 
-  /* =========================
+  /* =====================================================
      DASHBOARD STATS
-  ========================== */
+  ====================================================== */
 
   if (action === "getDashboardStats") {
 
@@ -304,6 +335,9 @@ export default async function handler(req, res) {
       meetings
     })
   }
+
+  return res.status(400).json({ error: "Invalid action" })
+}
 
   return res.status(400).json({ error: "Invalid action" })
 }
