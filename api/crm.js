@@ -1,334 +1,447 @@
 export default async function handler(req, res) {
+  try {
+    const { action } = req.query
 
-  const { action } = req.query
+    const body =
+      req.method === "POST"
+        ? typeof req.body === "string"
+          ? JSON.parse(req.body || "{}")
+          : req.body
+        : {}
 
-  const body =
-    req.method === "POST"
-      ? typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : req.body
-      : {}
+    const baseId = process.env.AIRTABLE_BASE_ID
+    const token = process.env.AIRTABLE_TOKEN
 
-  const baseId = process.env.AIRTABLE_BASE_ID
-  const token = process.env.AIRTABLE_TOKEN
-
-  /* =====================================================
-     HELPERS
-  ====================================================== */
-
-  const getSessionEmail = () => {
-    const cookie = req.headers.cookie
-    if (!cookie) return null
-    if (!cookie.includes("session=")) return null
-
-    return cookie
-      .split("session=")[1]
-      ?.split(";")[0]
-      ?.trim()
-      ?.toLowerCase()
-  }
-
-  const requireAuth = () => {
-    const email = getSessionEmail()
-    if (!email) {
-      res.status(401).json({ error: "Not authenticated" })
-      return null
-    }
-    return email
-  }
-
-  /* =====================================================
-     LOGIN (NO REQUIERE SESIÓN)
-  ====================================================== */
-
-  if (action === "login") {
-
-    const { email } = body
-
-    if (!email) {
-      return res.status(400).json({ error: "Email required" })
+    if (!baseId || !token) {
+      return res.status(500).json({ error: "Missing Airtable configuration" })
     }
 
-    const normalized = email.trim().toLowerCase()
-
-    const allowedUsers = [
-      "benjamin.alegre@psicofunnel.com",
-      "sarahduatorrss@gmail.com"
-    ]
-
-    if (!allowedUsers.includes(normalized)) {
-      return res.status(401).json({ error: "Not authorized" })
+    const AIRTABLE_HEADERS = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
     }
 
-    const expires = new Date()
-    expires.setDate(expires.getDate() + 7)
+    /* =====================================================
+       SESSION HELPERS
+    ====================================================== */
 
-    res.setHeader(
-      "Set-Cookie",
-      `session=${normalized}; Path=/; HttpOnly; SameSite=Lax; Expires=${expires.toUTCString()}`
-    )
+    const getSessionEmail = () => {
+      const cookie = req.headers.cookie
+      if (!cookie) return null
+      if (!cookie.includes("session=")) return null
 
-    return res.status(200).json({ success: true })
-  }
-
-  /* =====================================================
-     ME (CHECK SESSION)
-  ====================================================== */
-
-  if (action === "me") {
-
-    const email = getSessionEmail()
-
-    if (!email) {
-      return res.status(401).json({ authenticated: false })
+      return cookie
+        .split("session=")[1]
+        ?.split(";")[0]
+        ?.trim()
+        ?.toLowerCase()
     }
 
-    return res.status(200).json({
-      authenticated: true,
-      email
-    })
-  }
-
-  /* =====================================================
-     AUTH REQUIRED BELOW
-  ====================================================== */
-
-  const email = requireAuth()
-  if (!email) return
-
-  /* =====================================================
-     GET COMPANIES
-  ====================================================== */
-
-  if (action === "getCompanies") {
-
-    const formula = `{Responsible Email}="${email}"`
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Companies?filterByFormula=${encodeURIComponent(formula)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     GET COMPANY
-  ====================================================== */
-
-  if (action === "getCompany") {
-
-    const { id } = req.query
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Companies/${id}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     UPDATE COMPANY
-  ====================================================== */
-
-  if (action === "updateCompany") {
-
-    const { id, fields } = body
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Companies/${id}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ fields })
+    const requireAuth = () => {
+      const email = getSessionEmail()
+      if (!email) {
+        res.status(401).json({ error: "Not authenticated" })
+        return null
       }
-    )
+      return email
+    }
 
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
+    const secureCookieFlags =
+      process.env.NODE_ENV === "production"
+        ? "HttpOnly; Secure; SameSite=Lax; Path=/"
+        : "HttpOnly; SameSite=Lax; Path=/"
 
-  /* =====================================================
-     GET CONTACTS
-  ====================================================== */
+    /* =====================================================
+       LOGIN
+    ====================================================== */
 
-  if (action === "getContacts") {
+    if (action === "login") {
+      const { email } = body
 
-    const formula = `{Responsible Email}="${email}"`
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(formula)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     GET CONTACT
-  ====================================================== */
-
-  if (action === "getContact") {
-
-    const { id } = req.query
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Contacts/${id}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     UPDATE CONTACT
-  ====================================================== */
-
-  if (action === "updateContact") {
-
-    const { id, fields } = body
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Contacts/${id}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ fields })
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email required" })
       }
-    )
 
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
+      const normalized = email.trim().toLowerCase()
 
-  /* =====================================================
-     CREATE ACTIVITY
-  ====================================================== */
+      const allowedUsers = [
+        "benjamin.alegre@psicofunnel.com",
+        "sarahduatorrss@gmail.com"
+      ]
 
-  if (action === "createActivity") {
-
-    const { contactId, companyId, type, notes, nextFollowUp } = body
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Activities`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          fields: {
-            "Activity Type": type,
-            "Related Contact": [contactId],
-            "Related Company": companyId ? [companyId] : [],
-            "Activity Date": new Date().toISOString(),
-            "Owner Email": email,
-            "Notes": notes || "",
-            "Next Follow-up Date": nextFollowUp || null
-          }
-        })
+      if (!allowedUsers.includes(normalized)) {
+        return res.status(401).json({ error: "Not authorized" })
       }
-    )
 
-    const data = await response.json()
-    return res.status(200).json(data)
+      const expires = new Date()
+      expires.setDate(expires.getDate() + 7)
+
+      res.setHeader(
+        "Set-Cookie",
+        `session=${normalized}; ${secureCookieFlags}; Expires=${expires.toUTCString()}`
+      )
+
+      return res.status(200).json({ success: true })
+    }
+
+    /* =====================================================
+       ME
+    ====================================================== */
+
+    if (action === "me") {
+      const email = getSessionEmail()
+
+      if (!email) {
+        return res.status(401).json({ authenticated: false })
+      }
+
+      return res.status(200).json({
+        authenticated: true,
+        email
+      })
+    }
+
+    /* =====================================================
+       AUTH REQUIRED BELOW
+    ====================================================== */
+
+    const email = requireAuth()
+    if (!email) return
+
+    /* =====================================================
+       GET COMPANIES (OWNERSHIP FILTERED)
+    ====================================================== */
+
+    if (action === "getCompanies") {
+      const formula = `{Responsible Email}="${email}"`
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Companies?filterByFormula=${encodeURIComponent(
+          formula
+        )}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to fetch companies" })
+      }
+
+      const data = await response.json()
+      return res.status(200).json(data)
+    }
+
+    /* =====================================================
+       GET COMPANY (OWNERSHIP VERIFIED)
+    ====================================================== */
+
+    if (action === "getCompany") {
+      const { id } = req.query
+
+      if (!id) return res.status(400).json({ error: "Missing company ID" })
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Companies/${id}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Company not found" })
+      }
+
+      const data = await response.json()
+
+      if (data.fields["Responsible Email"] !== email) {
+        return res.status(403).json({ error: "Forbidden" })
+      }
+
+      return res.status(200).json(data)
+    }
+
+    /* =====================================================
+       UPDATE COMPANY (OWNERSHIP VERIFIED)
+    ====================================================== */
+
+    if (action === "updateCompany") {
+      const { id, fields } = body
+
+      if (!id || !fields) {
+        return res.status(400).json({ error: "Missing data" })
+      }
+
+      const check = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Companies/${id}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!check.ok) {
+        return res.status(check.status).json({ error: "Company not found" })
+      }
+
+      const existing = await check.json()
+
+      if (existing.fields["Responsible Email"] !== email) {
+        return res.status(403).json({ error: "Forbidden" })
+      }
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Companies/${id}`,
+        {
+          method: "PATCH",
+          headers: AIRTABLE_HEADERS,
+          body: JSON.stringify({ fields })
+        }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to update company" })
+      }
+
+      const data = await response.json()
+      return res.status(200).json(data)
+    }
+
+    /* =====================================================
+       GET CONTACTS (OWNERSHIP FILTERED)
+    ====================================================== */
+
+    if (action === "getContacts") {
+      const formula = `{Responsible Email}="${email}"`
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(
+          formula
+        )}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to fetch contacts" })
+      }
+
+      const data = await response.json()
+      return res.status(200).json(data)
+    }
+
+    /* =====================================================
+       GET CONTACT (OWNERSHIP VERIFIED)
+    ====================================================== */
+
+    if (action === "getContact") {
+      const { id } = req.query
+
+      if (!id) return res.status(400).json({ error: "Missing contact ID" })
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Contacts/${id}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Contact not found" })
+      }
+
+      const data = await response.json()
+
+      if (data.fields["Responsible Email"] !== email) {
+        return res.status(403).json({ error: "Forbidden" })
+      }
+
+      return res.status(200).json(data)
+    }
+
+    /* =====================================================
+       UPDATE CONTACT (OWNERSHIP VERIFIED)
+    ====================================================== */
+
+    if (action === "updateContact") {
+      const { id, fields } = body
+
+      if (!id || !fields) {
+        return res.status(400).json({ error: "Missing data" })
+      }
+
+      const check = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Contacts/${id}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!check.ok) {
+        return res.status(check.status).json({ error: "Contact not found" })
+      }
+
+      const existing = await check.json()
+
+      if (existing.fields["Responsible Email"] !== email) {
+        return res.status(403).json({ error: "Forbidden" })
+      }
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Contacts/${id}`,
+        {
+          method: "PATCH",
+          headers: AIRTABLE_HEADERS,
+          body: JSON.stringify({ fields })
+        }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to update contact" })
+      }
+
+      const data = await response.json()
+      return res.status(200).json(data)
+    }
+
+    /* =====================================================
+       CREATE ACTIVITY (OWNER FORCED)
+    ====================================================== */
+
+    if (action === "createActivity") {
+      const { contactId, companyId, type, notes, nextFollowUp } = body
+
+      if (!contactId || !type) {
+        return res.status(400).json({ error: "Missing required fields" })
+      }
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Activities`,
+        {
+          method: "POST",
+          headers: AIRTABLE_HEADERS,
+          body: JSON.stringify({
+            fields: {
+              "Activity Type": type,
+              "Related Contact": [contactId],
+              "Related Company": companyId ? [companyId] : [],
+              "Activity Date": new Date().toISOString(),
+              "Owner Email": email,
+              "Notes": notes || "",
+              "Next Follow-up Date": nextFollowUp || null
+            }
+          })
+        }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to create activity" })
+      }
+
+      const data = await response.json()
+      return res.status(200).json(data)
+    }
+
+    /* =====================================================
+       GET ACTIVITIES (OWNERSHIP FILTERED)
+    ====================================================== */
+
+    if (action === "getActivities") {
+      const { contactId } = req.query
+
+      if (!contactId) {
+        return res.status(400).json({ error: "Missing contact ID" })
+      }
+
+      const formula = `AND(FIND("${contactId}", ARRAYJOIN({Related Contact})), {Owner Email}="${email}")`
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(
+          formula
+        )}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to fetch activities" })
+      }
+
+      const data = await response.json()
+
+      const records = (data.records || []).sort(
+        (a, b) =>
+          new Date(b.fields["Activity Date"]) -
+          new Date(a.fields["Activity Date"])
+      )
+
+      return res.status(200).json({ records })
+    }
+
+    /* =====================================================
+       GET CALENDAR (OWNERSHIP FILTERED)
+    ====================================================== */
+
+    if (action === "getCalendar") {
+      const formula = `{Owner Email}="${email}"`
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(
+          formula
+        )}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to fetch calendar" })
+      }
+
+      const data = await response.json()
+      return res.status(200).json(data)
+    }
+
+    /* =====================================================
+       DASHBOARD STATS (OWNERSHIP FILTERED)
+    ====================================================== */
+
+    if (action === "getDashboardStats") {
+      const contactsRes = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(
+          `{Responsible Email}="${email}"`
+        )}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      const activitiesRes = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(
+          `{Owner Email}="${email}"`
+        )}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      if (!contactsRes.ok || !activitiesRes.ok) {
+        return res.status(500).json({ error: "Failed to load dashboard data" })
+      }
+
+      const contacts = await contactsRes.json()
+      const activities = await activitiesRes.json()
+
+      const totalLeads = contacts.records?.length || 0
+
+      const calls =
+        activities.records?.filter(
+          r => r.fields["Activity Type"] === "Call"
+        ).length || 0
+
+      const emails =
+        activities.records?.filter(
+          r => r.fields["Activity Type"] === "Email"
+        ).length || 0
+
+      const meetings =
+        activities.records?.filter(
+          r => r.fields["Activity Type"] === "Meeting"
+        ).length || 0
+
+      return res.status(200).json({
+        totalLeads,
+        calls,
+        emails,
+        meetings
+      })
+    }
+
+    return res.status(400).json({ error: "Invalid action" })
+
+  } catch (err) {
+    console.error("CRM BACKEND ERROR:", err)
+    return res.status(500).json({ error: "Internal server error" })
   }
-
-  /* =====================================================
-     GET ACTIVITIES
-  ====================================================== */
-
-  if (action === "getActivities") {
-
-    const { contactId } = req.query
-
-    const formula = `FIND("${contactId}", ARRAYJOIN({Related Contact}))`
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const data = await response.json()
-
-    const records = (data.records || []).sort(
-      (a, b) =>
-        new Date(b.fields["Activity Date"]) -
-        new Date(a.fields["Activity Date"])
-    )
-
-    return res.status(200).json({ records })
-  }
-
-  /* =====================================================
-     GET CALENDAR
-  ====================================================== */
-
-  if (action === "getCalendar") {
-
-    const formula = `{Owner Email}="${email}"`
-
-    const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  }
-
-  /* =====================================================
-     DASHBOARD STATS
-  ====================================================== */
-
-  if (action === "getDashboardStats") {
-
-    const contactsRes = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(`{Responsible Email}="${email}"`)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const activitiesRes = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(`{Owner Email}="${email}"`)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const contacts = await contactsRes.json()
-    const activities = await activitiesRes.json()
-
-    const totalLeads = contacts.records?.length || 0
-
-    const calls = activities.records?.filter(
-      r => r.fields["Activity Type"] === "Call"
-    ).length || 0
-
-    const emails = activities.records?.filter(
-      r => r.fields["Activity Type"] === "Email"
-    ).length || 0
-
-    const meetings = activities.records?.filter(
-      r => r.fields["Activity Type"] === "Meeting"
-    ).length || 0
-
-    return res.status(200).json({
-      totalLeads,
-      calls,
-      emails,
-      meetings
-    })
-  }
-
-  return res.status(400).json({ error: "Invalid action" })
 }
