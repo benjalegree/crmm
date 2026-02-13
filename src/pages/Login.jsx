@@ -1,11 +1,13 @@
 import { useState } from "react"
 
 export default function Login() {
+
   const [email, setEmail] = useState("")
   const [error, setError] = useState("")
 
   const login = async () => {
-    const res = await fetch("/api/login", {
+
+    const res = await fetch("/api/crm?action=login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -17,7 +19,7 @@ export default function Login() {
     if (res.status === 200 && data.success) {
       window.location.href = "/dashboard"
     } else {
-      setError(data.error || "Error")
+      setError(data.error || "Login failed")
     }
   }
 
@@ -25,14 +27,19 @@ export default function Login() {
     <div style={container}>
       <div style={card}>
         <h2>PsicoFunnel CRM</h2>
+
         <input
           placeholder="Email"
           value={email}
           onChange={e => setEmail(e.target.value)}
           style={input}
         />
-        <button onClick={login} style={button}>Entrar</button>
-        <p style={{color:"red"}}>{error}</p>
+
+        <button onClick={login} style={button}>
+          Entrar
+        </button>
+
+        {error && <p style={{ color: "red" }}>{error}</p>}
       </div>
     </div>
   )
