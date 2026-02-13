@@ -198,49 +198,49 @@ export default async function handler(req, res) {
        GET CONTACTS
     ====================================================== */
 
- if (action === "getContacts") {
-  const formula = `{Responsible Email}="${email}"`
+    if (action === "getContacts") {
+      const formula = `{Responsible Email}="${email}"`
 
-  const contactsRes = await fetch(
-    `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(formula)}`,
-    { headers: AIRTABLE_HEADERS }
-  )
+      const contactsRes = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(formula)}`,
+        { headers: AIRTABLE_HEADERS }
+      )
 
-  if (!contactsRes.ok) {
-    return res.status(contactsRes.status).json({ error: "Failed to fetch contacts" })
-  }
-
-  const contactsData = await contactsRes.json()
-  const contacts = contactsData.records || []
-
-  const companiesRes = await fetch(
-    `https://api.airtable.com/v0/${baseId}/Companies`,
-    { headers: AIRTABLE_HEADERS }
-  )
-
-  const companiesData = await companiesRes.json()
-  const companies = companiesData.records || []
-
-  const companiesMap = {}
-  companies.forEach(c => {
-    companiesMap[c.id] = c.fields
-  })
-
-  const enrichedContacts = contacts.map(contact => {
-    const companyId = contact.fields.Company?.[0]
-    const companyData = companyId ? companiesMap[companyId] : null
-
-    return {
-      ...contact,
-      fields: {
-        ...contact.fields,
-        CompanyWebsite: companyData?.Website || ""
+      if (!contactsRes.ok) {
+        return res.status(contactsRes.status).json({ error: "Failed to fetch contacts" })
       }
-    }
-  })
 
-  return res.status(200).json({ records: enrichedContacts })
-}
+      const contactsData = await contactsRes.json()
+      const contacts = contactsData.records || []
+
+      const companiesRes = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Companies`,
+        { headers: AIRTABLE_HEADERS }
+      )
+
+      const companiesData = await companiesRes.json()
+      const companies = companiesData.records || []
+
+      const companiesMap = {}
+      companies.forEach(c => {
+        companiesMap[c.id] = c.fields
+      })
+
+      const enrichedContacts = contacts.map(contact => {
+        const companyId = contact.fields.Company?.[0]
+        const companyData = companyId ? companiesMap[companyId] : null
+
+        return {
+          ...contact,
+          fields: {
+            ...contact.fields,
+            CompanyWebsite: companyData?.Website || ""
+          }
+        }
+      })
+
+      return res.status(200).json({ records: enrichedContacts })
+    }
 
     /* =====================================================
        GET CONTACT
@@ -313,64 +313,67 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       CREATE ACTIVITY
+       CREATE ACTIVITY (ARREGLADO DEFINITIVO)
     ====================================================== */
-if (action === "createActivity") {
 
-  const { contactId, type, notes, nextFollowUp } = body
+    if (action === "createActivity") {
 
-  if (!contactId || !type) {
-    return res.status(400).json({ error: "Missing required fields" })
-  }
+      const { contactId, type, notes, nextFollowUp } = body
 
-  // 🔥 1️⃣ Obtener el contacto completo
-  const contactRes = await fetch(
-    `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
-    { headers: AIRTABLE_HEADERS }
-  )
+      if (!contactId || !type) {
+        return res.status(400).json({ error: "Missing required fields" })
+      }
 
-  if (!contactRes.ok) {
-    return res.status(404).json({ error: "Contact not found" })
-  }
+      const contactRes = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
+        { headers: AIRTABLE_HEADERS }
+      )
 
-  const contactData = await contactRes.json()
+      if (!contactRes.ok) {
+        return res.status(404).json({ error: "Contact not found" })
+      }
 
-  // 🔥 2️⃣ Obtener el ID REAL de la empresa (campo Link)
-  const linkedCompanyId =
-    Array.isArray(contactData.fields.Company) &&
-    contactData.fields.Company.length > 0
-      ? contactData.fields.Company[0]
-      : null
+      const contactData = await contactRes.json()
 
-  // 🔥 3️⃣ Crear actividad correctamente
-  const activityRes = await fetch(
-    `https://api.airtable.com/v0/${baseId}/Activities`,
-    {
-      method: "POST",
-      headers: AIRTABLE_HEADERS,
-      body: JSON.stringify({
-        fields: {
-          "Activity Type": type,
-          "Related Contact": [contactId],
-          "Related Company": linkedCompanyId ? [linkedCompanyId] : [],
-          "Activity Date": new Date().toISOString(),
-          "Owner Email": email,
-          "Notes": notes || "",
-          "Next Follow-up Date": nextFollowUp || null
+      if (contactData.fields["Responsible Email"] !== email) {
+        return res.status(403).json({ error: "Forbidden" })
+      }
+
+      const linkedCompanyId =
+        Array.isArray(contactData.fields.Company) &&
+        contactData.fields.Company.length > 0
+          ? contactData.fields.Company[0]
+          : null
+
+      const activityResponse = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Activities`,
+        {
+          method: "POST",
+          headers: AIRTABLE_HEADERS,
+          body: JSON.stringify({
+            fields: {
+              "Activity Type": type,
+              "Related Contact": [contactId],
+              "Related Company": linkedCompanyId ? [linkedCompanyId] : [],
+              "Activity Date": new Date().toISOString(),
+              "Owner Email": email,
+              "Notes": notes || "",
+              "Next Follow-up Date": nextFollowUp || null
+            }
+          })
         }
-      })
+      )
+
+      const activityData = await activityResponse.json()
+
+      if (!activityResponse.ok) {
+        console.error("Airtable Activity Error:", activityData)
+        return res.status(activityResponse.status).json(activityData)
+      }
+
+      return res.status(200).json(activityData)
     }
-  )
 
-  const activityData = await activityRes.json()
-
-  if (!activityRes.ok) {
-    console.error("Airtable error:", activityData)
-    return res.status(activityRes.status).json(activityData)
-  }
-
-  return res.status(200).json(activityData)
-}
     /* =====================================================
        GET ACTIVITIES
     ====================================================== */
@@ -382,7 +385,7 @@ if (action === "createActivity") {
         return res.status(400).json({ error: "Missing contact ID" })
       }
 
-      const formula = `AND(FIND("${contactId}", ARRAYJOIN({Related Contact})), {Owner Email}="${email}")`
+      const formula = `AND({Owner Email}="${email}", FIND("${contactId}", ARRAYJOIN({Related Contact})))`
 
       const response = await fetch(
         `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
@@ -405,7 +408,7 @@ if (action === "createActivity") {
     }
 
     /* =====================================================
-       DASHBOARD INTELIGENTE SaaS B2B
+       DASHBOARD
     ====================================================== */
 
     if (action === "getDashboardStats") {
@@ -426,10 +429,6 @@ if (action === "createActivity") {
 
       const totalLeads = contacts.length
 
-      const activeLeads = contacts.filter(c =>
-        c.fields.Status !== "Closed Lost"
-      ).length
-
       const meetingsBooked = contacts.filter(c =>
         c.fields.Status === "Meeting Booked"
       ).length
@@ -443,65 +442,14 @@ if (action === "createActivity") {
           ? ((closedWon / totalLeads) * 100).toFixed(1)
           : 0
 
-      const winRate =
-        meetingsBooked > 0
-          ? ((closedWon / meetingsBooked) * 100).toFixed(1)
-          : 0
-
-      let atRiskLeads = 0
-      let coolingLeads = 0
-      let leadsWithoutFollowUp = 0
-      let totalDaysWithoutContact = 0
-      let countedLeads = 0
-
-      const now = new Date()
-
-      contacts.forEach(contact => {
-        const lastActivity = contact.fields["Last Activity Date"]
-        const nextFollowUp = contact.fields["Next Follow-up Date"]
-
-        if (!nextFollowUp) {
-          leadsWithoutFollowUp++
-        }
-
-        if (lastActivity) {
-          const diffTime = Math.abs(now - new Date(lastActivity))
-          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-
-          totalDaysWithoutContact += diffDays
-          countedLeads++
-
-          if (diffDays >= 7) {
-            atRiskLeads++
-          } else if (diffDays >= 5) {
-            coolingLeads++
-          }
-        }
-      })
-
-      const avgDaysWithoutContact =
-        countedLeads > 0
-          ? (totalDaysWithoutContact / countedLeads).toFixed(1)
-          : 0
-
       return res.status(200).json({
         totalLeads,
-        activeLeads,
         meetingsBooked,
         closedWon,
-        conversionRate,
-        winRate,
-        atRiskLeads,
-        coolingLeads,
-        leadsWithoutFollowUp,
-        avgDaysWithoutContact
+        conversionRate
       })
     }
 
     return res.status(400).json({ error: "Invalid action" })
 
-  } catch (err) {
-    console.error("CRM BACKEND ERROR:", err)
-    return res.status(500).json({ error: "Internal server error" })
   }
-}
