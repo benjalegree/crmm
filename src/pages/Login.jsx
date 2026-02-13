@@ -1,26 +1,42 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 
 export default function Login() {
 
   const [email, setEmail] = useState("")
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const navigate = useNavigate()
 
   const login = async () => {
 
-    const res = await fetch("/api/crm?action=login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email })
-    })
+    if (!email) return
 
-    const data = await res.json()
+    setLoading(true)
+    setError("")
 
-    if (res.status === 200 && data.success) {
-      window.location.href = "/dashboard"
-    } else {
-      setError(data.error || "Login failed")
+    try {
+
+      const res = await fetch("/api/crm?action=login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email })
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        navigate("/dashboard")
+      } else {
+        setError(data.error || "Login failed")
+      }
+
+    } catch (err) {
+      setError("Server error")
     }
+
+    setLoading(false)
   }
 
   return (
@@ -35,8 +51,15 @@ export default function Login() {
           style={input}
         />
 
-        <button onClick={login} style={button}>
-          Entrar
+        <button
+          onClick={login}
+          disabled={loading}
+          style={{
+            ...button,
+            opacity: loading ? 0.6 : 1
+          }}
+        >
+          {loading ? "Logging in..." : "Entrar"}
         </button>
 
         {error && <p style={{ color: "red" }}>{error}</p>}
@@ -58,7 +81,7 @@ const card = {
   padding: "40px",
   borderRadius: "20px",
   boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
-  width: "300px",
+  width: "320px",
   textAlign: "center"
 }
 
