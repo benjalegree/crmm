@@ -17,101 +17,134 @@ export default function Dashboard() {
     setStats(data)
   }
 
-  if (!stats) return <div>Loading dashboard...</div>
+  if (!stats) return <div style={{ padding: "20px" }}>Loading...</div>
 
   return (
     <div>
+
       <h1 style={title}>Dashboard</h1>
+      <p style={subtitle}>Your pipeline health at a glance</p>
 
-      {/* PRIMARY METRICS */}
+      {/* Primary Metrics */}
       <div style={grid}>
-        <Card title="Total Leads" value={stats.totalLeads} />
-        <Card title="Active Leads" value={stats.activeLeads} />
-        <Card title="Meetings Booked" value={stats.meetingsBooked} />
-        <Card title="Closed Won" value={stats.closedWon} />
-      </div>
-
-      {/* PERFORMANCE METRICS */}
-      <div style={{ ...grid, marginTop: "30px" }}>
-        <Card 
-          title="Conversion Rate" 
-          value={`${stats.conversionRate}%`} 
+        <MetricCard
+          label="Total Leads"
+          value={stats.totalLeads}
+          accent="rgba(120,180,255,0.4)"
         />
-        <Card 
-          title="Win Rate" 
-          value={`${stats.winRate}%`} 
+        <MetricCard
+          label="Active Leads"
+          value={stats.activeLeads}
+          accent="rgba(150,255,200,0.4)"
         />
-        <Card 
-          title="Avg Days Without Contact" 
-          value={stats.avgDaysWithoutContact} 
+        <MetricCard
+          label="Meetings Booked"
+          value={stats.meetingsBooked}
+          accent="rgba(200,180,255,0.4)"
         />
-        <Card 
-          title="Leads Without Follow-up" 
-          value={stats.leadsWithoutFollowUp} 
+        <MetricCard
+          label="Closed Won"
+          value={stats.closedWon}
+          accent="rgba(255,210,150,0.4)"
         />
       </div>
 
-      {/* PIPELINE HEALTH */}
-      <div style={{ ...grid, marginTop: "30px" }}>
-        <Card 
-          title="At Risk (7+ days)" 
-          value={stats.atRiskLeads} 
-          color="#ff3b30"
+      {/* Performance */}
+      <div style={{ ...grid, marginTop: "40px" }}>
+        <MetricCard
+          label="Conversion Rate"
+          value={`${stats.conversionRate}%`}
         />
-        <Card 
-          title="Cooling (5–6 days)" 
-          value={stats.coolingLeads} 
-          color="#ff9500"
+        <MetricCard
+          label="Win Rate"
+          value={`${stats.winRate}%`}
+        />
+        <MetricCard
+          label="Avg Days Without Contact"
+          value={stats.avgDaysWithoutContact}
+        />
+        <MetricCard
+          label="Leads Without Follow-up"
+          value={stats.leadsWithoutFollowUp}
         />
       </div>
+
+      {/* Pipeline Health */}
+      <div style={{ ...grid, marginTop: "40px" }}>
+        <MetricCard
+          label="At Risk (7+ days)"
+          value={stats.atRiskLeads}
+          accent="rgba(255,100,100,0.4)"
+        />
+        <MetricCard
+          label="Cooling (5–6 days)"
+          value={stats.coolingLeads}
+          accent="rgba(255,180,100,0.4)"
+        />
+      </div>
+
     </div>
   )
 }
 
-function Card({ title, value, color }) {
+function MetricCard({ label, value, accent }) {
   return (
     <div style={{
       ...card,
-      borderLeft: color ? `6px solid ${color}` : "6px solid #007aff"
+      background: accent
+        ? `
+          linear-gradient(135deg, rgba(255,255,255,0.75), rgba(255,255,255,0.55)),
+          radial-gradient(circle at top left, ${accent}, transparent 60%)
+        `
+        : "rgba(255,255,255,0.65)"
     }}>
-      <h3 style={cardTitle}>{title}</h3>
-      <p style={number}>{value ?? 0}</p>
+      <span style={metricLabel}>{label}</span>
+      <span style={metricValue}>{value ?? 0}</span>
     </div>
   )
 }
 
 const title = {
-  fontSize: "28px",
+  fontSize: "34px",
   fontWeight: "600",
-  marginBottom: "10px"
+  letterSpacing: "-0.5px"
+}
+
+const subtitle = {
+  fontSize: "15px",
+  color: "#6e6e73",
+  marginTop: "8px",
+  marginBottom: "40px"
 }
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-  gap: "20px",
-  marginTop: "20px"
+  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gap: "30px"
 }
 
 const card = {
-  background: "white",
-  padding: "25px",
-  borderRadius: "20px",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
+  backdropFilter: "blur(30px)",
+  borderRadius: "26px",
+  padding: "35px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
+  border: "1px solid rgba(255,255,255,0.6)",
   display: "flex",
   flexDirection: "column",
-  justifyContent: "center",
-  minHeight: "110px"
+  justifyContent: "space-between",
+  minHeight: "140px",
+  transition: "all 0.25s ease"
 }
 
-const cardTitle = {
+const metricLabel = {
   fontSize: "14px",
-  color: "#666",
-  marginBottom: "10px",
+  color: "#6e6e73",
   fontWeight: "500"
 }
 
-const number = {
-  fontSize: "28px",
-  fontWeight: "700"
+const metricValue = {
+  fontSize: "34px",
+  fontWeight: "700",
+  marginTop: "15px",
+  letterSpacing: "-1px"
 }
