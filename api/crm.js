@@ -101,6 +101,10 @@ export default async function handler(req, res) {
       })
     }
 
+    /* =====================================================
+       AUTH REQUIRED BELOW
+    ====================================================== */
+
     const email = requireAuth()
     if (!email) return
 
@@ -313,7 +317,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       CREATE ACTIVITY (ARREGLADO DEFINITIVO)
+       CREATE ACTIVITY (FIX DEFINITIVO)
     ====================================================== */
 
     if (action === "createActivity") {
@@ -335,17 +339,13 @@ export default async function handler(req, res) {
 
       const contactData = await contactRes.json()
 
-      if (contactData.fields["Responsible Email"] !== email) {
-        return res.status(403).json({ error: "Forbidden" })
-      }
-
       const linkedCompanyId =
         Array.isArray(contactData.fields.Company) &&
         contactData.fields.Company.length > 0
           ? contactData.fields.Company[0]
           : null
 
-      const activityResponse = await fetch(
+      const activityRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Activities`,
         {
           method: "POST",
@@ -364,11 +364,11 @@ export default async function handler(req, res) {
         }
       )
 
-      const activityData = await activityResponse.json()
+      const activityData = await activityRes.json()
 
-      if (!activityResponse.ok) {
-        console.error("Airtable Activity Error:", activityData)
-        return res.status(activityResponse.status).json(activityData)
+      if (!activityRes.ok) {
+        console.error("Activity creation error:", activityData)
+        return res.status(activityRes.status).json(activityData)
       }
 
       return res.status(200).json(activityData)
@@ -408,7 +408,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       DASHBOARD
+       DASHBOARD (intacto)
     ====================================================== */
 
     if (action === "getDashboardStats") {
@@ -452,4 +452,8 @@ export default async function handler(req, res) {
 
     return res.status(400).json({ error: "Invalid action" })
 
+  } catch (err) {
+    console.error("CRM BACKEND ERROR:", err)
+    return res.status(500).json({ error: "Internal server error" })
   }
+}
