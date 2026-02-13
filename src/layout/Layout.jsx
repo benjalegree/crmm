@@ -3,7 +3,7 @@ import Sidebar from "../components/Sidebar"
 export default function Layout({ children }) {
   return (
     <div style={background}>
-      <div style={wrapper}>
+      <div style={windowShell}>
         <Sidebar />
         <div style={main}>
           {children}
@@ -15,24 +15,32 @@ export default function Layout({ children }) {
 
 const background = {
   minHeight: "100vh",
-  background: `
-    linear-gradient(180deg, #f4f5f7 0%, #eceef1 100%)
-  `,
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
-  padding: "60px 80px"
+  background: "#e9eaee",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  padding: "60px",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
-const wrapper = {
+const windowShell = {
+  width: "100%",
+  maxWidth: "1500px",
   display: "flex",
-  gap: "48px"
+  gap: "40px",
+  background: "#f7f8fa",
+  borderRadius: "32px",
+  padding: "40px",
+  boxShadow: `
+    0 40px 80px rgba(0,0,0,0.08),
+    0 10px 20px rgba(0,0,0,0.04)
+  `
 }
 
 const main = {
   flex: 1,
-  backdropFilter: "blur(40px)",
-  background: "rgba(255,255,255,0.65)",
-  borderRadius: "28px",
+  background: "white",
+  borderRadius: "24px",
   padding: "60px",
-  boxShadow: "0 30px 60px rgba(0,0,0,0.06)",
-  border: "1px solid rgba(255,255,255,0.8)"
+  boxShadow: "0 20px 40px rgba(0,0,0,0.05)"
 }
