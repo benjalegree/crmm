@@ -8,48 +8,61 @@ export default function Sidebar() {
     { path: "/companies", label: "Companies" },
     { path: "/leads", label: "Leads" },
     { path: "/pipeline", label: "Pipeline" },
-    { path: "/calendar", label: "Calendar" },
-    { path: "/profile", label: "Profile" }
+    { path: "/calendar", label: "Calendar" }
   ]
 
   return (
     <div style={sidebar}>
-      <h2 style={{marginBottom:"40px"}}>PsicoFunnel CRM</h2>
-      {links.map(link => (
-        <Link
-          key={link.path}
-          to={link.path}
-          style={{
-            ...item,
-            background:
-              location.pathname === link.path
-                ? "#000"
-                : "transparent",
-            color:
-              location.pathname === link.path
-                ? "#fff"
-                : "#333"
-          }}
-        >
-          {link.label}
-        </Link>
-      ))}
+      <div style={logo}>PsicoFunnel</div>
+
+      <div style={{ marginTop: "50px" }}>
+        {links.map(link => {
+          const active = location.pathname === link.path
+
+          return (
+            <Link
+              key={link.path}
+              to={link.path}
+              style={{
+                ...item,
+                background: active
+                  ? "rgba(0,0,0,0.8)"
+                  : "transparent",
+                color: active ? "#fff" : "#1c1c1e"
+              }}
+            >
+              {link.label}
+            </Link>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
 const sidebar = {
   width: "240px",
-  background: "#ffffff",
-  padding: "30px",
-  boxShadow: "5px 0 20px rgba(0,0,0,0.05)"
+  backdropFilter: "blur(30px)",
+  background: "rgba(255, 255, 255, 0.6)",
+  borderRadius: "28px",
+  padding: "40px 25px",
+  boxShadow: "0 10px 40px rgba(0,0,0,0.04)",
+  border: "1px solid rgba(255,255,255,0.6)"
+}
+
+const logo = {
+  fontSize: "20px",
+  fontWeight: "700",
+  letterSpacing: "-0.5px"
 }
 
 const item = {
   display: "block",
-  padding: "12px 16px",
-  marginBottom: "10px",
-  borderRadius: "10px",
+  padding: "14px 18px",
+  marginBottom: "12px",
+  borderRadius: "16px",
   textDecoration: "none",
-  transition: "all 0.2s ease"
+  fontSize: "14px",
+  fontWeight: "500",
+  transition: "all 0.25s ease"
 }
