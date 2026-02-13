@@ -15,7 +15,7 @@ export default function Sidebar() {
     <div style={sidebar}>
       <div style={logo}>PsicoFunnel</div>
 
-      <div style={{ marginTop: "50px" }}>
+      <div style={{ marginTop: "60px" }}>
         {links.map(link => {
           const active = location.pathname === link.path
 
@@ -25,12 +25,10 @@ export default function Sidebar() {
               to={link.path}
               style={{
                 ...item,
-                background: active
-                  ? "linear-gradient(135deg,#2563eb,#3b82f6)"
-                  : "transparent",
-                color: active ? "white" : "#4b5563",
+                background: active ? "#2563eb" : "transparent",
+                color: active ? "#fff" : "#6b7280",
                 boxShadow: active
-                  ? "0 10px 25px rgba(37,99,235,0.25)"
+                  ? "0 8px 20px rgba(37,99,235,0.25)"
                   : "none"
               }}
             >
@@ -44,11 +42,10 @@ export default function Sidebar() {
 }
 
 const sidebar = {
-  width: "240px",
+  width: "260px",
+  padding: "50px 30px",
   background: "white",
-  borderRadius: "20px",
-  padding: "40px 28px",
-  boxShadow: "0 20px 40px rgba(37,99,235,0.05)"
+  borderRight: "1px solid #e5e7eb"
 }
 
 const logo = {
@@ -61,7 +58,7 @@ const item = {
   display: "block",
   padding: "14px 18px",
   marginBottom: "14px",
-  borderRadius: "16px",
+  borderRadius: "14px",
   textDecoration: "none",
   fontSize: "14px",
   fontWeight: "500",
