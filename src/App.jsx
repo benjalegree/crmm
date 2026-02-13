@@ -9,82 +9,56 @@ import Leads from "./pages/Leads"
 import LeadProfile from "./pages/LeadProfile"
 import Pipeline from "./pages/Pipeline"
 import Calendar from "./pages/Calendar"
+import ProtectedRoute from "./components/ProtectedRoute"
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* Login */}
         <Route path="/" element={<Login />} />
 
-        {/* Dashboard */}
-        <Route
-          path="/dashboard"
-          element={
-            <Layout>
-              <Dashboard />
-            </Layout>
-          }
-        />
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Layout><Dashboard /></Layout>
+          </ProtectedRoute>
+        } />
 
-        {/* Companies */}
-        <Route
-          path="/companies"
-          element={
-            <Layout>
-              <Companies />
-            </Layout>
-          }
-        />
+        <Route path="/companies" element={
+          <ProtectedRoute>
+            <Layout><Companies /></Layout>
+          </ProtectedRoute>
+        } />
 
-        <Route
-          path="/companies/:id"
-          element={
-            <Layout>
-              <CompanyProfile />
-            </Layout>
-          }
-        />
+        <Route path="/companies/:id" element={
+          <ProtectedRoute>
+            <Layout><CompanyProfile /></Layout>
+          </ProtectedRoute>
+        } />
 
-        {/* Leads */}
-        <Route
-          path="/leads"
-          element={
-            <Layout>
-              <Leads />
-            </Layout>
-          }
-        />
+        <Route path="/leads" element={
+          <ProtectedRoute>
+            <Layout><Leads /></Layout>
+          </ProtectedRoute>
+        } />
 
-        <Route
-          path="/leads/:id"
-          element={
-            <Layout>
-              <LeadProfile />
-            </Layout>
-          }
-        />
+        <Route path="/leads/:id" element={
+          <ProtectedRoute>
+            <Layout><LeadProfile /></Layout>
+          </ProtectedRoute>
+        } />
 
-        {/* Pipeline */}
-        <Route
-          path="/pipeline"
-          element={
-            <Layout>
-              <Pipeline />
-            </Layout>
-          }
-        />
+        <Route path="/pipeline" element={
+          <ProtectedRoute>
+            <Layout><Pipeline /></Layout>
+          </ProtectedRoute>
+        } />
 
-        {/* Calendar */}
-        <Route
-          path="/calendar"
-          element={
-            <Layout>
-              <Calendar />
-            </Layout>
-          }
-        />
+        <Route path="/calendar" element={
+          <ProtectedRoute>
+            <Layout><Calendar /></Layout>
+          </ProtectedRoute>
+        } />
 
       </Routes>
     </BrowserRouter>
