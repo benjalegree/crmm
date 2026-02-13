@@ -2,20 +2,24 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 export default function Leads() {
+
   const [leads, setLeads] = useState([])
   const navigate = useNavigate()
 
   useEffect(() => {
-    const load = async () => {
-      const res = await fetch("/api/getContacts", {
-        credentials: "include"
-      })
-      const data = await res.json()
-      setLeads(data.records || [])
-    }
-
-    load()
+    loadLeads()
   }, [])
+
+  const loadLeads = async () => {
+
+    const res = await fetch("/api/crm?action=getContacts", {
+      credentials: "include"
+    })
+
+    const data = await res.json()
+
+    setLeads(data.records || [])
+  }
 
   return (
     <div>
@@ -30,7 +34,11 @@ export default function Leads() {
           >
             <div>{lead.fields["Full Name"]}</div>
             <div>{lead.fields.Position}</div>
-            <div>{lead.fields.Company?.[0]}</div>
+            <div>
+              {Array.isArray(lead.fields.Company)
+                ? lead.fields.Company[0]
+                : lead.fields.Company}
+            </div>
             <Status status={lead.fields.Status} />
           </div>
         ))}
@@ -40,11 +48,14 @@ export default function Leads() {
 }
 
 function Status({ status }) {
+
   const colors = {
     "Not Contacted": "#8e8e93",
     "Contacted": "#007aff",
     "Replied": "#5856d6",
-    "Meeting Booked": "#34c759"
+    "Meeting Booked": "#34c759",
+    "Closed Won": "#30d158",
+    "Closed Lost": "#ff3b30"
   }
 
   return (
