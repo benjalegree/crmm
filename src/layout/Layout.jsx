@@ -3,7 +3,7 @@ import Sidebar from "../components/Sidebar"
 export default function Layout({ children }) {
   return (
     <div style={background}>
-      <div style={windowShell}>
+      <div style={shell}>
         <Sidebar />
         <div style={main}>
           {children}
@@ -15,32 +15,24 @@ export default function Layout({ children }) {
 
 const background = {
   minHeight: "100vh",
-  background: "#e9eaee",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  padding: "60px",
+  background: `
+    linear-gradient(180deg, #f9fbff 0%, #eef4ff 100%)
+  `,
+  padding: "60px 80px",
   fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
-const windowShell = {
-  width: "100%",
-  maxWidth: "1500px",
+const shell = {
   display: "flex",
-  gap: "40px",
-  background: "#f7f8fa",
-  borderRadius: "32px",
-  padding: "40px",
-  boxShadow: `
-    0 40px 80px rgba(0,0,0,0.08),
-    0 10px 20px rgba(0,0,0,0.04)
-  `
+  gap: "50px",
+  maxWidth: "1500px",
+  margin: "0 auto"
 }
 
 const main = {
   flex: 1,
   background: "white",
-  borderRadius: "24px",
+  borderRadius: "22px",
   padding: "60px",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.05)"
+  boxShadow: "0 25px 60px rgba(37,99,235,0.08)"
 }
