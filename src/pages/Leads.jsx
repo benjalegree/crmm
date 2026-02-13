@@ -3,11 +3,25 @@ import { useNavigate } from "react-router-dom"
 
 export default function Leads() {
 
+  const navigate = useNavigate()
   const [leads, setLeads] = useState([])
   const [filterStatus, setFilterStatus] = useState("All")
   const [sortField, setSortField] = useState(null)
   const [sortDirection, setSortDirection] = useState("asc")
-  const navigate = useNavigate()
+  const [showPanel, setShowPanel] = useState(false)
+
+  const defaultColumns = [
+    { key: "Full Name", label: "Name", visible: true },
+    { key: "Position", label: "Position", visible: true },
+    { key: "Company", label: "Company", visible: true },
+    { key: "Email", label: "Email", visible: true },
+    { key: "Phone", label: "Phone", visible: true },
+    { key: "LinkedIn", label: "LinkedIn", visible: true },
+    { key: "CompanyWebsite", label: "Website", visible: true },
+    { key: "Status", label: "Status", visible: true }
+  ]
+
+  const [columns, setColumns] = useState(defaultColumns)
 
   useEffect(() => {
     fetch("/api/crm?action=getContacts", {
@@ -16,16 +30,6 @@ export default function Leads() {
       .then(res => res.json())
       .then(data => setLeads(data.records || []))
   }, [])
-
-  const statuses = [
-    "All",
-    "Not Contacted",
-    "Contacted",
-    "Replied",
-    "Meeting Booked",
-    "Closed Won",
-    "Closed Lost"
-  ]
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -36,10 +40,17 @@ export default function Leads() {
     }
   }
 
-  const filtered = leads.filter(lead => {
-    if (filterStatus === "All") return true
-    return lead.fields.Status === filterStatus
-  })
+  const toggleColumn = (key) => {
+    setColumns(cols =>
+      cols.map(c =>
+        c.key === key ? { ...c, visible: !c.visible } : c
+      )
+    )
+  }
+
+  const filtered = leads.filter(lead =>
+    filterStatus === "All" ? true : lead.fields.Status === filterStatus
+  )
 
   const sorted = [...filtered].sort((a, b) => {
     if (!sortField) return 0
@@ -52,34 +63,58 @@ export default function Leads() {
     return 0
   })
 
+  const visibleColumns = columns.filter(c => c.visible)
+
   return (
     <div>
       <h1 style={title}>Leads</h1>
 
-      {/* FILTER */}
-      <div style={filterWrapper}>
+      <div style={topBar}>
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value)}
           style={select}
         >
-          {statuses.map(s => (
-            <option key={s}>{s}</option>
-          ))}
+          <option>All</option>
+          <option>Not Contacted</option>
+          <option>Contacted</option>
+          <option>Replied</option>
+          <option>Meeting Booked</option>
+          <option>Closed Won</option>
+          <option>Closed Lost</option>
         </select>
+
+        <button style={configButton} onClick={() => setShowPanel(!showPanel)}>
+          Columns
+        </button>
       </div>
 
-      {/* TABLE */}
-      <div style={glassCard}>
+      {showPanel && (
+        <div style={panel}>
+          {columns.map(col => (
+            <label key={col.key} style={panelItem}>
+              <input
+                type="checkbox"
+                checked={col.visible}
+                onChange={() => toggleColumn(col.key)}
+              />
+              {col.label}
+            </label>
+          ))}
+        </div>
+      )}
 
-        {/* HEADER */}
-        <div style={headerRow}>
-          <HeaderCell label="Name" field="Full Name" onSort={handleSort} />
-          <HeaderCell label="Position" field="Position" onSort={handleSort} />
-          <HeaderCell label="Company" field="Company" onSort={handleSort} />
-          <HeaderCell label="Website" field="Website" onSort={handleSort} />
-          <HeaderCell label="LinkedIn" field="LinkedIn" onSort={handleSort} />
-          <HeaderCell label="Status" field="Status" onSort={handleSort} />
+      <div style={glassCard}>
+        <div style={{ ...row, fontWeight: "600", color: "#145c43" }}>
+          {visibleColumns.map(col => (
+            <div
+              key={col.key}
+              onClick={() => handleSort(col.key)}
+              style={{ cursor: "pointer" }}
+            >
+              {col.label}
+            </div>
+          ))}
         </div>
 
         {sorted.map(lead => (
@@ -88,28 +123,11 @@ export default function Leads() {
             style={row}
             onClick={() => navigate(`/leads/${lead.id}`)}
           >
-            <div style={name}>{lead.fields["Full Name"]}</div>
-            <div style={subText}>{lead.fields.Position}</div>
-            <div style={subText}>
-              {Array.isArray(lead.fields.Company)
-                ? lead.fields.Company[0]
-                : lead.fields.Company}
-            </div>
-            <div style={linkCell}>
-              {lead.fields.Website && (
-                <a href={lead.fields.Website} target="_blank" rel="noreferrer">
-                  Visit
-                </a>
-              )}
-            </div>
-            <div style={linkCell}>
-              {lead.fields.LinkedIn && (
-                <a href={lead.fields.LinkedIn} target="_blank" rel="noreferrer">
-                  Profile
-                </a>
-              )}
-            </div>
-            <Status status={lead.fields.Status} />
+            {visibleColumns.map(col => (
+              <div key={col.key}>
+                {renderCell(lead.fields, col.key)}
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -117,47 +135,22 @@ export default function Leads() {
   )
 }
 
-/* ======================= */
-/* HEADER COMPONENT */
-/* ======================= */
+function renderCell(fields, key) {
+  if (key === "LinkedIn" && fields.LinkedIn)
+    return <a href={fields.LinkedIn} target="_blank" rel="noreferrer">Profile</a>
 
-function HeaderCell({ label, field, onSort }) {
-  return (
-    <div
-      style={headerCell}
-      onClick={() => onSort(field)}
-    >
-      {label}
-    </div>
-  )
-}
+  if (key === "CompanyWebsite" && fields.CompanyWebsite)
+    return <a href={fields.CompanyWebsite} target="_blank" rel="noreferrer">Visit</a>
 
-/* ======================= */
-/* STATUS */
-/* ======================= */
+  if (key === "Status")
+    return <span style={statusStyle}>{fields.Status}</span>
 
-function Status({ status }) {
-  const colors = {
-    "Not Contacted": "#8e8e93",
-    "Contacted": "#1e7a57",
-    "Replied": "#0f3d2e",
-    "Meeting Booked": "#34c759",
-    "Closed Won": "#30d158",
-    "Closed Lost": "#ff3b30"
-  }
+  if (key === "Company")
+    return Array.isArray(fields.Company)
+      ? fields.Company[0]
+      : fields.Company
 
-  return (
-    <span style={{
-      padding: "6px 14px",
-      borderRadius: "18px",
-      fontSize: "12px",
-      fontWeight: "600",
-      background: colors[status] || "#ccc",
-      color: "#ffffff"
-    }}>
-      {status}
-    </span>
-  )
+  return fields[key]
 }
 
 /* ======================= */
@@ -168,64 +161,69 @@ const title = {
   fontSize: "32px",
   fontWeight: "700",
   color: "#0f3d2e",
-  marginBottom: "30px"
+  marginBottom: "20px"
 }
 
-const filterWrapper = {
+const topBar = {
+  display: "flex",
+  gap: "15px",
   marginBottom: "20px"
 }
 
 const select = {
   padding: "10px 14px",
   borderRadius: "14px",
-  border: "1px solid rgba(0,0,0,0.08)",
   background: "rgba(255,255,255,0.6)",
-  backdropFilter: "blur(20px)"
+  backdropFilter: "blur(20px)",
+  border: "1px solid rgba(0,0,0,0.08)"
+}
+
+const configButton = {
+  padding: "10px 18px",
+  borderRadius: "14px",
+  background: "#145c43",
+  color: "#fff",
+  border: "none",
+  cursor: "pointer"
+}
+
+const panel = {
+  marginBottom: "20px",
+  padding: "20px",
+  borderRadius: "20px",
+  background: "rgba(255,255,255,0.6)",
+  backdropFilter: "blur(20px)",
+  display: "flex",
+  gap: "20px",
+  flexWrap: "wrap"
+}
+
+const panelItem = {
+  fontSize: "14px",
+  color: "#145c43"
 }
 
 const glassCard = {
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(30px)",
-  WebkitBackdropFilter: "blur(30px)",
   borderRadius: "26px",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 20px 50px rgba(15,61,46,0.12)",
-  paddingBottom: "10px"
-}
-
-const headerRow = {
-  display: "grid",
-  gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr",
-  padding: "18px 30px",
-  fontWeight: "600",
-  color: "#145c43",
-  borderBottom: "1px solid rgba(0,0,0,0.05)",
-  cursor: "pointer"
-}
-
-const headerCell = {
-  cursor: "pointer"
+  boxShadow: "0 20px 50px rgba(15,61,46,0.12)"
 }
 
 const row = {
   display: "grid",
-  gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr",
-  padding: "20px 30px",
+  gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))",
+  padding: "18px 30px",
   borderBottom: "1px solid rgba(0,0,0,0.05)",
-  cursor: "pointer",
-  alignItems: "center"
+  alignItems: "center",
+  cursor: "pointer"
 }
 
-const name = {
-  fontWeight: "600",
-  color: "#0f3d2e"
-}
-
-const subText = {
-  color: "#1e7a57",
-  fontSize: "14px"
-}
-
-const linkCell = {
-  fontSize: "14px"
+const statusStyle = {
+  padding: "6px 12px",
+  borderRadius: "14px",
+  background: "#145c43",
+  color: "#fff",
+  fontSize: "12px"
 }
