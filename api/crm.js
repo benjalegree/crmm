@@ -198,21 +198,49 @@ export default async function handler(req, res) {
        GET CONTACTS
     ====================================================== */
 
-    if (action === "getContacts") {
-      const formula = `{Responsible Email}="${email}"`
+ if (action === "getContacts") {
+  const formula = `{Responsible Email}="${email}"`
 
-      const response = await fetch(
-        `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(formula)}`,
-        { headers: AIRTABLE_HEADERS }
-      )
+  const contactsRes = await fetch(
+    `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(formula)}`,
+    { headers: AIRTABLE_HEADERS }
+  )
 
-      if (!response.ok) {
-        return res.status(response.status).json({ error: "Failed to fetch contacts" })
+  if (!contactsRes.ok) {
+    return res.status(contactsRes.status).json({ error: "Failed to fetch contacts" })
+  }
+
+  const contactsData = await contactsRes.json()
+  const contacts = contactsData.records || []
+
+  const companiesRes = await fetch(
+    `https://api.airtable.com/v0/${baseId}/Companies`,
+    { headers: AIRTABLE_HEADERS }
+  )
+
+  const companiesData = await companiesRes.json()
+  const companies = companiesData.records || []
+
+  const companiesMap = {}
+  companies.forEach(c => {
+    companiesMap[c.id] = c.fields
+  })
+
+  const enrichedContacts = contacts.map(contact => {
+    const companyId = contact.fields.Company?.[0]
+    const companyData = companyId ? companiesMap[companyId] : null
+
+    return {
+      ...contact,
+      fields: {
+        ...contact.fields,
+        CompanyWebsite: companyData?.Website || ""
       }
-
-      const data = await response.json()
-      return res.status(200).json(data)
     }
+  })
+
+  return res.status(200).json({ records: enrichedContacts })
+}
 
     /* =====================================================
        GET CONTACT
