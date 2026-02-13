@@ -22,7 +22,6 @@ export default function LeadProfile() {
     const res = await fetch(`/api/crm?action=getContact&id=${id}`, {
       credentials: "include"
     })
-
     const data = await res.json()
     setLead(data)
   }
@@ -31,7 +30,6 @@ export default function LeadProfile() {
     const res = await fetch(`/api/crm?action=getActivities&contactId=${id}`, {
       credentials: "include"
     })
-
     const data = await res.json()
     setActivities(data.records || [])
   }
@@ -59,7 +57,9 @@ export default function LeadProfile() {
           Email: lead.fields.Email,
           Position: lead.fields.Position,
           Status: lead.fields.Status,
-          Notes: lead.fields.Notes
+          Notes: lead.fields.Notes,
+          "Numero de telefono": lead.fields["Numero de telefono"],
+          "LinkedIn URL": lead.fields["LinkedIn URL"]
         }
       })
     })
@@ -68,7 +68,6 @@ export default function LeadProfile() {
   }
 
   const createActivity = async () => {
-    if (!activityType) return
 
     await fetch("/api/crm?action=createActivity", {
       method: "POST",
@@ -88,264 +87,206 @@ export default function LeadProfile() {
     loadActivities()
   }
 
-  if (!lead) return <div>Loading...</div>
+  if (!lead) return null
 
   const f = lead.fields
 
   return (
-    <div>
+    <div style={page}>
 
       <h1 style={title}>{f["Full Name"]}</h1>
-      <p style={subtitle}>Lead details & activity timeline</p>
 
-      <div style={layout}>
+      <div style={grid}>
 
         {/* LEFT COLUMN */}
-        <div style={column}>
+        <div style={glassCard}>
 
-          <GlassCard>
+          <h3 style={sectionTitle}>Contact Info</h3>
 
-            <Input label="Email">
-              <input
-                value={f.Email || ""}
-                onChange={e => updateField("Email", e.target.value)}
-                style={input}
-              />
-            </Input>
+          <label>Email</label>
+          <input
+            value={f.Email || ""}
+            onChange={e => updateField("Email", e.target.value)}
+            style={input}
+          />
 
-            <Input label="Position">
-              <input
-                value={f.Position || ""}
-                onChange={e => updateField("Position", e.target.value)}
-                style={input}
-              />
-            </Input>
+          <label>Phone</label>
+          <input
+            value={f["Numero de telefono"] || ""}
+            onChange={e => updateField("Numero de telefono", e.target.value)}
+            style={input}
+          />
 
-            <Input label="Status">
-              <select
-                value={f.Status || ""}
-                onChange={e => updateField("Status", e.target.value)}
-                style={input}
-              >
-                <option>Not Contacted</option>
-                <option>Contacted</option>
-                <option>Replied</option>
-                <option>Meeting Booked</option>
-                <option>Closed Won</option>
-                <option>Closed Lost</option>
-              </select>
-            </Input>
+          <label>Position</label>
+          <input
+            value={f.Position || ""}
+            onChange={e => updateField("Position", e.target.value)}
+            style={input}
+          />
 
-            <Input label="Notes">
-              <textarea
-                rows="4"
-                value={f.Notes || ""}
-                onChange={e => updateField("Notes", e.target.value)}
-                style={textarea}
-              />
-            </Input>
+          <label>LinkedIn</label>
+          <input
+            value={f["LinkedIn URL"] || ""}
+            onChange={e => updateField("LinkedIn URL", e.target.value)}
+            style={input}
+          />
 
-            <button
-              onClick={saveChanges}
-              disabled={loading}
-              style={primaryButton}
-            >
-              {loading ? "Saving..." : "Save Changes"}
-            </button>
+          <label>Status</label>
+          <select
+            value={f.Status || ""}
+            onChange={e => updateField("Status", e.target.value)}
+            style={input}
+          >
+            <option>Not Contacted</option>
+            <option>Contacted</option>
+            <option>Replied</option>
+            <option>Meeting Booked</option>
+            <option>Closed Won</option>
+            <option>Closed Lost</option>
+          </select>
 
-          </GlassCard>
+          <label>Notes</label>
+          <textarea
+            rows="4"
+            value={f.Notes || ""}
+            onChange={e => updateField("Notes", e.target.value)}
+            style={input}
+          />
 
-          <GlassCard>
-
-            <h3 style={sectionTitle}>Add Activity</h3>
-
-            <select
-              value={activityType}
-              onChange={e => setActivityType(e.target.value)}
-              style={input}
-            >
-              <option>Call</option>
-              <option>Email</option>
-              <option>LinkedIn</option>
-              <option>Meeting</option>
-            </select>
-
-            <textarea
-              placeholder="Activity notes..."
-              rows="3"
-              value={activityNotes}
-              onChange={e => setActivityNotes(e.target.value)}
-              style={textarea}
-            />
-
-            <input
-              type="date"
-              value={nextFollowUp}
-              onChange={e => setNextFollowUp(e.target.value)}
-              style={input}
-            />
-
-            <button onClick={createActivity} style={secondaryButton}>
-              Add Activity
-            </button>
-
-          </GlassCard>
+          <button style={saveBtn} onClick={saveChanges}>
+            {loading ? "Saving..." : "Save Changes"}
+          </button>
 
         </div>
 
         {/* RIGHT COLUMN */}
-        <div style={column}>
+        <div style={glassCard}>
 
-          <GlassCard>
+          <h3 style={sectionTitle}>Add Activity</h3>
 
-            <h3 style={sectionTitle}>Activity Timeline</h3>
+          <select
+            value={activityType}
+            onChange={e => setActivityType(e.target.value)}
+            style={input}
+          >
+            <option>Call</option>
+            <option>Email</option>
+            <option>LinkedIn</option>
+            <option>Meeting</option>
+          </select>
 
-            {activities.map(activity => (
-              <div key={activity.id} style={activityRow}>
-                <div style={activityTypeStyle}>
-                  {activity.fields["Activity Type"]}
-                </div>
-                <div style={activityNotesStyle}>
-                  {activity.fields.Notes}
-                </div>
-                <div style={activityDate}>
-                  {new Date(activity.fields["Activity Date"]).toLocaleDateString()}
-                </div>
+          <textarea
+            placeholder="Activity notes..."
+            rows="3"
+            value={activityNotes}
+            onChange={e => setActivityNotes(e.target.value)}
+            style={input}
+          />
+
+          <input
+            type="date"
+            value={nextFollowUp}
+            onChange={e => setNextFollowUp(e.target.value)}
+            style={input}
+          />
+
+          <button style={saveBtn} onClick={createActivity}>
+            Add Activity
+          </button>
+
+          <h3 style={{ marginTop: 40 }}>Activity Timeline</h3>
+
+          {activities.map(activity => (
+            <div key={activity.id} style={timelineItem}>
+              <div style={timelineDot} />
+              <div>
+                <strong>{activity.fields["Activity Type"]}</strong>
+                <p>{activity.fields.Notes}</p>
+                <small>{activity.fields["Activity Date"]}</small>
               </div>
-            ))}
-
-          </GlassCard>
+            </div>
+          ))}
 
         </div>
 
       </div>
+
     </div>
   )
 }
 
-/* ================== COMPONENTS ================== */
+/* ===================== */
+/* STYLES */
+/* ===================== */
 
-function GlassCard({ children }) {
-  return (
-    <div style={glassCard}>
-      {children}
-    </div>
-  )
+const page = {
+  width: "100%"
 }
-
-function Input({ label, children }) {
-  return (
-    <div style={{ marginBottom: "25px" }}>
-      <div style={labelStyle}>{label}</div>
-      {children}
-    </div>
-  )
-}
-
-/* ================== STYLES ================== */
 
 const title = {
-  fontSize: "34px",
-  fontWeight: "600"
+  fontSize: 30,
+  fontWeight: 700,
+  color: "#0f3d2e",
+  marginBottom: 30
 }
 
-const subtitle = {
-  fontSize: "15px",
-  color: "#6e6e73",
-  marginTop: "8px",
-  marginBottom: "40px"
-}
-
-const layout = {
+const grid = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: "40px"
-}
-
-const column = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "40px"
+  gap: 30
 }
 
 const glassCard = {
+  padding: 30,
+  borderRadius: 30,
+  background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(40px)",
-  background: "rgba(255,255,255,0.45)",
-  borderRadius: "30px",
-  padding: "40px",
-  border: "1px solid rgba(255,255,255,0.9)",
-  boxShadow: "0 25px 60px rgba(0,0,0,0.08)"
-}
-
-const labelStyle = {
-  fontSize: "13px",
-  color: "#6e6e73",
-  marginBottom: "10px",
-  fontWeight: "500"
-}
-
-const input = {
-  width: "100%",
-  padding: "16px 20px",
-  borderRadius: "20px",
-  border: "1px solid rgba(0,0,0,0.05)",
-  background: "rgba(255,255,255,0.6)",
-  fontSize: "14px",
-  outline: "none"
-}
-
-const textarea = {
-  ...input,
-  resize: "none"
-}
-
-const primaryButton = {
-  marginTop: "10px",
-  padding: "16px",
-  borderRadius: "20px",
-  border: "none",
-  background: "linear-gradient(135deg, #007aff, #5ac8fa)",
-  color: "white",
-  fontWeight: "600",
-  cursor: "pointer",
-  boxShadow: "0 15px 40px rgba(0,122,255,0.3)"
-}
-
-const secondaryButton = {
-  marginTop: "15px",
-  padding: "14px",
-  borderRadius: "20px",
-  border: "none",
-  background: "#1c1c1e",
-  color: "white",
-  fontWeight: "500",
-  cursor: "pointer"
+  border: "1px solid rgba(255,255,255,0.4)",
+  boxShadow: "0 8px 30px rgba(0,0,0,0.05)",
+  display: "flex",
+  flexDirection: "column",
+  gap: 15
 }
 
 const sectionTitle = {
-  fontSize: "18px",
-  fontWeight: "600",
-  marginBottom: "25px"
+  marginBottom: 10,
+  fontWeight: 600,
+  color: "#145c43"
 }
 
-const activityRow = {
-  padding: "18px 0",
-  borderBottom: "1px solid rgba(0,0,0,0.05)"
+const input = {
+  padding: 12,
+  borderRadius: 16,
+  border: "1px solid rgba(0,0,0,0.05)",
+  background: "rgba(255,255,255,0.7)",
+  outline: "none"
 }
 
-const activityTypeStyle = {
-  fontWeight: "600",
-  fontSize: "14px"
+const saveBtn = {
+  marginTop: 15,
+  padding: "12px 20px",
+  borderRadius: 20,
+  border: "none",
+  background: "#145c43",
+  color: "#fff",
+  fontWeight: 500,
+  cursor: "pointer"
 }
 
-const activityNotesStyle = {
-  fontSize: "14px",
-  color: "#6e6e73",
-  marginTop: "6px"
+const timelineItem = {
+  display: "flex",
+  gap: 15,
+  marginTop: 15,
+  padding: 15,
+  borderRadius: 20,
+  background: "rgba(255,255,255,0.6)",
+  backdropFilter: "blur(20px)"
 }
 
-const activityDate = {
-  fontSize: "12px",
-  color: "#8e8e93",
-  marginTop: "6px"
+const timelineDot = {
+  width: 12,
+  height: 12,
+  borderRadius: "50%",
+  background: "#145c43",
+  marginTop: 6
 }
