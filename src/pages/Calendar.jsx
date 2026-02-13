@@ -11,60 +11,75 @@ export default function Calendar() {
   }, [])
 
   const loadCalendar = async () => {
-    const res = await fetch("/api/getCalendar", {
+
+    const res = await fetch("/api/crm?action=getCalendar", {
       credentials: "include"
     })
-    const data = await res.json()
-    setEvents(data.events || [])
-  }
 
-  const groupByDate = events.reduce((acc, event) => {
-    acc[event.date] = acc[event.date] || []
-    acc[event.date].push(event)
-    return acc
-  }, {})
+    const data = await res.json()
+
+    const mapped = (data.records || []).map(record => {
+
+      const date = record.fields["Next Follow-up Date"]
+
+      const isOverdue =
+        new Date(date) < new Date() &&
+        record.fields.Status !== "Completed"
+
+      return {
+        id: record.id,
+        title: record.fields["Activity Type"],
+        date,
+        contactId: record.fields["Related Contact"]?.[0],
+        overdue: isOverdue
+      }
+    })
+
+    setEvents(mapped)
+  }
 
   return (
     <div>
       <h1>Calendar</h1>
 
-      {Object.keys(groupByDate)
-        .sort()
-        .map(date => (
-          <div key={date} style={dayBlock}>
-            <h3>{date}</h3>
-
-            {groupByDate[date].map(event => (
-              <div
-                key={event.id}
-                style={{
-                  ...eventCard,
-                  background: event.overdue ? "#ffe5e5" : "#f5f5f7"
-                }}
-                onClick={() => navigate(`/leads/${event.contactId}`)}
-              >
-                {event.title}
-              </div>
-            ))}
+      <div style={grid}>
+        {events.map(event => (
+          <div
+            key={event.id}
+            style={{
+              ...card,
+              borderLeft: event.overdue
+                ? "6px solid #ff3b30"
+                : "6px solid #007aff"
+            }}
+            onClick={() => navigate(`/leads/${event.contactId}`)}
+          >
+            <strong>{event.title}</strong>
+            <p>{event.date}</p>
+            {event.overdue && <span style={overdue}>Overdue</span>}
           </div>
-        ))
-      }
-
+        ))}
+      </div>
     </div>
   )
 }
 
-const dayBlock = {
-  marginBottom: "30px",
-  padding: "20px",
-  background: "#fff",
-  borderRadius: "20px",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.05)"
+const grid = {
+  marginTop: "30px",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+  gap: "20px"
 }
 
-const eventCard = {
-  padding: "12px",
-  marginTop: "10px",
-  borderRadius: "12px",
+const card = {
+  background: "#fff",
+  padding: "20px",
+  borderRadius: "20px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
   cursor: "pointer"
+}
+
+const overdue = {
+  color: "#ff3b30",
+  fontWeight: "bold"
 }
