@@ -18,9 +18,9 @@ const app = {
   overflow: "hidden",
   fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
   background: `
-    radial-gradient(circle at 20% 20%, rgba(30,122,87,0.12), transparent 40%),
-    radial-gradient(circle at 80% 80%, rgba(15,61,46,0.12), transparent 40%),
-    linear-gradient(135deg, #f4fbf8 0%, #e8f5ef 50%, #f4fbf8 100%)
+    radial-gradient(circle at 10% 10%, rgba(30,122,87,0.18), transparent 40%),
+    radial-gradient(circle at 90% 90%, rgba(15,61,46,0.18), transparent 40%),
+    linear-gradient(135deg, #f4fbf8 0%, #e9f6f0 50%, #f4fbf8 100%)
   `
 }
 
