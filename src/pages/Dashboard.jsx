@@ -1,150 +1,129 @@
 import { useEffect, useState } from "react"
 
 export default function Dashboard() {
-
   const [stats, setStats] = useState(null)
 
   useEffect(() => {
-    loadStats()
-  }, [])
-
-  const loadStats = async () => {
-    const res = await fetch("/api/crm?action=getDashboardStats", {
+    fetch("/api/crm?action=getDashboardStats", {
       credentials: "include"
     })
+      .then(res => res.json())
+      .then(data => setStats(data))
+  }, [])
 
-    const data = await res.json()
-    setStats(data)
+  if (!stats) {
+    return <div style={{ color: "#0f3d2e" }}>Loading...</div>
   }
-
-  if (!stats) return <div style={{ padding: "20px" }}>Loading...</div>
 
   return (
     <div>
-
       <h1 style={title}>Dashboard</h1>
-      <p style={subtitle}>Your pipeline health at a glance</p>
 
-      {/* Primary Metrics */}
       <div style={grid}>
-        <MetricCard
-          label="Total Leads"
-          value={stats.totalLeads}
-          accent="rgba(120,180,255,0.4)"
-        />
-        <MetricCard
-          label="Active Leads"
-          value={stats.activeLeads}
-          accent="rgba(150,255,200,0.4)"
-        />
-        <MetricCard
-          label="Meetings Booked"
-          value={stats.meetingsBooked}
-          accent="rgba(200,180,255,0.4)"
-        />
-        <MetricCard
-          label="Closed Won"
-          value={stats.closedWon}
-          accent="rgba(255,210,150,0.4)"
-        />
+
+        <div style={card}>
+          <span style={label}>Total Leads</span>
+          <span style={value}>{stats.totalLeads}</span>
+        </div>
+
+        <div style={card}>
+          <span style={label}>Calls</span>
+          <span style={value}>{stats.calls}</span>
+        </div>
+
+        <div style={card}>
+          <span style={label}>Emails</span>
+          <span style={value}>{stats.emails}</span>
+        </div>
+
+        <div style={card}>
+          <span style={label}>Meetings</span>
+          <span style={value}>{stats.meetings}</span>
+        </div>
+
       </div>
 
-      {/* Performance */}
-      <div style={{ ...grid, marginTop: "40px" }}>
-        <MetricCard
-          label="Conversion Rate"
-          value={`${stats.conversionRate}%`}
-        />
-        <MetricCard
-          label="Win Rate"
-          value={`${stats.winRate}%`}
-        />
-        <MetricCard
-          label="Avg Days Without Contact"
-          value={stats.avgDaysWithoutContact}
-        />
-        <MetricCard
-          label="Leads Without Follow-up"
-          value={stats.leadsWithoutFollowUp}
-        />
-      </div>
+      <div style={{ marginTop: "60px" }}>
+        <div style={largeCard}>
+          <h3 style={{ marginBottom: "20px", color: "#0f3d2e" }}>
+            Performance Overview
+          </h3>
 
-      {/* Pipeline Health */}
-      <div style={{ ...grid, marginTop: "40px" }}>
-        <MetricCard
-          label="At Risk (7+ days)"
-          value={stats.atRiskLeads}
-          accent="rgba(255,100,100,0.4)"
-        />
-        <MetricCard
-          label="Cooling (5–6 days)"
-          value={stats.coolingLeads}
-          accent="rgba(255,180,100,0.4)"
-        />
+          <div style={fakeChart}>
+            <div style={{ ...bar, height: "40%" }} />
+            <div style={{ ...bar, height: "70%" }} />
+            <div style={{ ...bar, height: "55%" }} />
+            <div style={{ ...bar, height: "85%" }} />
+            <div style={{ ...bar, height: "60%" }} />
+            <div style={{ ...bar, height: "75%" }} />
+          </div>
+        </div>
       </div>
-
     </div>
   )
 }
 
-function MetricCard({ label, value, accent }) {
-  return (
-    <div style={{
-      ...card,
-      background: accent
-        ? `
-          linear-gradient(135deg, rgba(255,255,255,0.75), rgba(255,255,255,0.55)),
-          radial-gradient(circle at top left, ${accent}, transparent 60%)
-        `
-        : "rgba(255,255,255,0.65)"
-    }}>
-      <span style={metricLabel}>{label}</span>
-      <span style={metricValue}>{value ?? 0}</span>
-    </div>
-  )
-}
+/* ============================= */
+/* STYLES */
+/* ============================= */
 
 const title = {
   fontSize: "34px",
-  fontWeight: "600",
-  letterSpacing: "-0.5px"
-}
-
-const subtitle = {
-  fontSize: "15px",
-  color: "#6e6e73",
-  marginTop: "8px",
+  fontWeight: "700",
+  color: "#0f3d2e",
   marginBottom: "40px"
 }
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
   gap: "30px"
 }
 
 const card = {
-  backdropFilter: "blur(40px)",
-  borderRadius: "30px",
-  padding: "40px",
-  boxShadow: "0 25px 60px rgba(0,0,0,0.08)",
-  border: "1px solid rgba(255,255,255,0.9)",
+  background: "rgba(255,255,255,0.65)",
+  backdropFilter: "blur(20px)",
+  borderRadius: "24px",
+  padding: "30px",
+  border: "1px solid rgba(255,255,255,0.4)",
+  boxShadow: "0 10px 40px rgba(15,61,46,0.12)",
   display: "flex",
   flexDirection: "column",
-  justifyContent: "space-between",
-  minHeight: "160px",
-  transition: "all 0.3s ease"
+  justifyContent: "center",
+  minHeight: "140px"
 }
 
-const metricLabel = {
+const largeCard = {
+  background: "rgba(255,255,255,0.65)",
+  backdropFilter: "blur(20px)",
+  borderRadius: "30px",
+  padding: "40px",
+  border: "1px solid rgba(255,255,255,0.4)",
+  boxShadow: "0 15px 50px rgba(15,61,46,0.12)"
+}
+
+const label = {
   fontSize: "14px",
-  color: "#6e6e73",
-  fontWeight: "500"
+  fontWeight: "600",
+  color: "#1e7a57",
+  marginBottom: "10px"
 }
 
-const metricValue = {
-  fontSize: "34px",
+const value = {
+  fontSize: "32px",
   fontWeight: "700",
-  marginTop: "15px",
-  letterSpacing: "-1px"
+  color: "#0f3d2e"
+}
+
+const fakeChart = {
+  display: "flex",
+  alignItems: "flex-end",
+  height: "180px",
+  gap: "20px"
+}
+
+const bar = {
+  width: "30px",
+  background: "linear-gradient(180deg,#1e7a57,#0f3d2e)",
+  borderRadius: "10px"
 }
