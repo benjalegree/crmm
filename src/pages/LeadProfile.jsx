@@ -69,13 +69,14 @@ export default function LeadProfile() {
 
   const createActivity = async () => {
 
+    if (!activityType) return
+
     await fetch("/api/crm?action=createActivity", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
         contactId: id,
-        companyId: lead.fields.Company?.[0],
         type: activityType,
         notes: activityNotes,
         nextFollowUp: nextFollowUp || null
@@ -92,51 +93,21 @@ export default function LeadProfile() {
   const f = lead.fields
 
   return (
-    <div style={page}>
+    <div style={{ width: "100%" }}>
 
-      <h1 style={title}>{f["Full Name"]}</h1>
+      <h1 style={{ fontSize: 28, marginBottom: 30 }}>{f["Full Name"]}</h1>
 
-      <div style={grid}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
 
-        {/* LEFT COLUMN */}
         <div style={glassCard}>
+          <h3>Contact Info</h3>
 
-          <h3 style={sectionTitle}>Contact Info</h3>
+          <input style={input} value={f.Email || ""} onChange={e => updateField("Email", e.target.value)} />
+          <input style={input} value={f["Numero de telefono"] || ""} onChange={e => updateField("Numero de telefono", e.target.value)} />
+          <input style={input} value={f.Position || ""} onChange={e => updateField("Position", e.target.value)} />
+          <input style={input} value={f["LinkedIn URL"] || ""} onChange={e => updateField("LinkedIn URL", e.target.value)} />
 
-          <label>Email</label>
-          <input
-            value={f.Email || ""}
-            onChange={e => updateField("Email", e.target.value)}
-            style={input}
-          />
-
-          <label>Phone</label>
-          <input
-            value={f["Numero de telefono"] || ""}
-            onChange={e => updateField("Numero de telefono", e.target.value)}
-            style={input}
-          />
-
-          <label>Position</label>
-          <input
-            value={f.Position || ""}
-            onChange={e => updateField("Position", e.target.value)}
-            style={input}
-          />
-
-          <label>LinkedIn</label>
-          <input
-            value={f["LinkedIn URL"] || ""}
-            onChange={e => updateField("LinkedIn URL", e.target.value)}
-            style={input}
-          />
-
-          <label>Status</label>
-          <select
-            value={f.Status || ""}
-            onChange={e => updateField("Status", e.target.value)}
-            style={input}
-          >
+          <select style={input} value={f.Status || ""} onChange={e => updateField("Status", e.target.value)}>
             <option>Not Contacted</option>
             <option>Contacted</option>
             <option>Replied</option>
@@ -145,30 +116,22 @@ export default function LeadProfile() {
             <option>Closed Lost</option>
           </select>
 
-          <label>Notes</label>
           <textarea
             rows="4"
+            style={input}
             value={f.Notes || ""}
             onChange={e => updateField("Notes", e.target.value)}
-            style={input}
           />
 
-          <button style={saveBtn} onClick={saveChanges}>
+          <button style={btn} onClick={saveChanges}>
             {loading ? "Saving..." : "Save Changes"}
           </button>
-
         </div>
 
-        {/* RIGHT COLUMN */}
         <div style={glassCard}>
+          <h3>Add Activity</h3>
 
-          <h3 style={sectionTitle}>Add Activity</h3>
-
-          <select
-            value={activityType}
-            onChange={e => setActivityType(e.target.value)}
-            style={input}
-          >
+          <select style={input} value={activityType} onChange={e => setActivityType(e.target.value)}>
             <option>Call</option>
             <option>Email</option>
             <option>LinkedIn</option>
@@ -176,21 +139,21 @@ export default function LeadProfile() {
           </select>
 
           <textarea
-            placeholder="Activity notes..."
             rows="3"
+            style={input}
             value={activityNotes}
             onChange={e => setActivityNotes(e.target.value)}
-            style={input}
+            placeholder="Activity notes..."
           />
 
           <input
             type="date"
+            style={input}
             value={nextFollowUp}
             onChange={e => setNextFollowUp(e.target.value)}
-            style={input}
           />
 
-          <button style={saveBtn} onClick={createActivity}>
+          <button style={btn} onClick={createActivity}>
             Add Activity
           </button>
 
@@ -198,42 +161,16 @@ export default function LeadProfile() {
 
           {activities.map(activity => (
             <div key={activity.id} style={timelineItem}>
-              <div style={timelineDot} />
-              <div>
-                <strong>{activity.fields["Activity Type"]}</strong>
-                <p>{activity.fields.Notes}</p>
-                <small>{activity.fields["Activity Date"]}</small>
-              </div>
+              <strong>{activity.fields["Activity Type"]}</strong>
+              <p>{activity.fields.Notes}</p>
+              <small>{activity.fields["Activity Date"]}</small>
             </div>
           ))}
-
         </div>
 
       </div>
-
     </div>
   )
-}
-
-/* ===================== */
-/* STYLES */
-/* ===================== */
-
-const page = {
-  width: "100%"
-}
-
-const title = {
-  fontSize: 30,
-  fontWeight: 700,
-  color: "#0f3d2e",
-  marginBottom: 30
-}
-
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: 30
 }
 
 const glassCard = {
@@ -242,51 +179,30 @@ const glassCard = {
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(40px)",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 8px 30px rgba(0,0,0,0.05)",
   display: "flex",
   flexDirection: "column",
   gap: 15
-}
-
-const sectionTitle = {
-  marginBottom: 10,
-  fontWeight: 600,
-  color: "#145c43"
 }
 
 const input = {
   padding: 12,
   borderRadius: 16,
   border: "1px solid rgba(0,0,0,0.05)",
-  background: "rgba(255,255,255,0.7)",
-  outline: "none"
+  background: "rgba(255,255,255,0.8)"
 }
 
-const saveBtn = {
-  marginTop: 15,
+const btn = {
   padding: "12px 20px",
   borderRadius: 20,
   border: "none",
   background: "#145c43",
   color: "#fff",
-  fontWeight: 500,
   cursor: "pointer"
 }
 
 const timelineItem = {
-  display: "flex",
-  gap: 15,
   marginTop: 15,
   padding: 15,
   borderRadius: 20,
-  background: "rgba(255,255,255,0.6)",
-  backdropFilter: "blur(20px)"
-}
-
-const timelineDot = {
-  width: 12,
-  height: 12,
-  borderRadius: "50%",
-  background: "#145c43",
-  marginTop: 6
+  background: "rgba(255,255,255,0.6)"
 }
