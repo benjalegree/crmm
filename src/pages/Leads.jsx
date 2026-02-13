@@ -28,7 +28,7 @@ export default function Leads() {
     <div>
 
       <h1 style={title}>Leads</h1>
-      <p style={subtitle}>Manage and track your pipeline</p>
+      <p style={subtitle}>All your contacts in one clean workspace</p>
 
       <div style={toolbar}>
         <input
@@ -40,6 +40,7 @@ export default function Leads() {
       </div>
 
       <div style={tableContainer}>
+
         <div style={headerRow}>
           <div>Name</div>
           <div>Position</div>
@@ -52,16 +53,23 @@ export default function Leads() {
             key={lead.id}
             style={row}
             onClick={() => navigate(`/leads/${lead.id}`)}
+            onMouseEnter={e => e.currentTarget.style.transform = "translateY(-4px)"}
+            onMouseLeave={e => e.currentTarget.style.transform = "translateY(0px)"}
           >
             <div style={nameCell}>
               {lead.fields["Full Name"]}
             </div>
-            <div>{lead.fields.Position}</div>
-            <div>
+
+            <div style={secondaryText}>
+              {lead.fields.Position}
+            </div>
+
+            <div style={secondaryText}>
               {Array.isArray(lead.fields.Company)
                 ? lead.fields.Company[0]
                 : lead.fields.Company}
             </div>
+
             <Status status={lead.fields.Status} />
           </div>
         ))}
@@ -84,13 +92,13 @@ function Status({ status }) {
 
   return (
     <span style={{
-      padding: "8px 14px",
-      borderRadius: "30px",
+      padding: "10px 18px",
+      borderRadius: "40px",
       fontSize: "13px",
-      fontWeight: "500",
+      fontWeight: "600",
       background: colors[status] || "#ccc",
       color: "white",
-      boxShadow: "0 8px 20px rgba(0,0,0,0.15)"
+      boxShadow: "0 10px 25px rgba(0,0,0,0.15)"
     }}>
       {status}
     </span>
@@ -117,46 +125,52 @@ const toolbar = {
 }
 
 const searchInput = {
-  padding: "16px 22px",
-  borderRadius: "20px",
+  padding: "18px 24px",
+  borderRadius: "22px",
   border: "1px solid rgba(255,255,255,0.9)",
-  backdropFilter: "blur(30px)",
-  background: "rgba(255,255,255,0.4)",
-  width: "320px",
+  backdropFilter: "blur(40px)",
+  background: "rgba(255,255,255,0.5)",
+  width: "350px",
   fontSize: "14px",
   outline: "none",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.05)"
+  boxShadow: "0 15px 40px rgba(0,0,0,0.05)"
 }
 
 const tableContainer = {
-  backdropFilter: "blur(40px)",
-  background: "rgba(255,255,255,0.35)",
-  borderRadius: "30px",
-  padding: "30px",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.08)",
-  border: "1px solid rgba(255,255,255,0.9)"
+  display: "flex",
+  flexDirection: "column",
+  gap: "16px"
 }
 
 const headerRow = {
   display: "grid",
   gridTemplateColumns: "2fr 1fr 1fr 1fr",
-  paddingBottom: "20px",
+  padding: "0 25px",
   fontSize: "13px",
   fontWeight: "600",
-  color: "#6e6e73",
-  borderBottom: "1px solid rgba(0,0,0,0.05)"
+  color: "#6e6e73"
 }
 
 const row = {
   display: "grid",
   gridTemplateColumns: "2fr 1fr 1fr 1fr",
-  padding: "22px 0",
+  padding: "28px 25px",
+  borderRadius: "28px",
+  backdropFilter: "blur(40px)",
+  background: "rgba(255,255,255,0.45)",
+  border: "1px solid rgba(255,255,255,0.9)",
+  boxShadow: "0 20px 50px rgba(0,0,0,0.06)",
   cursor: "pointer",
-  transition: "all 0.2s ease",
-  borderBottom: "1px solid rgba(0,0,0,0.04)"
+  transition: "all 0.25s ease"
 }
 
 const nameCell = {
   fontWeight: "600",
+  fontSize: "15px",
   color: "#1c1c1e"
+}
+
+const secondaryText = {
+  fontSize: "14px",
+  color: "#6e6e73"
 }
