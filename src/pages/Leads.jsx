@@ -29,75 +29,11 @@ export default function Leads() {
       .then(data => setLeads(data.records || []))
   }, [])
 
-  /* ========================= */
-  /* FILTER + SEARCH */
-  /* ========================= */
-
-  const processedLeads = leads
-    .filter(l =>
-      filterStatus === "All" ? true : l.fields.Status === filterStatus
-    )
-    .filter(l =>
-      Object.values(l.fields)
-        .join(" ")
-        .toLowerCase()
-        .includes(search.toLowerCase())
-    )
-
-  /* ========================= */
-  /* COLUMN VISIBILITY */
-  /* ========================= */
-
   const toggleColumn = key => {
     setColumns(cols =>
       cols.map(c => c.key === key ? { ...c, visible: !c.visible } : c)
     )
   }
-
-  /* ========================= */
-  /* DRAG REORDER */
-  /* ========================= */
-
-  const handleDragStart = index => {
-    setDraggedColumn(index)
-  }
-
-  const handleDrop = index => {
-    const updated = [...columns]
-    const [removed] = updated.splice(draggedColumn, 1)
-    updated.splice(index, 0, removed)
-    setColumns(updated)
-  }
-
-  /* ========================= */
-  /* RESIZE */
-  /* ========================= */
-
-  const startResize = (e, index) => {
-    const startX = e.clientX
-    const startWidth = columns[index].width
-
-    const onMouseMove = e => {
-      const newWidth = startWidth + (e.clientX - startX)
-      setColumns(cols =>
-        cols.map((c, i) =>
-          i === index ? { ...c, width: Math.max(80, newWidth) } : c
-        )
-      )
-    }
-
-    const onMouseUp = () => {
-      window.removeEventListener("mousemove", onMouseMove)
-      window.removeEventListener("mouseup", onMouseUp)
-    }
-
-    window.addEventListener("mousemove", onMouseMove)
-    window.addEventListener("mouseup", onMouseUp)
-  }
-
-  /* ========================= */
-  /* RENDER */
-  /* ========================= */
 
   const visibleColumns = columns.filter(c => c.visible)
 
@@ -106,9 +42,7 @@ export default function Leads() {
 
       <h1 style={title}>Leads</h1>
 
-      {/* Top Controls */}
       <div style={topBar}>
-
         <input
           placeholder="Search..."
           value={search}
@@ -116,114 +50,64 @@ export default function Leads() {
           style={searchInput}
         />
 
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          style={select}
-        >
-          <option>All</option>
-          <option>Not Contacted</option>
-          <option>Contacted</option>
-          <option>Meeting Booked</option>
-          <option>Closed Won</option>
-          <option>Closed Lost</option>
-        </select>
-
-        <button style={btn} onClick={() => setView(view === "table" ? "kanban" : "table")}>
-          {view === "table" ? "Kanban View" : "Table View"}
-        </button>
-
         <button style={btn} onClick={() => setShowPanel(!showPanel)}>
-          Columns
+          Customize Columns
         </button>
-
       </div>
 
-      {/* COLUMN PANEL */}
       {showPanel && (
         <div style={glassPanel}>
-          {columns.map((col, index) => (
-            <div key={col.key} style={panelItem}>
-              <span>{col.label}</span>
-              <input
-                type="checkbox"
-                checked={col.visible}
-                onChange={() => toggleColumn(col.key)}
-              />
+          {columns.map(col => (
+            <div key={col.key} style={pill}>
+              <span style={pillText}>{col.label}</span>
+
+              <div
+                style={{
+                  ...toggle,
+                  background: col.visible ? "#145c43" : "#d9d9d9"
+                }}
+                onClick={() => toggleColumn(col.key)}
+              >
+                <div
+                  style={{
+                    ...circle,
+                    transform: col.visible
+                      ? "translateX(20px)"
+                      : "translateX(2px)"
+                  }}
+                />
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* TABLE VIEW */}
-      {view === "table" && (
-        <div style={tableGlass} ref={tableRef}>
+      <div style={tableGlass}>
+        <div style={{ display: "flex" }}>
+          {visibleColumns.map(col => (
+            <div key={col.key} style={{ width: col.width, ...headerCell }}>
+              {col.label}
+            </div>
+          ))}
+        </div>
 
-          {/* HEADER */}
-          <div style={{ display: "flex" }}>
-            {visibleColumns.map((col, index) => (
+        {leads.map(lead => (
+          <div
+            key={lead.id}
+            style={{ display: "flex" }}
+            onClick={() => navigate(`/leads/${lead.id}`)}
+          >
+            {visibleColumns.map(col => (
               <div
                 key={col.key}
-                draggable
-                onDragStart={() => handleDragStart(index)}
-                onDragOver={e => e.preventDefault()}
-                onDrop={() => handleDrop(index)}
-                style={{
-                  width: col.width,
-                  ...headerCell
-                }}
+                style={{ width: col.width, ...cell }}
               >
-                {col.label}
-                <div
-                  style={resizer}
-                  onMouseDown={e => startResize(e, index)}
-                />
+                {renderCell(lead.fields, col.key)}
               </div>
             ))}
           </div>
-
-          {/* ROWS */}
-          {processedLeads.map(lead => (
-            <div
-              key={lead.id}
-              style={{ display: "flex" }}
-              onClick={() => navigate(`/leads/${lead.id}`)}
-            >
-              {visibleColumns.map(col => (
-                <div
-                  key={col.key}
-                  style={{
-                    width: col.width,
-                    ...cell
-                  }}
-                >
-                  {renderCell(lead.fields, col.key)}
-                </div>
-              ))}
-            </div>
-          ))}
-
-        </div>
-      )}
-
-      {/* KANBAN VIEW */}
-      {view === "kanban" && (
-        <div style={kanbanContainer}>
-          {["Not Contacted", "Contacted", "Meeting Booked", "Closed Won", "Closed Lost"].map(status => (
-            <div key={status} style={kanbanColumn}>
-              <h3>{status}</h3>
-              {processedLeads
-                .filter(l => l.fields.Status === status)
-                .map(l => (
-                  <div key={l.id} style={kanbanCard}>
-                    {l.fields["Full Name"]}
-                  </div>
-                ))}
-            </div>
-          ))}
-        </div>
-      )}
-
+        ))}
+      </div>
     </div>
   )
 }
@@ -262,41 +146,73 @@ const title = {
 
 const topBar = {
   display: "flex",
-  gap: 10,
+  gap: 12,
   marginBottom: 20
 }
 
 const searchInput = {
-  padding: 10,
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.05)"
+  padding: 12,
+  borderRadius: 16,
+  border: "1px solid rgba(0,0,0,0.05)",
+  minWidth: 250
 }
 
-const select = searchInput
-
 const btn = {
-  padding: "10px 16px",
-  borderRadius: 14,
+  padding: "12px 18px",
+  borderRadius: 18,
   background: "#145c43",
   color: "#fff",
   border: "none",
-  cursor: "pointer"
+  cursor: "pointer",
+  fontWeight: 500
 }
 
 const glassPanel = {
   padding: 20,
   marginBottom: 20,
-  borderRadius: 24,
+  borderRadius: 28,
   background: "rgba(255,255,255,0.6)",
-  backdropFilter: "blur(30px)",
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
-  gap: 15
+  backdropFilter: "blur(35px)",
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 16
 }
 
-const panelItem = {
+/* NEW BEAUTIFUL PILLS */
+
+const pill = {
   display: "flex",
-  justifyContent: "space-between"
+  alignItems: "center",
+  gap: 12,
+  padding: "10px 18px",
+  borderRadius: 20,
+  background: "rgba(255,255,255,0.7)",
+  backdropFilter: "blur(20px)",
+  border: "1px solid rgba(255,255,255,0.5)"
+}
+
+const pillText = {
+  fontWeight: 500,
+  color: "#0f3d2e"
+}
+
+const toggle = {
+  width: 44,
+  height: 24,
+  borderRadius: 30,
+  position: "relative",
+  cursor: "pointer",
+  transition: "0.3s"
+}
+
+const circle = {
+  width: 20,
+  height: 20,
+  borderRadius: "50%",
+  background: "#fff",
+  position: "absolute",
+  top: 2,
+  transition: "0.3s"
 }
 
 const tableGlass = {
@@ -310,43 +226,11 @@ const tableGlass = {
 const headerCell = {
   padding: 15,
   fontWeight: 600,
-  borderRight: "1px solid rgba(0,0,0,0.05)",
-  position: "relative",
-  cursor: "grab"
+  borderRight: "1px solid rgba(0,0,0,0.05)"
 }
 
 const cell = {
   padding: 15,
   borderRight: "1px solid rgba(0,0,0,0.05)",
   borderTop: "1px solid rgba(0,0,0,0.05)"
-}
-
-const resizer = {
-  width: 6,
-  cursor: "col-resize",
-  position: "absolute",
-  right: 0,
-  top: 0,
-  bottom: 0
-}
-
-const kanbanContainer = {
-  display: "flex",
-  gap: 20
-}
-
-const kanbanColumn = {
-  flex: 1,
-  background: "rgba(255,255,255,0.55)",
-  backdropFilter: "blur(30px)",
-  padding: 20,
-  borderRadius: 24
-}
-
-const kanbanCard = {
-  background: "#145c43",
-  color: "#fff",
-  padding: 10,
-  borderRadius: 14,
-  marginBottom: 10
 }
