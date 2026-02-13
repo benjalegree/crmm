@@ -67,26 +67,30 @@ export default function LeadProfile() {
     setLoading(false)
   }
 
-  const createActivity = async () => {
+const createActivity = async () => {
 
-    if (!activityType) return
+  if (!activityType) return
 
-    await fetch("/api/crm?action=createActivity", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        contactId: id,
-        type: activityType,
-        notes: activityNotes,
-        nextFollowUp: nextFollowUp || null
-      })
+  const res = await fetch("/api/crm?action=createActivity", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      contactId: id,
+      type: activityType,
+      notes: activityNotes,
+      nextFollowUp: nextFollowUp || null
     })
+  })
 
+  if (res.ok) {
     setActivityNotes("")
     setNextFollowUp("")
     loadActivities()
+  } else {
+    console.error("Failed to create activity")
   }
+}
 
   if (!lead) return null
 
