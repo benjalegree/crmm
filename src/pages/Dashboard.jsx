@@ -1,4 +1,11 @@
 import { useEffect, useState } from "react"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  Tooltip,
+  ResponsiveContainer
+} from "recharts"
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
@@ -24,7 +31,7 @@ export default function Dashboard() {
   }, [])
 
   if (!stats || !calendar || !user) {
-    return <div style={{ color: "#0f3d2e" }}>Loading dashboard...</div>
+    return <div style={{ color: "#0f3d2e" }}>Loading...</div>
   }
 
   const today = new Date().toISOString().split("T")[0]
@@ -44,6 +51,17 @@ export default function Dashboard() {
     return "User"
   }
 
+  const chartData = [
+    { name: "Calls", value: stats.calls },
+    { name: "Emails", value: stats.emails },
+    { name: "Meetings", value: stats.meetings }
+  ]
+
+  const productivity =
+    todayActivities.length >= 5
+      ? 100
+      : todayActivities.length * 20
+
   return (
     <div>
       <h1 style={greeting}>
@@ -55,69 +73,55 @@ export default function Dashboard() {
         <div style={glassCard}>
           <div style={cardTitle}>Today Activity</div>
           <div style={bigNumber}>{todayActivities.length}</div>
-          <div style={subText}>Actions completed today</div>
+          <div style={progressBar}>
+            <div
+              style={{
+                ...progressFill,
+                width: `${productivity}%`
+              }}
+            />
+          </div>
         </div>
 
         <div style={glassCard}>
           <div style={cardTitle}>Upcoming Follow-ups</div>
           <div style={bigNumber}>{upcoming.length}</div>
-          <div style={subText}>Tasks pending</div>
         </div>
 
         <div style={glassCard}>
           <div style={cardTitle}>Total Leads</div>
           <div style={bigNumber}>{stats.totalLeads}</div>
-          <div style={subText}>Active contacts</div>
-        </div>
-
-        <div style={glassCard}>
-          <div style={cardTitle}>Meetings</div>
-          <div style={bigNumber}>{stats.meetings}</div>
-          <div style={subText}>Total meetings</div>
         </div>
 
       </div>
 
-      <div style={{ marginTop: "60px", display: "grid", gridTemplateColumns: "2fr 1fr", gap: "40px" }}>
+      <div style={bottomGrid}>
 
         <div style={largeGlass}>
-          <div style={cardTitle}>Activity Overview</div>
+          <div style={cardTitle}>Weekly Overview</div>
 
-          <div style={chartContainer}>
-            {["Calls","Emails","Meetings"].map((type, i) => {
-              const value =
-                type === "Calls"
-                  ? stats.calls
-                  : type === "Emails"
-                  ? stats.emails
-                  : stats.meetings
-
-              return (
-                <div key={type} style={chartBlock}>
-                  <div
-                    style={{
-                      ...chartBar,
-                      height: `${value * 15 + 20}px`
-                    }}
-                  />
-                  <span style={chartLabel}>{type}</span>
-                </div>
-              )
-            })}
+          <div style={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer>
+              <BarChart data={chartData}>
+                <XAxis dataKey="name" stroke="#145c43" />
+                <Tooltip />
+                <Bar dataKey="value" fill="#1e7a57" radius={[10,10,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
         <div style={largeGlass}>
-          <div style={cardTitle}>Today Tasks</div>
+          <div style={cardTitle}>Next Follow-up</div>
 
-          {todayActivities.length === 0 && (
-            <div style={subText}>No activity yet today</div>
+          {upcoming.length === 0 && (
+            <div style={subText}>No upcoming tasks</div>
           )}
 
-          {todayActivities.map(a => (
+          {upcoming.slice(0,3).map(a => (
             <div key={a.id} style={taskItem}>
-              {a.fields["Activity Type"]} —{" "}
-              {a.fields["Related Contact"]?.[0] || ""}
+              {a.fields["Activity Type"]} –{" "}
+              {a.fields["Next Follow-up Date"]}
             </div>
           ))}
         </div>
@@ -127,9 +131,7 @@ export default function Dashboard() {
   )
 }
 
-/* =============================== */
-/* STYLES */
-/* =============================== */
+/* ================= STYLES ================= */
 
 const greeting = {
   fontSize: "38px",
@@ -140,24 +142,30 @@ const greeting = {
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
   gap: "30px"
+}
+
+const bottomGrid = {
+  display: "grid",
+  gridTemplateColumns: "2fr 1fr",
+  gap: "40px",
+  marginTop: "60px"
 }
 
 const glassCard = {
   background: "rgba(255,255,255,0.55)",
-  backdropFilter: "blur(25px)",
-  borderRadius: "28px",
-  padding: "35px",
+  backdropFilter: "blur(30px)",
+  borderRadius: "30px",
+  padding: "40px",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 20px 60px rgba(15,61,46,0.15)",
-  transition: "all 0.3s ease"
+  boxShadow: "0 25px 70px rgba(15,61,46,0.15)"
 }
 
 const largeGlass = {
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(30px)",
-  borderRadius: "32px",
+  borderRadius: "30px",
   padding: "45px",
   border: "1px solid rgba(255,255,255,0.4)",
   boxShadow: "0 25px 70px rgba(15,61,46,0.15)"
@@ -167,44 +175,17 @@ const cardTitle = {
   fontSize: "14px",
   fontWeight: "600",
   color: "#1e7a57",
-  marginBottom: "15px"
+  marginBottom: "20px"
 }
 
 const bigNumber = {
-  fontSize: "40px",
+  fontSize: "42px",
   fontWeight: "700",
   color: "#0f3d2e"
 }
 
 const subText = {
-  fontSize: "13px",
-  color: "#145c43",
-  marginTop: "8px"
-}
-
-const chartContainer = {
-  display: "flex",
-  alignItems: "flex-end",
-  gap: "40px",
-  marginTop: "40px"
-}
-
-const chartBlock = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center"
-}
-
-const chartBar = {
-  width: "45px",
-  background: "linear-gradient(180deg,#1e7a57,#0f3d2e)",
-  borderRadius: "14px"
-}
-
-const chartLabel = {
-  marginTop: "10px",
-  fontSize: "13px",
-  fontWeight: "600",
+  fontSize: "14px",
   color: "#145c43"
 }
 
@@ -213,4 +194,17 @@ const taskItem = {
   borderBottom: "1px solid rgba(0,0,0,0.05)",
   fontSize: "14px",
   color: "#0f3d2e"
+}
+
+const progressBar = {
+  marginTop: "20px",
+  height: "8px",
+  background: "rgba(0,0,0,0.05)",
+  borderRadius: "10px",
+  overflow: "hidden"
+}
+
+const progressFill = {
+  height: "100%",
+  background: "linear-gradient(90deg,#145c43,#1e7a57)"
 }
