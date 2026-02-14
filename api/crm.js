@@ -117,7 +117,8 @@ export default async function handler(req, res) {
       )
 
       if (!response.ok) {
-        return res.status(response.status).json({ error: "Failed to fetch companies" })
+        const err = await response.json().catch(() => ({}))
+        return res.status(response.status).json({ error: "Failed to fetch companies", details: err })
       }
 
       const data = await response.json()
@@ -139,7 +140,8 @@ export default async function handler(req, res) {
       )
 
       if (!response.ok) {
-        return res.status(response.status).json({ error: "Company not found" })
+        const err = await response.json().catch(() => ({}))
+        return res.status(response.status).json({ error: "Company not found", details: err })
       }
 
       const data = await response.json()
@@ -168,7 +170,8 @@ export default async function handler(req, res) {
       )
 
       if (!check.ok) {
-        return res.status(check.status).json({ error: "Company not found" })
+        const err = await check.json().catch(() => ({}))
+        return res.status(check.status).json({ error: "Company not found", details: err })
       }
 
       const existing = await check.json()
@@ -187,7 +190,8 @@ export default async function handler(req, res) {
       )
 
       if (!response.ok) {
-        return res.status(response.status).json({ error: "Failed to update company" })
+        const err = await response.json().catch(() => ({}))
+        return res.status(response.status).json({ error: "Failed to update company", details: err })
       }
 
       const data = await response.json()
@@ -207,7 +211,8 @@ export default async function handler(req, res) {
       )
 
       if (!contactsRes.ok) {
-        return res.status(contactsRes.status).json({ error: "Failed to fetch contacts" })
+        const err = await contactsRes.json().catch(() => ({}))
+        return res.status(contactsRes.status).json({ error: "Failed to fetch contacts", details: err })
       }
 
       const contactsData = await contactsRes.json()
@@ -218,7 +223,7 @@ export default async function handler(req, res) {
         { headers: AIRTABLE_HEADERS }
       )
 
-      const companiesData = await companiesRes.json()
+      const companiesData = await companiesRes.json().catch(() => ({}))
       const companies = companiesData.records || []
 
       const companiesMap = {}
@@ -257,7 +262,8 @@ export default async function handler(req, res) {
       )
 
       if (!response.ok) {
-        return res.status(response.status).json({ error: "Contact not found" })
+        const err = await response.json().catch(() => ({}))
+        return res.status(response.status).json({ error: "Contact not found", details: err })
       }
 
       const data = await response.json()
@@ -286,7 +292,8 @@ export default async function handler(req, res) {
       )
 
       if (!check.ok) {
-        return res.status(check.status).json({ error: "Contact not found" })
+        const err = await check.json().catch(() => ({}))
+        return res.status(check.status).json({ error: "Contact not found", details: err })
       }
 
       const existing = await check.json()
@@ -305,7 +312,8 @@ export default async function handler(req, res) {
       )
 
       if (!response.ok) {
-        return res.status(response.status).json({ error: "Failed to update contact" })
+        const err = await response.json().catch(() => ({}))
+        return res.status(response.status).json({ error: "Failed to update contact", details: err })
       }
 
       const data = await response.json()
@@ -313,10 +321,10 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       CREATE ACTIVITY  ✅ FIX ROBUSTO (NO DEPENDE DE COMPANY ID)
-       - Si Company es lookup (nombre) NO rompe.
-       - Si Company es link (recordId recxxx) lo usa.
-       - Siempre crea la actividad.
+       CREATE ACTIVITY ✅ FIX DEFINITIVO
+       - Si Company es lookup: NO enviamos Related Company
+       - Si Company es link recXXX: lo enviamos
+       - Devuelve error real de Airtable si falla
     ====================================================== */
 
     if (action === "createActivity") {
@@ -326,39 +334,31 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Missing required fields" })
       }
 
-      // 1) Obtener contacto para asegurar ownership y (si existe) company recordId real
       const contactRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
         { headers: AIRTABLE_HEADERS }
       )
 
-      const contactData = await contactRes.json()
+      const contactData = await contactRes.json().catch(() => ({}))
 
       if (!contactRes.ok) {
-        console.error("CONTACT FETCH ERROR:", contactData)
-        return res.status(contactRes.status).json(contactData)
+        return res.status(contactRes.status).json({
+          error: "Failed to fetch contact for activity",
+          details: contactData
+        })
       }
 
-      if (contactData.fields["Responsible Email"] !== email) {
+      if (contactData.fields?.["Responsible Email"] !== email) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
-      // 2) Company puede ser:
-      // - Link -> ["recXXXX"]
-      // - Lookup -> ["Nombre empresa"] o string
-      // Solo usamos companyId si es recordId válido
-      const rawCompany = contactData.fields.Company
+      const rawCompany = contactData.fields?.Company
       const candidate =
-        Array.isArray(rawCompany) && rawCompany.length > 0
-          ? rawCompany[0]
-          : null
+        Array.isArray(rawCompany) && rawCompany.length > 0 ? rawCompany[0] : null
 
       const linkedCompanyId =
-        typeof candidate === "string" && candidate.startsWith("rec")
-          ? candidate
-          : null
+        typeof candidate === "string" && candidate.startsWith("rec") ? candidate : null
 
-      // 3) Crear fields SIN mandar Related Company si no es recXXX
       const fieldsToSend = {
         "Activity Type": type,
         "Related Contact": [contactId],
@@ -368,11 +368,9 @@ export default async function handler(req, res) {
         "Next Follow-up Date": nextFollowUp || null
       }
 
+      // ✅ clave: SOLO mandamos Related Company si es recXXX
       if (linkedCompanyId) {
         fieldsToSend["Related Company"] = [linkedCompanyId]
-      } else {
-        // NO enviamos Related Company para que Airtable no rechace por formato inválido
-        fieldsToSend["Related Company"] = []
       }
 
       const response = await fetch(
@@ -384,21 +382,21 @@ export default async function handler(req, res) {
         }
       )
 
-      const data = await response.json()
+      const data = await response.json().catch(() => ({}))
 
       if (!response.ok) {
         console.error("ACTIVITY CREATE ERROR:", data)
-        return res.status(response.status).json(data)
+        return res.status(response.status).json({
+          error: "Failed to create activity",
+          details: data
+        })
       }
 
       return res.status(200).json(data)
     }
 
     /* =====================================================
-       GET ACTIVITIES ✅ FIX ROBUSTO
-       - En vez de depender de una formula frágil con ARRAYJOIN/FIND,
-         traemos por Owner Email y filtramos en server por contactId.
-       - Así SIEMPRE aparecen las nuevas.
+       GET ACTIVITIES
     ====================================================== */
 
     if (action === "getActivities") {
@@ -408,8 +406,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Missing contact ID" })
       }
 
-      // Traemos todas las actividades del owner (filtro estable)
-      const formula = `{Owner Email}="${email}"`
+      const formula = `AND({Owner Email}="${email}", FIND("${contactId}", ARRAYJOIN({Related Contact})))`
 
       const response = await fetch(
         `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
@@ -417,20 +414,13 @@ export default async function handler(req, res) {
       )
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}))
-        console.error("GET ACTIVITIES FETCH ERROR:", errData)
-        return res.status(response.status).json({ error: "Failed to fetch activities", details: errData })
+        const err = await response.json().catch(() => ({}))
+        return res.status(response.status).json({ error: "Failed to fetch activities", details: err })
       }
 
       const data = await response.json()
 
-      // Filtramos por contacto de forma segura
-      const filtered = (data.records || []).filter(r => {
-        const rel = r.fields?.["Related Contact"]
-        return Array.isArray(rel) && rel.includes(contactId)
-      })
-
-      const records = filtered.sort(
+      const records = (data.records || []).sort(
         (a, b) =>
           new Date(b.fields["Activity Date"]) -
           new Date(a.fields["Activity Date"])
@@ -536,6 +526,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("CRM BACKEND ERROR:", err)
-    return res.status(500).json({ error: "Internal server error" })
+    return res.status(500).json({ error: "Internal server error", details: String(err?.message || err) })
   }
 }
