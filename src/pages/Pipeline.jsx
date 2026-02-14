@@ -2,11 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 export default function Pipeline() {
-  const [leads, setLeads] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState("")
-  const [updatingId, setUpdatingId] = useState(null)
-
   const navigate = useNavigate()
 
   const statuses = useMemo(
@@ -21,10 +16,24 @@ export default function Pipeline() {
     []
   )
 
+  const [leads, setLeads] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+  const [draggingId, setDraggingId] = useState(null)
+  const [updatingId, setUpdatingId] = useState(null)
+
   useEffect(() => {
     loadLeads()
     // eslint-disable-next-line
   }, [])
+
+  const readJson = async (res) => {
+    try {
+      return await res.json()
+    } catch {
+      return {}
+    }
+  }
 
   const loadLeads = async () => {
     setLoading(true)
@@ -33,7 +42,7 @@ export default function Pipeline() {
       const res = await fetch("/api/crm?action=getContacts", {
         credentials: "include"
       })
-      const data = await res.json().catch(() => ({}))
+      const data = await readJson(res)
       if (!res.ok) {
         setErr(data?.error || "Failed to load leads")
         setLeads([])
@@ -42,14 +51,22 @@ export default function Pipeline() {
       }
       setLeads(data.records || [])
       setLoading(false)
-    } catch (e) {
+    } catch {
       setErr("Failed to load leads")
       setLeads([])
       setLoading(false)
     }
   }
 
-  const updateStatus = async (leadId, newStatus) => {
+  const patchLeadStatusLocal = (leadId, newStatus) => {
+    setLeads(prev =>
+      (prev || []).map(l =>
+        l.id === leadId ? { ...l, fields: { ...l.fields, Status: newStatus } } : l
+      )
+    )
+  }
+
+  const updateStatusServer = async (leadId, newStatus, prevStatus) => {
     setUpdatingId(leadId)
     setErr("")
     try {
@@ -62,26 +79,40 @@ export default function Pipeline() {
           fields: { Status: newStatus }
         })
       })
-
-      const data = await res.json().catch(() => ({}))
+      const data = await readJson(res)
       if (!res.ok) {
+        // rollback
+        patchLeadStatusLocal(leadId, prevStatus)
         setErr(data?.error || "Failed to update status")
         setUpdatingId(null)
         return
       }
-
-      // ✅ Optimistic update
-      setLeads(prev =>
-        (prev || []).map(l =>
-          l.id === leadId
-            ? { ...l, fields: { ...l.fields, Status: newStatus } }
-            : l
-        )
-      )
-    } catch (e) {
+    } catch {
+      patchLeadStatusLocal(leadId, prevStatus)
       setErr("Failed to update status")
     }
     setUpdatingId(null)
+  }
+
+  const onDragStart = (leadId) => {
+    setDraggingId(leadId)
+  }
+
+  const onDropTo = (status) => {
+    if (!draggingId) return
+    const lead = leads.find(l => l.id === draggingId)
+    if (!lead) return
+
+    const prevStatus = lead.fields.Status || "Not Contacted"
+    if (prevStatus === status) {
+      setDraggingId(null)
+      return
+    }
+
+    // optimistic UI
+    patchLeadStatusLocal(draggingId, status)
+    updateStatusServer(draggingId, status, prevStatus)
+    setDraggingId(null)
   }
 
   const countByStatus = useMemo(() => {
@@ -101,7 +132,7 @@ export default function Pipeline() {
         <div>
           <h1 style={title}>Pipeline</h1>
           <p style={subtitle}>
-            Gestión rápida por estado · Click en un lead para ver perfil
+            Arrastrá un lead a otra columna para cambiar el estado.
           </p>
         </div>
 
@@ -117,85 +148,63 @@ export default function Pipeline() {
       ) : (
         <div style={board}>
           {statuses.map(status => (
-            <div key={status} style={column}>
+            <div
+              key={status}
+              style={column}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => onDropTo(status)}
+            >
               <div style={colHeader}>
                 <div style={colTitleRow}>
                   <h3 style={colTitle}>{status}</h3>
                   <span style={badge}>{countByStatus[status] || 0}</span>
                 </div>
-                <div style={colHint}>Drag & drop lo hacemos después</div>
               </div>
 
               <div style={colBody}>
                 {leads
-                  .filter(lead => (lead.fields.Status || "Not Contacted") === status)
+                  .filter(l => (l.fields.Status || "Not Contacted") === status)
                   .map(lead => (
-                    <div key={lead.id} style={card}>
+                    <div
+                      key={lead.id}
+                      style={{
+                        ...card,
+                        opacity: updatingId === lead.id ? 0.65 : 1,
+                        transform:
+                          draggingId === lead.id ? "scale(0.99)" : "scale(1)"
+                      }}
+                      draggable
+                      onDragStart={() => onDragStart(lead.id)}
+                      onDoubleClick={() => navigate(`/leads/${lead.id}`)}
+                      title="Doble click para abrir el perfil"
+                    >
                       <div
                         style={cardTop}
                         onClick={() => navigate(`/leads/${lead.id}`)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={e => {
+                        onKeyDown={(e) => {
                           if (e.key === "Enter") navigate(`/leads/${lead.id}`)
                         }}
                       >
-                        <div style={cardNameRow}>
-                          <strong style={cardName}>
-                            {lead.fields["Full Name"] || "—"}
-                          </strong>
-                          <span style={pillFor(status)}>{status}</span>
-                        </div>
-
+                        <strong style={cardName}>
+                          {lead.fields["Full Name"] || "—"}
+                        </strong>
                         <div style={cardMeta}>
-                          <div style={metaLine}>
-                            <span style={metaLabel}>Role</span>
-                            <span style={metaValue}>
-                              {lead.fields.Position || "—"}
-                            </span>
-                          </div>
-
-                          <div style={metaLine}>
-                            <span style={metaLabel}>Company</span>
-                            <span style={metaValue}>
-                              {Array.isArray(lead.fields.CompanyName)
-                                ? (lead.fields.CompanyName[0] || "—")
-                                : (lead.fields.CompanyName || "—")}
-                            </span>
-                          </div>
+                          <span style={metaText}>{lead.fields.Position || "—"}</span>
+                          <span style={metaDot}>•</span>
+                          <span style={metaText}>
+                            {Array.isArray(lead.fields.CompanyName)
+                              ? (lead.fields.CompanyName[0] || "—")
+                              : (lead.fields.CompanyName || "—")}
+                          </span>
                         </div>
-                      </div>
-
-                      <div style={cardBottom}>
-                        <select
-                          style={{
-                            ...select,
-                            opacity: updatingId === lead.id ? 0.65 : 1
-                          }}
-                          value={lead.fields.Status || "Not Contacted"}
-                          onChange={e => updateStatus(lead.id, e.target.value)}
-                          disabled={updatingId === lead.id}
-                        >
-                          {statuses.map(s => (
-                            <option key={s}>{s}</option>
-                          ))}
-                        </select>
-
-                        <button
-                          style={miniBtn}
-                          onClick={() => navigate(`/leads/${lead.id}`)}
-                        >
-                          Open
-                        </button>
                       </div>
                     </div>
                   ))}
 
                 {!leads.some(l => (l.fields.Status || "Not Contacted") === status) ? (
-                  <div style={emptyState}>
-                    <div style={emptyTitle}>Nada acá</div>
-                    <div style={emptyText}>Mové un lead a este estado.</div>
-                  </div>
+                  <div style={emptyState}>Vacío</div>
                 ) : null}
               </div>
             </div>
@@ -207,7 +216,7 @@ export default function Pipeline() {
 }
 
 /* ===================== */
-/* STYLES (mismo look “glass” del CRM) */
+/* STYLES (minimal, “Apple-like”, sin botones extra) */
 /* ===================== */
 
 const page = { width: "100%" }
@@ -256,15 +265,15 @@ const errBox = {
 
 const board = {
   display: "flex",
-  gap: 18,
+  gap: 14,
   marginTop: 18,
   overflowX: "auto",
   paddingBottom: 6
 }
 
 const column = {
-  minWidth: 320,
-  borderRadius: 26,
+  minWidth: 280,
+  borderRadius: 22,
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(40px)",
   border: "1px solid rgba(255,255,255,0.45)",
@@ -275,7 +284,7 @@ const column = {
 }
 
 const colHeader = {
-  padding: 18,
+  padding: 14,
   borderBottom: "1px solid rgba(0,0,0,0.06)",
   background: "linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.45))"
 }
@@ -289,7 +298,7 @@ const colTitleRow = {
 
 const colTitle = {
   margin: 0,
-  fontSize: 16,
+  fontSize: 14,
   fontWeight: 900,
   color: "#145c43"
 }
@@ -303,131 +312,62 @@ const badge = {
   color: "rgba(0,0,0,0.75)"
 }
 
-const colHint = {
-  marginTop: 8,
-  fontSize: 12,
-  color: "rgba(0,0,0,0.45)"
-}
-
 const colBody = {
-  padding: 16,
+  padding: 12,
   display: "flex",
   flexDirection: "column",
-  gap: 12
-}
-
-const card = {
-  borderRadius: 20,
-  background: "rgba(255,255,255,0.75)",
-  border: "1px solid rgba(0,0,0,0.06)",
-  boxShadow: "0 10px 22px rgba(0,0,0,0.06)",
-  overflow: "hidden"
-}
-
-const cardTop = {
-  padding: 14,
-  cursor: "pointer"
-}
-
-const cardNameRow = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
   gap: 10
 }
 
+const card = {
+  borderRadius: 18,
+  background: "rgba(255,255,255,0.78)",
+  border: "1px solid rgba(0,0,0,0.06)",
+  boxShadow: "0 10px 22px rgba(0,0,0,0.06)"
+}
+
+const cardTop = {
+  padding: 12,
+  cursor: "pointer"
+}
+
 const cardName = {
-  fontSize: 14,
+  display: "block",
+  fontSize: 13,
   fontWeight: 900,
   color: "rgba(0,0,0,0.85)"
 }
 
-const pillFor = (status) => {
-  const map = {
-    "Not Contacted": "rgba(0,0,0,0.08)",
-    "Contacted": "rgba(255,149,0,0.16)",
-    "Replied": "rgba(88,86,214,0.16)",
-    "Meeting Booked": "rgba(52,199,89,0.16)",
-    "Closed Won": "rgba(48,209,88,0.16)",
-    "Closed Lost": "rgba(255,59,48,0.16)"
-  }
-  return {
-    fontSize: 11,
-    fontWeight: 900,
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: map[status] || "rgba(0,0,0,0.08)",
-    color: "rgba(0,0,0,0.75)"
-  }
-}
-
 const cardMeta = {
-  marginTop: 10,
-  display: "flex",
-  flexDirection: "column",
-  gap: 6
-}
-
-const metaLine = {
+  marginTop: 6,
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
-  gap: 10
+  gap: 8
 }
 
-const metaLabel = {
-  fontSize: 11,
-  color: "rgba(0,0,0,0.45)",
-  fontWeight: 800
-}
-
-const metaValue = {
+const metaText = {
   fontSize: 12,
-  color: "rgba(0,0,0,0.75)",
-  fontWeight: 800,
-  maxWidth: 170,
+  color: "rgba(0,0,0,0.60)",
+  fontWeight: 700,
+  maxWidth: 120,
   overflow: "hidden",
   textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-  textAlign: "right"
+  whiteSpace: "nowrap"
 }
 
-const cardBottom = {
-  display: "flex",
-  gap: 10,
-  padding: 14,
-  borderTop: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.65)"
-}
-
-const select = {
-  flex: 1,
-  padding: 10,
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.10)",
-  background: "rgba(255,255,255,0.85)",
-  outline: "none",
-  fontWeight: 800,
-  cursor: "pointer"
-}
-
-const miniBtn = {
-  padding: "10px 12px",
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.10)",
-  background: "#111",
-  color: "#fff",
-  fontWeight: 900,
-  cursor: "pointer"
+const metaDot = {
+  fontSize: 12,
+  color: "rgba(0,0,0,0.25)",
+  fontWeight: 900
 }
 
 const emptyState = {
-  padding: 14,
-  borderRadius: 18,
-  border: "1px dashed rgba(0,0,0,0.15)",
+  padding: 12,
+  borderRadius: 16,
+  border: "1px dashed rgba(0,0,0,0.14)",
   background: "rgba(255,255,255,0.55)",
-  color: "rgba(0,0,0,0.55)"
+  color: "rgba(0,0,0,0.45)",
+  fontSize: 12,
+  fontWeight: 800,
+  textAlign: "center"
 }
-
-const emptyTitle = { fontWeight: 900, fontSize: 13 }
-const emptyText = { marginTop: 6, fontSize: 12 }
