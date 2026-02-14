@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useParams } from "react-router-dom"
 
 export default function LeadProfile() {
@@ -6,39 +6,128 @@ export default function LeadProfile() {
 
   const [lead, setLead] = useState(null)
   const [activities, setActivities] = useState([])
-  const [loading, setLoading] = useState(false)
+
+  const [loadingLead, setLoadingLead] = useState(true)
+  const [loadingActs, setLoadingActs] = useState(true)
+
+  const [saving, setSaving] = useState(false)
+  const [saveErr, setSaveErr] = useState("")
+  const [saveOk, setSaveOk] = useState("")
 
   const [activityType, setActivityType] = useState("Call")
   const [activityNotes, setActivityNotes] = useState("")
   const [nextFollowUp, setNextFollowUp] = useState("")
   const [creating, setCreating] = useState(false)
-  const [activityErr, setActivityErr] = useState("")
-  const [activityOk, setActivityOk] = useState("")
+  const [actErr, setActErr] = useState("")
+  const [actOk, setActOk] = useState("")
+
+  const readJson = async (res) => {
+    try {
+      return await res.json()
+    } catch {
+      return {}
+    }
+  }
+
+  // ✅ Normaliza campos reales de Airtable -> campos “estándar” para tu UI
+  const normalizeContact = (record) => {
+    if (!record || !record.fields) return record
+    const f = record.fields
+
+    const notes =
+      f.Notes ??
+      f["Contact Notes"] ??
+      f["Permanent Notes"] ??
+      f["Notas"] ??
+      f["Observaciones"] ??
+      ""
+
+    const phone =
+      f.Phone ??
+      f["Numero de telefono"] ??
+      f["Número de teléfono"] ??
+      f["Numero de teléfono"] ??
+      f["Teléfono"] ??
+      f["Telefono"] ??
+      ""
+
+    const linkedin =
+      f["LinkedIn URL"] ??
+      f.LinkedIn ??
+      f.Linkedin ??
+      ""
+
+    const nextFU =
+      f["Next Follow-up Date"] ??
+      f["Next Follow Up Date"] ??
+      f["Next follow-up Date"] ??
+      f["Próximo seguimiento"] ??
+      f["Proximo seguimiento"] ??
+      null
+
+    return {
+      ...record,
+      fields: {
+        ...f,
+        Notes: notes,
+        Phone: phone,
+        "LinkedIn URL": linkedin,
+        "Next Follow-up Date": nextFU
+      }
+    }
+  }
 
   useEffect(() => {
-    loadLead()
-    loadActivities()
+    loadAll()
     // eslint-disable-next-line
   }, [id])
 
+  const loadAll = async () => {
+    await Promise.all([loadLead(), loadActivities()])
+  }
+
   const loadLead = async () => {
-    const res = await fetch(`/api/crm?action=getContact&id=${id}`, {
-      credentials: "include"
-    })
-    const data = await res.json()
-    setLead(data)
+    setLoadingLead(true)
+    setSaveErr("")
+    setSaveOk("")
+    try {
+      const res = await fetch(`/api/crm?action=getContact&id=${id}`, {
+        credentials: "include"
+      })
+      const data = await readJson(res)
+      if (!res.ok) {
+        setLead(null)
+        setLoadingLead(false)
+        return
+      }
+      setLead(normalizeContact(data))
+    } catch {
+      setLead(null)
+    }
+    setLoadingLead(false)
   }
 
   const loadActivities = async () => {
-    const res = await fetch(`/api/crm?action=getActivities&contactId=${id}`, {
-      credentials: "include"
-    })
-    const data = await res.json()
-    setActivities(data.records || [])
+    setLoadingActs(true)
+    try {
+      const res = await fetch(`/api/crm?action=getActivities&contactId=${id}`, {
+        credentials: "include"
+      })
+      const data = await readJson(res)
+      if (!res.ok) {
+        setActivities([])
+        setLoadingActs(false)
+        return
+      }
+      setActivities(data.records || [])
+    } catch {
+      setActivities([])
+    }
+    setLoadingActs(false)
   }
 
   const updateField = (field, value) => {
-    setLead(prev => ({
+    setLead((prev) => ({
       ...prev,
       fields: {
         ...prev.fields,
@@ -47,35 +136,74 @@ export default function LeadProfile() {
     }))
   }
 
-  const saveChanges = async () => {
-    setLoading(true)
+  const safeErrMsg = (data, fallback) => {
+    return (
+      data?.error ||
+      data?.details?.error?.message ||
+      data?.details?.error ||
+      data?.details?.message ||
+      fallback
+    )
+  }
+
+  const saveChanges = async (e) => {
+    if (e?.preventDefault) e.preventDefault()
+    if (!lead) return
+
+    setSaving(true)
+    setSaveErr("")
+    setSaveOk("")
 
     try {
-      await fetch("/api/crm?action=updateContact", {
+      const res = await fetch("/api/crm?action=updateContact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           id,
           fields: {
-            Email: lead.fields.Email,
-            Position: lead.fields.Position,
-            Status: lead.fields.Status,
-            Notes: lead.fields.Notes,
-            "Numero de telefono": lead.fields["Numero de telefono"],
-            "LinkedIn URL": lead.fields["LinkedIn URL"]
+            Email: lead.fields.Email || "",
+            Position: lead.fields.Position || "",
+            Status: lead.fields.Status || "",
+
+            // ✅ notes generales (UI)
+            Notes: lead.fields.Notes || "",
+
+            // ✅ phone (UI)
+            Phone: lead.fields.Phone || "",
+
+            // ✅ linkedin (UI)
+            "LinkedIn URL": lead.fields["LinkedIn URL"] || "",
+
+            // ✅ next follow-up (contact)
+            "Next Follow-up Date": lead.fields["Next Follow-up Date"] || null
           }
         })
       })
-    } finally {
-      setLoading(false)
+
+      const data = await readJson(res)
+
+      if (!res.ok) {
+        setSaveErr(safeErrMsg(data, "Failed to update contact"))
+        setSaving(false)
+        return
+      }
+
+      setSaveOk("Guardado ✅")
+      await loadLead() // ✅ vuelve a traer lo guardado real desde Airtable
+    } catch {
+      setSaveErr("Failed to update contact")
     }
+
+    setSaving(false)
   }
 
-  const createActivity = async () => {
-    setActivityErr("")
-    setActivityOk("")
+  const createActivity = async (e) => {
+    if (e?.preventDefault) e.preventDefault()
+
     setCreating(true)
+    setActErr("")
+    setActOk("")
 
     try {
       const res = await fetch("/api/crm?action=createActivity", {
@@ -90,80 +218,87 @@ export default function LeadProfile() {
         })
       })
 
-      const data = await res.json().catch(() => ({}))
+      const data = await readJson(res)
 
       if (!res.ok) {
-        const msg =
-          data?.error ||
-          data?.details?.error?.message ||
-          data?.details?.message ||
-          "Failed to create activity"
-
-        setActivityErr(msg)
-        console.error("CREATE ACTIVITY ERROR:", data)
+        setActErr(safeErrMsg(data, "Failed to create activity"))
         setCreating(false)
         return
       }
 
       setActivityNotes("")
       setNextFollowUp("")
-      setActivityOk("Activity saved ✅")
+      setActOk("Actividad guardada ✅")
 
-      await loadActivities()
-    } catch (e) {
-      console.error("CREATE ACTIVITY CRASH:", e)
-      setActivityErr("Network/server error while creating activity")
-    } finally {
-      setCreating(false)
+      // ✅ refresca timeline + refresca lead (por status/next followup auto)
+      await Promise.all([loadActivities(), loadLead()])
+    } catch {
+      setActErr("Failed to create activity")
     }
+
+    setCreating(false)
   }
 
-  if (!lead) return null
+  if (loadingLead) return <div>Loading...</div>
+  if (!lead) return <div>Lead not found</div>
 
   const f = lead.fields || {}
 
+  const statusPill = useMemo(() => {
+    if (!f.Status) return null
+    return <span style={pill}>{f.Status}</span>
+  }, [f.Status])
+
   return (
     <div style={page}>
-      <h1 style={title}>{f["Full Name"] || "Lead"}</h1>
+      <div style={headerRow}>
+        <h1 style={title}>{f["Full Name"] || "Lead"}</h1>
+        <div style={topRight}>
+          {statusPill}
+          <span style={mutedSmall}>
+            {loadingActs ? "Loading activity..." : activities.length ? "" : "No activity yet"}
+          </span>
+        </div>
+      </div>
 
       <div style={grid}>
-        {/* LEFT COLUMN */}
-        <div style={glassCard}>
-          <h3 style={sectionTitle}>Contact Info</h3>
+        {/* LEFT */}
+        <div style={card}>
+          <h3 style={h3}>Contact Info</h3>
 
-          <label>Email</label>
+          <label style={label}>Email</label>
           <input
+            style={input}
             value={f.Email || ""}
-            onChange={e => updateField("Email", e.target.value)}
-            style={input}
+            onChange={(e) => updateField("Email", e.target.value)}
           />
 
-          <label>Phone</label>
+          <label style={label}>Phone</label>
           <input
-            value={f["Numero de telefono"] || ""}
-            onChange={e => updateField("Numero de telefono", e.target.value)}
             style={input}
+            value={f.Phone || ""}
+            onChange={(e) => updateField("Phone", e.target.value)}
           />
 
-          <label>Position</label>
+          <label style={label}>Position</label>
           <input
+            style={input}
             value={f.Position || ""}
-            onChange={e => updateField("Position", e.target.value)}
-            style={input}
+            onChange={(e) => updateField("Position", e.target.value)}
           />
 
-          <label>LinkedIn</label>
+          <label style={label}>LinkedIn</label>
           <input
-            value={f["LinkedIn URL"] || ""}
-            onChange={e => updateField("LinkedIn URL", e.target.value)}
             style={input}
+            value={f["LinkedIn URL"] || ""}
+            onChange={(e) => updateField("LinkedIn URL", e.target.value)}
           />
 
-          <label>Status</label>
+          <label style={label}>Status</label>
           <select
-            value={f.Status || ""}
-            onChange={e => updateField("Status", e.target.value)}
             style={input}
+            value={f.Status || "Not Contacted"}
+            onChange={(e) => updateField("Status", e.target.value)}
           >
             <option>Not Contacted</option>
             <option>Contacted</option>
@@ -173,172 +308,132 @@ export default function LeadProfile() {
             <option>Closed Lost</option>
           </select>
 
-          <label>Notes</label>
-          <textarea
-            rows="4"
-            value={f.Notes || ""}
-            onChange={e => updateField("Notes", e.target.value)}
+          <label style={label}>Next Follow-up</label>
+          <input
             style={input}
+            type="date"
+            value={f["Next Follow-up Date"] ? String(f["Next Follow-up Date"]).slice(0, 10) : ""}
+            onChange={(e) => updateField("Next Follow-up Date", e.target.value || null)}
           />
 
-          <button style={saveBtn} onClick={saveChanges} disabled={loading}>
-            {loading ? "Saving..." : "Save Changes"}
+          <label style={label}>Notes (general)</label>
+          <textarea
+            style={textarea}
+            rows={5}
+            value={f.Notes || ""}
+            onChange={(e) => updateField("Notes", e.target.value)}
+          />
+
+          {/* ✅ IMPORTANT: type="button" para que NO haga submit/reload */}
+          <button type="button" style={btn} onClick={saveChanges} disabled={saving}>
+            {saving ? "Saving..." : "Save Changes"}
           </button>
+
+          {saveErr ? <div style={err}>{saveErr}</div> : null}
+          {saveOk ? <div style={ok}>{saveOk}</div> : null}
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div style={glassCard}>
-          <h3 style={sectionTitle}>Add Activity</h3>
+        {/* RIGHT */}
+        <div style={card}>
+          <h3 style={h3}>Add Activity</h3>
 
+          <label style={label}>Type</label>
           <select
-            value={activityType}
-            onChange={e => setActivityType(e.target.value)}
             style={input}
+            value={activityType}
+            onChange={(e) => setActivityType(e.target.value)}
           >
-            <option>Call</option>
             <option>Email</option>
+            <option>Call</option>
             <option>LinkedIn</option>
             <option>Meeting</option>
           </select>
 
+          <label style={label}>Activity notes</label>
           <textarea
-            placeholder="Activity notes..."
-            rows="3"
+            style={textarea}
+            rows={4}
             value={activityNotes}
-            onChange={e => setActivityNotes(e.target.value)}
-            style={input}
+            onChange={(e) => setActivityNotes(e.target.value)}
           />
 
+          <label style={label}>Next follow-up (optional)</label>
           <input
+            style={input}
             type="date"
             value={nextFollowUp}
-            onChange={e => setNextFollowUp(e.target.value)}
-            style={input}
+            onChange={(e) => setNextFollowUp(e.target.value)}
           />
 
-          <button
-            style={{
-              ...saveBtn,
-              opacity: creating ? 0.75 : 1,
-              cursor: creating ? "not-allowed" : "pointer"
-            }}
-            onClick={createActivity}
-            disabled={creating}
-          >
+          {/* ✅ IMPORTANT: type="button" para que NO haga submit/reload */}
+          <button type="button" style={btn} onClick={createActivity} disabled={creating}>
             {creating ? "Saving..." : "Add Activity"}
           </button>
 
-          {activityErr && <div style={errBox}>{activityErr}</div>}
-          {activityOk && <div style={okBox}>{activityOk}</div>}
+          {actErr ? <div style={err}>{actErr}</div> : null}
+          {actOk ? <div style={ok}>{actOk}</div> : null}
 
-          <h3 style={{ marginTop: 40 }}>Activity Timeline</h3>
+          <div style={timelineHeader}>
+            <h3 style={{ margin: 0 }}>Activity Timeline</h3>
+            <button type="button" style={miniBtn} onClick={loadActivities}>
+              Refresh
+            </button>
+          </div>
 
-          {activities.map(activity => (
-            <div key={activity.id} style={timelineItem}>
-              <div style={timelineDot} />
-              <div>
-                <strong>{activity.fields?.["Activity Type"] || "-"}</strong>
-                <p>{activity.fields?.Notes || ""}</p>
-                <small>{activity.fields?.["Activity Date"] || ""}</small>
+          {loadingActs ? (
+            <div style={muted}>Loading activities...</div>
+          ) : !activities.length ? (
+            <div style={muted}>No activities yet.</div>
+          ) : (
+            activities.map((a) => (
+              <div key={a.id} style={timelineItem}>
+                <div style={dot} />
+                <div>
+                  <strong>{a.fields?.["Activity Type"] || "-"}</strong>
+                  <div style={note}>{a.fields?.Notes || ""}</div>
+                  <small style={date}>
+                    {String(a.fields?.["Activity Date"] || "").replace("T", " ").slice(0, 16)}
+                  </small>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-/* ===================== */
-/* STYLES */
-/* ===================== */
-
+/* styles */
 const page = { width: "100%" }
-
-const title = {
-  fontSize: 30,
-  fontWeight: 700,
-  color: "#0f3d2e",
-  marginBottom: 30
-}
-
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: 30
-}
-
-const glassCard = {
-  padding: 30,
-  borderRadius: 30,
+const headerRow = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }
+const topRight = { display: "flex", alignItems: "center", gap: 12 }
+const title = { fontSize: 34, fontWeight: 800, margin: 0, color: "#0f3d2e" }
+const pill = { fontSize: 12, padding: "6px 10px", borderRadius: 999, background: "rgba(0,0,0,0.06)" }
+const mutedSmall = { fontSize: 12, color: "rgba(0,0,0,0.5)" }
+const grid = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 26 }
+const card = {
+  padding: 28,
+  borderRadius: 26,
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(40px)",
   border: "1px solid rgba(255,255,255,0.4)",
   boxShadow: "0 8px 30px rgba(0,0,0,0.05)",
   display: "flex",
   flexDirection: "column",
-  gap: 15
+  gap: 10
 }
-
-const sectionTitle = {
-  marginBottom: 10,
-  fontWeight: 600,
-  color: "#145c43"
-}
-
-const input = {
-  padding: 12,
-  borderRadius: 16,
-  border: "1px solid rgba(0,0,0,0.05)",
-  background: "rgba(255,255,255,0.7)",
-  outline: "none"
-}
-
-const saveBtn = {
-  marginTop: 15,
-  padding: "12px 20px",
-  borderRadius: 20,
-  border: "none",
-  background: "#145c43",
-  color: "#fff",
-  fontWeight: 700,
-  cursor: "pointer"
-}
-
-const timelineItem = {
-  display: "flex",
-  gap: 15,
-  marginTop: 15,
-  padding: 15,
-  borderRadius: 20,
-  background: "rgba(255,255,255,0.6)",
-  backdropFilter: "blur(20px)"
-}
-
-const timelineDot = {
-  width: 12,
-  height: 12,
-  borderRadius: "50%",
-  background: "#145c43",
-  marginTop: 6
-}
-
-const errBox = {
-  marginTop: 10,
-  padding: "10px 12px",
-  borderRadius: 14,
-  background: "rgba(255, 59, 48, 0.12)",
-  border: "1px solid rgba(255, 59, 48, 0.25)",
-  color: "#b42318",
-  fontWeight: 700
-}
-
-const okBox = {
-  marginTop: 10,
-  padding: "10px 12px",
-  borderRadius: 14,
-  background: "rgba(52, 199, 89, 0.12)",
-  border: "1px solid rgba(52, 199, 89, 0.25)",
-  color: "#0f5132",
-  fontWeight: 700
-}
+const h3 = { margin: 0, fontSize: 18, fontWeight: 800, color: "#145c43" }
+const label = { fontSize: 12, color: "rgba(0,0,0,0.6)", marginTop: 6 }
+const input = { padding: 12, borderRadius: 14, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.8)" }
+const textarea = { padding: 12, borderRadius: 14, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.8)", resize: "vertical" }
+const btn = { marginTop: 10, padding: 14, borderRadius: 14, border: "none", background: "#111", color: "#fff", fontWeight: 800, cursor: "pointer" }
+const err = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(255,0,0,0.08)", color: "#7a1d1d", border: "1px solid rgba(255,0,0,0.12)" }
+const ok = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(0,200,120,0.10)", color: "#0f5132", border: "1px solid rgba(0,200,120,0.16)" }
+const timelineHeader = { marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }
+const miniBtn = { padding: "8px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.1)", background: "rgba(255,255,255,0.8)", fontWeight: 800, cursor: "pointer", fontSize: 12 }
+const muted = { marginTop: 10, fontSize: 13, color: "rgba(0,0,0,0.55)" }
+const timelineItem = { display: "flex", gap: 12, padding: 14, borderRadius: 18, background: "rgba(255,255,255,0.65)", border: "1px solid rgba(0,0,0,0.06)", marginTop: 10 }
+const dot = { width: 10, height: 10, borderRadius: 999, marginTop: 6, background: "#145c43" }
+const note = { marginTop: 6, fontSize: 13, color: "rgba(0,0,0,0.75)" }
+const date = { display: "block", marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.55)" }
