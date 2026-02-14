@@ -44,7 +44,7 @@ export default function LeadProfile() {
     )
   }
 
-  // ✅ Normaliza campos reales (en español/variantes) a claves que usa tu UI
+  // Normaliza campos (por si hay nombres distintos en Airtable)
   const normalizeContact = (record) => {
     if (!record || !record.fields) return record
     const f = record.fields
@@ -91,14 +91,34 @@ export default function LeadProfile() {
     }
   }
 
-  // ✅ convierte fechas para <input type="date">
   const toDateInputValue = (val) => {
     if (!val) return ""
-    // Airtable suele devolver "2026-02-13" o ISO
-    const s = String(val)
+    const s = String(val).trim()
+
+    // yyyy-mm-dd
     if (s.length >= 10 && s[4] === "-" && s[7] === "-") return s.slice(0, 10)
+
+    // dd/mm/yyyy -> yyyy-mm-dd
+    const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`
+
     const d = new Date(s)
     if (Number.isNaN(d.getTime())) return ""
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    const dd = String(d.getDate()).padStart(2, "0")
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  const normalizeDateForApi = (val) => {
+    // Airtable acepta "YYYY-MM-DD" para campo date
+    const v = String(val || "").trim()
+    if (!v) return null
+    if (v.length >= 10 && v[4] === "-" && v[7] === "-") return v.slice(0, 10)
+    const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`
+    const d = new Date(v)
+    if (Number.isNaN(d.getTime())) return null
     const yyyy = d.getFullYear()
     const mm = String(d.getMonth() + 1).padStart(2, "0")
     const dd = String(d.getDate()).padStart(2, "0")
@@ -113,7 +133,6 @@ export default function LeadProfile() {
   }, [])
 
   useEffect(() => {
-    // cada vez que cambia el id: reset estados y carga
     setLead(null)
     setActivities([])
     setErrLead("")
@@ -211,7 +230,6 @@ export default function LeadProfile() {
 
   const saveChanges = async (e) => {
     e?.preventDefault?.()
-
     if (!lead?.fields) return
 
     setSaving(true)
@@ -228,7 +246,7 @@ export default function LeadProfile() {
           Notes: lead.fields.Notes || "",
           Phone: lead.fields.Phone || "",
           "LinkedIn URL": lead.fields["LinkedIn URL"] || "",
-          "Next Follow-up Date": lead.fields["Next Follow-up Date"] || null
+          "Next Follow-up Date": normalizeDateForApi(lead.fields["Next Follow-up Date"])
         }
       }
 
@@ -248,7 +266,8 @@ export default function LeadProfile() {
       }
 
       setSaveMsg("Guardado ✅")
-      // ✅ refresca desde Airtable para ver lo real guardado
+
+      // refresca real desde Airtable
       const ctrl = new AbortController()
       await loadLead(ctrl.signal)
     } catch (err) {
@@ -274,7 +293,7 @@ export default function LeadProfile() {
           contactId: id,
           type: activityType,
           notes: activityNotes || "",
-          nextFollowUp: nextFollowUp || null
+          nextFollowUp: normalizeDateForApi(nextFollowUp)
         })
       })
 
@@ -286,18 +305,15 @@ export default function LeadProfile() {
         return
       }
 
-      // ✅ agrega instantáneo al timeline (sin esperar)
       setActivities((prev) => [data, ...(prev || [])])
 
       setActivityNotes("")
       setNextFollowUp("")
       setActMsg("Actividad guardada ✅")
 
-      // ✅ refresca del server para orden/fechas exactas
       const ctrl = new AbortController()
       await loadActivities(ctrl.signal)
 
-      // opcional: si tu backend actualiza cosas por activity, refrescamos lead
       const ctrl2 = new AbortController()
       await loadLead(ctrl2.signal)
     } catch {
