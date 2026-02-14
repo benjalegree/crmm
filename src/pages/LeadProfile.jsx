@@ -19,12 +19,17 @@ export default function LeadProfile() {
 
   const [activityType, setActivityType] = useState("Call")
   const [activityNotes, setActivityNotes] = useState("")
-  const [nextFollowUp, setNextFollowUp] = useState("") // yyyy-mm-dd
+  const [nextFollowUp, setNextFollowUp] = useState("")
   const [creating, setCreating] = useState(false)
   const [actMsg, setActMsg] = useState("")
   const [actErr, setActErr] = useState("")
 
   const mountedRef = useRef(true)
+
+  // ✅ guarda ids “pendientes” para que no desaparezcan si Airtable tarda
+  // key: id -> timestamp
+  const pendingRef = useRef(new Map())
+  const PENDING_TTL_MS = 12000 // 12s (suficiente para index de Airtable)
 
   const readJson = async (res) => {
     try {
@@ -78,7 +83,6 @@ export default function LeadProfile() {
     }
   }
 
-  // ✅ Normaliza Activity fields para que el UI siempre encuentre lo mismo
   const normalizeActivity = (rec) => {
     if (!rec) return rec
     const f = rec.fields || {}
@@ -86,11 +90,10 @@ export default function LeadProfile() {
       ...rec,
       fields: {
         ...f,
-        // Outcome es el principal en tu base, pero fallback por si cambia
-        __Outcome: f.Outcome ?? f["Activity Type"] ?? f["Activity_Type"] ?? "",
-        __Notes: f.Notes ?? f["Notas"] ?? f["Observaciones"] ?? "",
-        __ActivityDate: f["Activity Date"] ?? f["ActivityDate"] ?? "",
-        __NextFollowUp: f["Next Follow-up Date"] ?? f["Next Follow Up Date"] ?? ""
+        __Outcome: f.Outcome ?? f["Activity Type"] ?? "",
+        __Notes: f.Notes ?? "",
+        __ActivityDate: f["Activity Date"] ?? "",
+        __NextFollowUp: f["Next Follow-up Date"] ?? ""
       }
     }
   }
@@ -123,6 +126,13 @@ export default function LeadProfile() {
     return `${yyyy}-${mm}-${dd}`
   }
 
+  const cleanupPending = () => {
+    const now = Date.now()
+    for (const [key, ts] of pendingRef.current.entries()) {
+      if (now - ts > PENDING_TTL_MS) pendingRef.current.delete(key)
+    }
+  }
+
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -139,6 +149,7 @@ export default function LeadProfile() {
     setSaveErr("")
     setActMsg("")
     setActErr("")
+    pendingRef.current.clear()
 
     const leadAbort = new AbortController()
     const actAbort = new AbortController()
@@ -183,6 +194,7 @@ export default function LeadProfile() {
     }
   }
 
+  // ✅ merge inteligente: NO pisa burbujas recientes que Airtable todavía no devuelve
   const loadActivities = async (signal) => {
     setLoadingActs(true)
     setErrActs("")
@@ -196,19 +208,49 @@ export default function LeadProfile() {
       if (!mountedRef.current) return
 
       if (!res.ok) {
-        setActivities([])
         setErrActs(safeErrMsg(data, "Failed to load activities"))
         setLoadingActs(false)
         return
       }
 
-      const recs = (data.records || []).map(normalizeActivity)
-      setActivities(recs)
+      cleanupPending()
+
+      const fetched = (data.records || []).map(normalizeActivity)
+
+      setActivities((prev) => {
+        const prevArr = prev || []
+
+        // map por id para evitar duplicados
+        const map = new Map()
+        for (const r of fetched) map.set(r.id, r)
+
+        // mantenemos “pendientes” que todavía no llegaron en fetched
+        const now = Date.now()
+        for (const p of prevArr) {
+          const isPending = pendingRef.current.has(p.id)
+          if (!map.has(p.id)) {
+            if (isPending) {
+              const ts = pendingRef.current.get(p.id) || now
+              if (now - ts <= PENDING_TTL_MS) map.set(p.id, p)
+            }
+          }
+        }
+
+        // orden: fecha activityDate desc, fallback createdTime
+        const merged = Array.from(map.values())
+        merged.sort((a, b) => {
+          const ad = a?.fields?.__ActivityDate ? new Date(a.fields.__ActivityDate) : new Date(a?.createdTime || 0)
+          const bd = b?.fields?.__ActivityDate ? new Date(b.fields.__ActivityDate) : new Date(b?.createdTime || 0)
+          return bd - ad
+        })
+
+        return merged
+      })
+
       setLoadingActs(false)
     } catch (e) {
       if (!mountedRef.current) return
       if (e?.name === "AbortError") return
-      setActivities([])
       setErrActs("Failed to load activities")
       setLoadingActs(false)
     }
@@ -280,8 +322,10 @@ export default function LeadProfile() {
     setActMsg("")
     setActErr("")
 
-    // ✅ optimistic bubble (para que aparezca instantáneo)
+    // ✅ optimistic: aparece ya y queda “pending”
     const optimisticId = `tmp_${Date.now()}`
+    pendingRef.current.set(optimisticId, Date.now())
+
     const optimistic = normalizeActivity({
       id: optimisticId,
       fields: {
@@ -311,17 +355,20 @@ export default function LeadProfile() {
       const data = await readJson(res)
 
       if (!res.ok) {
-        // si falla, removemos la optimistic
+        pendingRef.current.delete(optimisticId)
         setActivities((prev) => (prev || []).filter((x) => x.id !== optimisticId))
         setActErr(safeErrMsg(data, "Failed to create activity"))
         setCreating(false)
         return
       }
 
-      // ✅ reemplaza optimistic por la real
+      // ✅ reemplaza optimistic por real, y marca real como pending (por si GET aún no la trae)
       const real = normalizeActivity(data)
+      pendingRef.current.delete(optimisticId)
+      pendingRef.current.set(real.id, Date.now())
+
       setActivities((prev) => {
-        const filtered = (prev || []).filter((x) => x.id !== optimisticId)
+        const filtered = (prev || []).filter((x) => x.id !== optimisticId && x.id !== real.id)
         return [real, ...filtered]
       })
 
@@ -329,10 +376,11 @@ export default function LeadProfile() {
       setNextFollowUp("")
       setActMsg("Actividad guardada ✅")
 
-      // ✅ refresco definitivo (por si Airtable agrega lookups / formulas)
+      // ✅ refresco: pero SIN borrar pending si Airtable tarda
       const ctrl = new AbortController()
       await loadActivities(ctrl.signal)
     } catch {
+      pendingRef.current.delete(optimisticId)
       setActivities((prev) => (prev || []).filter((x) => x.id !== optimisticId))
       setActErr("Failed to create activity")
     }
@@ -550,20 +598,10 @@ export default function LeadProfile() {
 
 /* styles */
 const page = { width: "100%" }
-const headerRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 18
-}
+const headerRow = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }
 const topRight = { display: "flex", alignItems: "center", gap: 12 }
 const title = { fontSize: 34, fontWeight: 800, margin: 0, color: "#0f3d2e" }
-const pill = {
-  fontSize: 12,
-  padding: "6px 10px",
-  borderRadius: 999,
-  background: "rgba(0,0,0,0.06)"
-}
+const pill = { fontSize: 12, padding: "6px 10px", borderRadius: 999, background: "rgba(0,0,0,0.06)" }
 const mutedSmall = { fontSize: 12, color: "rgba(0,0,0,0.5)" }
 const grid = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 26 }
 const card = {
@@ -579,70 +617,15 @@ const card = {
 }
 const h3 = { margin: 0, fontSize: 18, fontWeight: 800, color: "#145c43" }
 const label = { fontSize: 12, color: "rgba(0,0,0,0.6)", marginTop: 6 }
-const input = {
-  padding: 12,
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.8)"
-}
-const textarea = {
-  padding: 12,
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.8)",
-  resize: "vertical"
-}
-const btn = {
-  marginTop: 10,
-  padding: 14,
-  borderRadius: 14,
-  border: "none",
-  background: "#111",
-  color: "#fff",
-  fontWeight: 800,
-  cursor: "pointer"
-}
-const errBox = {
-  marginTop: 10,
-  padding: 12,
-  borderRadius: 14,
-  background: "rgba(255,0,0,0.08)",
-  color: "#7a1d1d",
-  border: "1px solid rgba(255,0,0,0.12)"
-}
-const okBox = {
-  marginTop: 10,
-  padding: 12,
-  borderRadius: 14,
-  background: "rgba(0,200,120,0.10)",
-  color: "#0f5132",
-  border: "1px solid rgba(0,200,120,0.16)"
-}
-const timelineHeader = {
-  marginTop: 18,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center"
-}
-const miniBtn = {
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid rgba(0,0,0,0.1)",
-  background: "rgba(255,255,255,0.8)",
-  fontWeight: 800,
-  cursor: "pointer",
-  fontSize: 12
-}
+const input = { padding: 12, borderRadius: 14, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.8)" }
+const textarea = { padding: 12, borderRadius: 14, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.8)", resize: "vertical" }
+const btn = { marginTop: 10, padding: 14, borderRadius: 14, border: "none", background: "#111", color: "#fff", fontWeight: 800, cursor: "pointer" }
+const errBox = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(255,0,0,0.08)", color: "#7a1d1d", border: "1px solid rgba(255,0,0,0.12)" }
+const okBox = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(0,200,120,0.10)", color: "#0f5132", border: "1px solid rgba(0,200,120,0.16)" }
+const timelineHeader = { marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }
+const miniBtn = { padding: "8px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.1)", background: "rgba(255,255,255,0.8)", fontWeight: 800, cursor: "pointer", fontSize: 12 }
 const muted = { marginTop: 10, fontSize: 13, color: "rgba(0,0,0,0.55)" }
-const timelineItem = {
-  display: "flex",
-  gap: 12,
-  padding: 14,
-  borderRadius: 18,
-  background: "rgba(255,255,255,0.65)",
-  border: "1px solid rgba(0,0,0,0.06)",
-  marginTop: 10
-}
+const timelineItem = { display: "flex", gap: 12, padding: 14, borderRadius: 18, background: "rgba(255,255,255,0.65)", border: "1px solid rgba(0,0,0,0.06)", marginTop: 10 }
 const dot = { width: 10, height: 10, borderRadius: 999, marginTop: 6, background: "#145c43" }
 const note = { marginTop: 6, fontSize: 13, color: "rgba(0,0,0,0.75)" }
 const date = { display: "block", marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.55)" }
