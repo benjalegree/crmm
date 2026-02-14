@@ -1,147 +1,57 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 export default function Pipeline() {
+  const [leads, setLeads] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+  const [updatingId, setUpdatingId] = useState(null)
+
   const navigate = useNavigate()
 
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [savingId, setSavingId] = useState("")
-  const [leads, setLeads] = useState([])
-
-  const draggingIdRef = useRef("")
-
-  const STAGES = useMemo(
+  const statuses = useMemo(
     () => [
-      { key: "Not Contacted", title: "Not Contacted" },
-      { key: "Contacted", title: "Contacted" },
-      { key: "Replied", title: "Replied" },
-      { key: "Meeting Booked", title: "Meeting Booked" },
-      { key: "Closed Won", title: "Closed Won" },
-      { key: "Closed Lost", title: "Closed Lost" }
+      "Not Contacted",
+      "Contacted",
+      "Replied",
+      "Meeting Booked",
+      "Closed Won",
+      "Closed Lost"
     ],
     []
   )
 
-  const readJson = async (res) => {
-    try {
-      return await res.json()
-    } catch {
-      return {}
-    }
-  }
-
-  const safeErrMsg = (data, fallback) => {
-    return (
-      data?.error ||
-      data?.details?.error?.message ||
-      data?.details?.error ||
-      data?.details?.message ||
-      fallback
-    )
-  }
-
-  const normalizeLead = (record) => {
-    if (!record?.fields) return record
-    const f = record.fields
-
-    const name =
-      f["Full Name"] ||
-      f["Name"] ||
-      f["Contact Name"] ||
-      f["Nombre"] ||
-      "Lead"
-
-    // Company puede venir como lookup (nombre), o como array
-    const companyName =
-      (Array.isArray(f.Company) ? f.Company[0] : f.Company) ||
-      f["Company Name"] ||
-      f["Company Name (from Company)"] ||
-      ""
-
-    const status = f.Status || "Not Contacted"
-
-    return {
-      ...record,
-      fields: {
-        ...f,
-        __name: name,
-        __companyName: companyName,
-        __status: status
-      }
-    }
-  }
-
   useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => (document.body.style.overflow = prev)
-  }, [])
-
-  useEffect(() => {
-    load()
+    loadLeads()
     // eslint-disable-next-line
   }, [])
 
-  const load = async () => {
+  const loadLeads = async () => {
     setLoading(true)
-    setError("")
+    setErr("")
     try {
       const res = await fetch("/api/crm?action=getContacts", {
         credentials: "include"
       })
-      const data = await readJson(res)
-
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(safeErrMsg(data, "Failed to load contacts"))
+        setErr(data?.error || "Failed to load leads")
         setLeads([])
         setLoading(false)
         return
       }
-
-      setLeads((data.records || []).map(normalizeLead))
+      setLeads(data.records || [])
       setLoading(false)
-    } catch {
-      setError("Failed to load contacts")
+    } catch (e) {
+      setErr("Failed to load leads")
       setLeads([])
       setLoading(false)
     }
   }
 
-  const grouped = useMemo(() => {
-    const map = {}
-    for (const s of STAGES) map[s.key] = []
-    for (const lead of leads) {
-      const st = lead?.fields?.__status || "Not Contacted"
-      if (!map[st]) map[st] = []
-      map[st].push(lead)
-    }
-    // orden simple por nombre
-    Object.keys(map).forEach((k) => {
-      map[k].sort((a, b) =>
-        String(a.fields?.__name || "").localeCompare(String(b.fields?.__name || ""))
-      )
-    })
-    return map
-  }, [leads, STAGES])
-
-  const moveLead = async (leadId, newStatus) => {
-    if (!leadId || !newStatus) return
-    const current = leads.find((l) => l.id === leadId)
-    const oldStatus = current?.fields?.__status || ""
-    if (oldStatus === newStatus) return
-
-    // optimistic UI
-    setLeads((prev) =>
-      prev.map((l) =>
-        l.id === leadId
-          ? { ...l, fields: { ...l.fields, Status: newStatus, __status: newStatus } }
-          : l
-      )
-    )
-
-    setSavingId(leadId)
-
+  const updateStatus = async (leadId, newStatus) => {
+    setUpdatingId(leadId)
+    setErr("")
     try {
       const res = await fetch("/api/crm?action=updateContact", {
         method: "POST",
@@ -153,346 +63,371 @@ export default function Pipeline() {
         })
       })
 
-      const data = await readJson(res)
-
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        // rollback
-        setLeads((prev) =>
-          prev.map((l) =>
-            l.id === leadId
-              ? { ...l, fields: { ...l.fields, Status: oldStatus, __status: oldStatus } }
-              : l
-          )
-        )
-        setSavingId("")
+        setErr(data?.error || "Failed to update status")
+        setUpdatingId(null)
         return
       }
-    } catch {
-      // rollback
-      setLeads((prev) =>
-        prev.map((l) =>
+
+      // ✅ Optimistic update
+      setLeads(prev =>
+        (prev || []).map(l =>
           l.id === leadId
-            ? { ...l, fields: { ...l.fields, Status: oldStatus, __status: oldStatus } }
+            ? { ...l, fields: { ...l.fields, Status: newStatus } }
             : l
         )
       )
+    } catch (e) {
+      setErr("Failed to update status")
     }
-
-    setSavingId("")
+    setUpdatingId(null)
   }
 
-  const onDragStart = (e, leadId) => {
-    draggingIdRef.current = leadId
-    e.dataTransfer.setData("text/plain", leadId)
-    e.dataTransfer.effectAllowed = "move"
-  }
-
-  const onDragOver = (e) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-  }
-
-  const onDrop = (e, stageKey) => {
-    e.preventDefault()
-    const leadId = e.dataTransfer.getData("text/plain") || draggingIdRef.current
-    draggingIdRef.current = ""
-    moveLead(leadId, stageKey)
-  }
-
-  const openLead = (id) => navigate(`/leads/${id}`)
+  const countByStatus = useMemo(() => {
+    const map = {}
+    statuses.forEach(s => (map[s] = 0))
+    leads.forEach(l => {
+      const s = l?.fields?.Status || "Not Contacted"
+      if (map[s] === undefined) map[s] = 0
+      map[s]++
+    })
+    return map
+  }, [leads, statuses])
 
   return (
     <div style={page}>
-      <div style={bgA} />
-      <div style={bgB} />
-      <div style={grain} />
-
-      <div style={header}>
+      <div style={headerRow}>
         <div>
-          <div style={title}>Pipeline</div>
-          <div style={sub}>Arrastrá burbujas entre estados • click para abrir el perfil</div>
+          <h1 style={title}>Pipeline</h1>
+          <p style={subtitle}>
+            Gestión rápida por estado · Click en un lead para ver perfil
+          </p>
         </div>
 
-        <button style={refreshBtn} onClick={load} disabled={loading}>
+        <button style={ghostBtn} onClick={loadLeads} disabled={loading}>
           {loading ? "Loading..." : "Refresh"}
         </button>
       </div>
 
-      {error ? (
-        <div style={errorBox}>
-          {error}
-          <button style={retryBtn} onClick={load}>Retry</button>
-        </div>
-      ) : null}
+      {err ? <div style={errBox}>{err}</div> : null}
 
-      <div style={board}>
-        {STAGES.map((stage) => {
-          const items = grouped[stage.key] || []
-          return (
-            <div
-              key={stage.key}
-              style={col}
-              onDragOver={onDragOver}
-              onDrop={(e) => onDrop(e, stage.key)}
-            >
+      {loading ? (
+        <div style={loadingBox}>Loading pipeline...</div>
+      ) : (
+        <div style={board}>
+          {statuses.map(status => (
+            <div key={status} style={column}>
               <div style={colHeader}>
-                <div style={colTitle}>{stage.title}</div>
-                <div style={colCount}>{items.length}</div>
+                <div style={colTitleRow}>
+                  <h3 style={colTitle}>{status}</h3>
+                  <span style={badge}>{countByStatus[status] || 0}</span>
+                </div>
+                <div style={colHint}>Drag & drop lo hacemos después</div>
               </div>
 
               <div style={colBody}>
-                {items.map((lead) => {
-                  const f = lead.fields || {}
-                  const saving = savingId === lead.id
+                {leads
+                  .filter(lead => (lead.fields.Status || "Not Contacted") === status)
+                  .map(lead => (
+                    <div key={lead.id} style={card}>
+                      <div
+                        style={cardTop}
+                        onClick={() => navigate(`/leads/${lead.id}`)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") navigate(`/leads/${lead.id}`)
+                        }}
+                      >
+                        <div style={cardNameRow}>
+                          <strong style={cardName}>
+                            {lead.fields["Full Name"] || "—"}
+                          </strong>
+                          <span style={pillFor(status)}>{status}</span>
+                        </div>
 
-                  return (
-                    <div
-                      key={lead.id}
-                      style={{ ...bubble, ...(saving ? bubbleSaving : null) }}
-                      draggable
-                      onDragStart={(e) => onDragStart(e, lead.id)}
-                      onClick={() => openLead(lead.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === "Enter" && openLead(lead.id)}
-                      title="Click para abrir el perfil"
-                    >
-                      <div style={bubbleName}>{f.__name}</div>
-                      <div style={bubbleCompany}>{f.__companyName || "No company"}</div>
+                        <div style={cardMeta}>
+                          <div style={metaLine}>
+                            <span style={metaLabel}>Role</span>
+                            <span style={metaValue}>
+                              {lead.fields.Position || "—"}
+                            </span>
+                          </div>
+
+                          <div style={metaLine}>
+                            <span style={metaLabel}>Company</span>
+                            <span style={metaValue}>
+                              {Array.isArray(lead.fields.CompanyName)
+                                ? (lead.fields.CompanyName[0] || "—")
+                                : (lead.fields.CompanyName || "—")}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={cardBottom}>
+                        <select
+                          style={{
+                            ...select,
+                            opacity: updatingId === lead.id ? 0.65 : 1
+                          }}
+                          value={lead.fields.Status || "Not Contacted"}
+                          onChange={e => updateStatus(lead.id, e.target.value)}
+                          disabled={updatingId === lead.id}
+                        >
+                          {statuses.map(s => (
+                            <option key={s}>{s}</option>
+                          ))}
+                        </select>
+
+                        <button
+                          style={miniBtn}
+                          onClick={() => navigate(`/leads/${lead.id}`)}
+                        >
+                          Open
+                        </button>
+                      </div>
                     </div>
-                  )
-                })}
+                  ))}
 
-                {!items.length ? (
-                  <div style={empty}>Soltá acá</div>
+                {!leads.some(l => (l.fields.Status || "Not Contacted") === status) ? (
+                  <div style={emptyState}>
+                    <div style={emptyTitle}>Nada acá</div>
+                    <div style={emptyText}>Mové un lead a este estado.</div>
+                  </div>
                 ) : null}
               </div>
             </div>
-          )
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 /* ===================== */
-/* STYLES */
+/* STYLES (mismo look “glass” del CRM) */
 /* ===================== */
 
-const page = {
-  height: "100vh",
-  width: "100%",
-  position: "relative",
-  overflow: "hidden",
-  padding: 18,
-  boxSizing: "border-box"
-}
+const page = { width: "100%" }
 
-const bgA = {
-  position: "absolute",
-  inset: "-35%",
-  background:
-    "radial-gradient(circle at 18% 22%, rgba(20,92,67,0.22) 0%, rgba(20,92,67,0.08) 32%, rgba(255,255,255,0) 64%)",
-  filter: "blur(18px)",
-  pointerEvents: "none"
-}
-
-const bgB = {
-  position: "absolute",
-  inset: "-35%",
-  background:
-    "radial-gradient(circle at 82% 82%, rgba(16,185,129,0.18) 0%, rgba(16,185,129,0.08) 34%, rgba(255,255,255,0) 68%)",
-  filter: "blur(22px)",
-  pointerEvents: "none"
-}
-
-const grain = {
-  position: "absolute",
-  inset: 0,
-  backgroundImage: "radial-gradient(rgba(0,0,0,0.03) 1px, transparent 1px)",
-  backgroundSize: "6px 6px",
-  opacity: 0.35,
-  mixBlendMode: "soft-light",
-  pointerEvents: "none"
-}
-
-const header = {
-  position: "relative",
-  zIndex: 2,
+const headerRow = {
   display: "flex",
+  alignItems: "flex-start",
   justifyContent: "space-between",
-  alignItems: "flex-end",
-  gap: 12,
-  marginBottom: 12
+  gap: 16,
+  marginBottom: 18
 }
 
 const title = {
   fontSize: 34,
-  fontWeight: 950,
-  letterSpacing: -0.8,
-  color: "rgba(0,0,0,0.82)"
+  fontWeight: 800,
+  margin: 0,
+  color: "#0f3d2e"
 }
 
-const sub = {
-  marginTop: 6,
-  fontSize: 13,
-  fontWeight: 850,
-  color: "rgba(0,0,0,0.45)"
+const subtitle = {
+  margin: "6px 0 0 0",
+  color: "rgba(0,0,0,0.55)",
+  fontSize: 13
 }
 
-const refreshBtn = {
-  height: 46,
-  padding: "0 14px",
-  borderRadius: 16,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.60)",
-  backdropFilter: "blur(22px)",
-  WebkitBackdropFilter: "blur(22px)",
-  fontWeight: 950,
+const ghostBtn = {
+  padding: "10px 12px",
+  borderRadius: 14,
+  border: "1px solid rgba(0,0,0,0.10)",
+  background: "rgba(255,255,255,0.7)",
+  backdropFilter: "blur(16px)",
   cursor: "pointer",
-  boxShadow: "0 14px 30px rgba(0,0,0,0.10)"
+  fontWeight: 800
+}
+
+const loadingBox = { padding: 22, color: "rgba(0,0,0,0.6)" }
+
+const errBox = {
+  marginTop: 10,
+  padding: 12,
+  borderRadius: 14,
+  background: "rgba(255,0,0,0.08)",
+  color: "#7a1d1d",
+  border: "1px solid rgba(255,0,0,0.12)"
 }
 
 const board = {
-  position: "relative",
-  zIndex: 2,
-  height: "calc(100vh - 18px - 18px - 66px)",
-  minHeight: 520,
-
-  borderRadius: 22,
-  background: "rgba(255,255,255,0.45)",
-  border: "1px solid rgba(0,0,0,0.06)",
-  backdropFilter: "blur(26px)",
-  WebkitBackdropFilter: "blur(26px)",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.10)",
-
-  padding: 14,
-  overflow: "hidden",
-
-  display: "grid",
-  gridAutoFlow: "column",
-  gridAutoColumns: "minmax(260px, 1fr)",
-  gap: 12
+  display: "flex",
+  gap: 18,
+  marginTop: 18,
+  overflowX: "auto",
+  paddingBottom: 6
 }
 
-const col = {
-  borderRadius: 20,
-  background: "rgba(255,255,255,0.35)",
-  border: "1px solid rgba(0,0,0,0.05)",
-  backdropFilter: "blur(20px)",
-  WebkitBackdropFilter: "blur(20px)",
-  overflow: "hidden",
+const column = {
+  minWidth: 320,
+  borderRadius: 26,
+  background: "rgba(255,255,255,0.55)",
+  backdropFilter: "blur(40px)",
+  border: "1px solid rgba(255,255,255,0.45)",
+  boxShadow: "0 10px 34px rgba(0,0,0,0.06)",
   display: "flex",
   flexDirection: "column",
-  minWidth: 0
+  overflow: "hidden"
 }
 
 const colHeader = {
-  padding: "12px 12px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  borderBottom: "1px solid rgba(0,0,0,0.05)",
-  background: "rgba(255,255,255,0.30)"
+  padding: 18,
+  borderBottom: "1px solid rgba(0,0,0,0.06)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.45))"
 }
 
-const colTitle = {
-  fontWeight: 950,
-  fontSize: 13,
-  color: "rgba(0,0,0,0.70)"
-}
-
-const colCount = {
-  minWidth: 30,
-  height: 26,
-  padding: "0 10px",
-  borderRadius: 999,
-  display: "grid",
-  placeItems: "center",
-  background: "rgba(20,92,67,0.14)",
-  border: "1px solid rgba(20,92,67,0.14)",
-  color: "rgba(0,0,0,0.70)",
-  fontWeight: 950,
-  fontSize: 12
-}
-
-const colBody = {
-  padding: 12,
-  overflowY: "auto",
-  scrollbarWidth: "thin"
-}
-
-/* burbuja simple */
-const bubble = {
-  borderRadius: 18,
-  padding: "12px 12px",
-  marginBottom: 10,
-  cursor: "pointer",
-  userSelect: "none",
-
-  background: "rgba(255,255,255,0.62)",
-  border: "1px solid rgba(0,0,0,0.06)",
-  backdropFilter: "blur(22px)",
-  WebkitBackdropFilter: "blur(22px)",
-  boxShadow: "0 12px 26px rgba(0,0,0,0.08)",
-  transition: "transform 120ms ease, box-shadow 120ms ease"
-}
-
-const bubbleSaving = {
-  opacity: 0.7
-}
-
-const bubbleName = {
-  fontWeight: 950,
-  fontSize: 13,
-  color: "rgba(0,0,0,0.78)",
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis"
-}
-
-const bubbleCompany = {
-  marginTop: 4,
-  fontWeight: 850,
-  fontSize: 12,
-  color: "rgba(0,0,0,0.45)",
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis"
-}
-
-const empty = {
-  borderRadius: 18,
-  padding: 14,
-  background: "rgba(255,255,255,0.35)",
-  border: "1px dashed rgba(0,0,0,0.14)",
-  color: "rgba(0,0,0,0.45)",
-  fontWeight: 900,
-  textAlign: "center"
-}
-
-const errorBox = {
-  position: "relative",
-  zIndex: 2,
-  marginBottom: 12,
-  padding: 12,
-  borderRadius: 16,
-  background: "rgba(255,0,0,0.08)",
-  color: "#7a1d1d",
-  border: "1px solid rgba(255,0,0,0.12)",
-  fontWeight: 900,
+const colTitleRow = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: 10
 }
 
-const retryBtn = {
-  height: 40,
-  padding: "0 14px",
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.10)",
+const colTitle = {
+  margin: 0,
+  fontSize: 16,
+  fontWeight: 900,
+  color: "#145c43"
+}
+
+const badge = {
+  fontSize: 12,
+  fontWeight: 900,
+  padding: "6px 10px",
+  borderRadius: 999,
+  background: "rgba(0,0,0,0.06)",
+  color: "rgba(0,0,0,0.75)"
+}
+
+const colHint = {
+  marginTop: 8,
+  fontSize: 12,
+  color: "rgba(0,0,0,0.45)"
+}
+
+const colBody = {
+  padding: 16,
+  display: "flex",
+  flexDirection: "column",
+  gap: 12
+}
+
+const card = {
+  borderRadius: 20,
   background: "rgba(255,255,255,0.75)",
-  fontWeight: 950,
+  border: "1px solid rgba(0,0,0,0.06)",
+  boxShadow: "0 10px 22px rgba(0,0,0,0.06)",
+  overflow: "hidden"
+}
+
+const cardTop = {
+  padding: 14,
   cursor: "pointer"
 }
+
+const cardNameRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10
+}
+
+const cardName = {
+  fontSize: 14,
+  fontWeight: 900,
+  color: "rgba(0,0,0,0.85)"
+}
+
+const pillFor = (status) => {
+  const map = {
+    "Not Contacted": "rgba(0,0,0,0.08)",
+    "Contacted": "rgba(255,149,0,0.16)",
+    "Replied": "rgba(88,86,214,0.16)",
+    "Meeting Booked": "rgba(52,199,89,0.16)",
+    "Closed Won": "rgba(48,209,88,0.16)",
+    "Closed Lost": "rgba(255,59,48,0.16)"
+  }
+  return {
+    fontSize: 11,
+    fontWeight: 900,
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: map[status] || "rgba(0,0,0,0.08)",
+    color: "rgba(0,0,0,0.75)"
+  }
+}
+
+const cardMeta = {
+  marginTop: 10,
+  display: "flex",
+  flexDirection: "column",
+  gap: 6
+}
+
+const metaLine = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10
+}
+
+const metaLabel = {
+  fontSize: 11,
+  color: "rgba(0,0,0,0.45)",
+  fontWeight: 800
+}
+
+const metaValue = {
+  fontSize: 12,
+  color: "rgba(0,0,0,0.75)",
+  fontWeight: 800,
+  maxWidth: 170,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  textAlign: "right"
+}
+
+const cardBottom = {
+  display: "flex",
+  gap: 10,
+  padding: 14,
+  borderTop: "1px solid rgba(0,0,0,0.06)",
+  background: "rgba(255,255,255,0.65)"
+}
+
+const select = {
+  flex: 1,
+  padding: 10,
+  borderRadius: 14,
+  border: "1px solid rgba(0,0,0,0.10)",
+  background: "rgba(255,255,255,0.85)",
+  outline: "none",
+  fontWeight: 800,
+  cursor: "pointer"
+}
+
+const miniBtn = {
+  padding: "10px 12px",
+  borderRadius: 14,
+  border: "1px solid rgba(0,0,0,0.10)",
+  background: "#111",
+  color: "#fff",
+  fontWeight: 900,
+  cursor: "pointer"
+}
+
+const emptyState = {
+  padding: 14,
+  borderRadius: 18,
+  border: "1px dashed rgba(0,0,0,0.15)",
+  background: "rgba(255,255,255,0.55)",
+  color: "rgba(0,0,0,0.55)"
+}
+
+const emptyTitle = { fontWeight: 900, fontSize: 13 }
+const emptyText = { marginTop: 6, fontSize: 12 }
