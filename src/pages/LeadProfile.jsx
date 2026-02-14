@@ -19,16 +19,12 @@ export default function LeadProfile() {
 
   const [activityType, setActivityType] = useState("Call")
   const [activityNotes, setActivityNotes] = useState("")
-  const [nextFollowUp, setNextFollowUp] = useState("")
+  const [nextFollowUp, setNextFollowUp] = useState("") // yyyy-mm-dd
   const [creating, setCreating] = useState(false)
   const [actMsg, setActMsg] = useState("")
   const [actErr, setActErr] = useState("")
 
   const mountedRef = useRef(true)
-
-  // pending cache para que no se borren si Airtable tarda
-  const pendingRef = useRef(new Map())
-  const PENDING_TTL_MS = 12000
 
   const readJson = async (res) => {
     try {
@@ -82,21 +78,6 @@ export default function LeadProfile() {
     }
   }
 
-  const normalizeActivity = (rec) => {
-    if (!rec) return rec
-    const f = rec.fields || {}
-    return {
-      ...rec,
-      fields: {
-        ...f,
-        __Outcome: f.Outcome ?? f["Activity Type"] ?? "",
-        __Notes: f.Notes ?? "",
-        __ActivityDate: f["Activity Date"] ?? "",
-        __NextFollowUp: f["Next Follow-up Date"] ?? ""
-      }
-    }
-  }
-
   const toDateInputValue = (val) => {
     if (!val) return ""
     const s = String(val).trim()
@@ -125,11 +106,14 @@ export default function LeadProfile() {
     return `${yyyy}-${mm}-${dd}`
   }
 
-  const cleanupPending = () => {
-    const now = Date.now()
-    for (const [key, ts] of pendingRef.current.entries()) {
-      if (now - ts > PENDING_TTL_MS) pendingRef.current.delete(key)
+  // ✅ dedupe por id (evita duplicados si hacemos optimistic + reload)
+  const dedupeById = (list = []) => {
+    const map = new Map()
+    for (const item of list) {
+      if (!item?.id) continue
+      map.set(item.id, item)
     }
+    return Array.from(map.values())
   }
 
   useEffect(() => {
@@ -148,7 +132,6 @@ export default function LeadProfile() {
     setSaveErr("")
     setActMsg("")
     setActErr("")
-    pendingRef.current.clear()
 
     const leadAbort = new AbortController()
     const actAbort = new AbortController()
@@ -193,7 +176,6 @@ export default function LeadProfile() {
     }
   }
 
-  // ✅ ahora al re-entrar, el backend ya trae las activities (por nombre/email)
   const loadActivities = async (signal) => {
     setLoadingActs(true)
     setErrActs("")
@@ -207,43 +189,20 @@ export default function LeadProfile() {
       if (!mountedRef.current) return
 
       if (!res.ok) {
+        setActivities([])
         setErrActs(safeErrMsg(data, "Failed to load activities"))
         setLoadingActs(false)
         return
       }
 
-      cleanupPending()
-
-      const fetched = (data.records || []).map(normalizeActivity)
-
-      setActivities((prev) => {
-        const prevArr = prev || []
-        const map = new Map()
-        for (const r of fetched) map.set(r.id, r)
-
-        const now = Date.now()
-        for (const p of prevArr) {
-          const isPending = pendingRef.current.has(p.id)
-          if (!map.has(p.id) && isPending) {
-            const ts = pendingRef.current.get(p.id) || now
-            if (now - ts <= PENDING_TTL_MS) map.set(p.id, p)
-          }
-        }
-
-        const merged = Array.from(map.values())
-        merged.sort((a, b) => {
-          const ad = a?.fields?.__ActivityDate ? new Date(a.fields.__ActivityDate) : new Date(a?.createdTime || 0)
-          const bd = b?.fields?.__ActivityDate ? new Date(b.fields.__ActivityDate) : new Date(b?.createdTime || 0)
-          return bd - ad
-        })
-
-        return merged
-      })
-
+      // ✅ asegura persistencia: lo que esté en Airtable siempre se refleja acá
+      const recs = data.records || []
+      setActivities(dedupeById(recs))
       setLoadingActs(false)
     } catch (e) {
       if (!mountedRef.current) return
       if (e?.name === "AbortError") return
+      setActivities([])
       setErrActs("Failed to load activities")
       setLoadingActs(false)
     }
@@ -252,7 +211,13 @@ export default function LeadProfile() {
   const updateField = (field, value) => {
     setLead((prev) => {
       if (!prev) return prev
-      return { ...prev, fields: { ...prev.fields, [field]: value } }
+      return {
+        ...prev,
+        fields: {
+          ...prev.fields,
+          [field]: value
+        }
+      }
     })
   }
 
@@ -285,6 +250,7 @@ export default function LeadProfile() {
       })
 
       const data = await readJson(res)
+
       if (!res.ok) {
         setSaveErr(safeErrMsg(data, "Failed to update contact"))
         setSaving(false)
@@ -308,22 +274,6 @@ export default function LeadProfile() {
     setActMsg("")
     setActErr("")
 
-    const optimisticId = `tmp_${Date.now()}`
-    pendingRef.current.set(optimisticId, Date.now())
-
-    const optimistic = normalizeActivity({
-      id: optimisticId,
-      fields: {
-        Outcome: activityType,
-        Notes: activityNotes || "",
-        "Activity Date": normalizeDateForApi(new Date()),
-        "Next Follow-up Date": normalizeDateForApi(nextFollowUp) || ""
-      },
-      createdTime: new Date().toISOString()
-    })
-
-    setActivities((prev) => [optimistic, ...(prev || [])])
-
     try {
       const res = await fetch(`/api/crm?action=createActivity`, {
         method: "POST",
@@ -340,40 +290,32 @@ export default function LeadProfile() {
       const data = await readJson(res)
 
       if (!res.ok) {
-        pendingRef.current.delete(optimisticId)
-        setActivities((prev) => (prev || []).filter((x) => x.id !== optimisticId))
         setActErr(safeErrMsg(data, "Failed to create activity"))
         setCreating(false)
         return
       }
 
-      const real = normalizeActivity(data)
-      pendingRef.current.delete(optimisticId)
-      pendingRef.current.set(real.id, Date.now())
-
-      setActivities((prev) => {
-        const filtered = (prev || []).filter((x) => x.id !== optimisticId && x.id !== real.id)
-        return [real, ...filtered]
-      })
+      // ✅ Optimistic UI: aparece la burbuja YA
+      setActivities((prev) => dedupeById([data, ...(prev || [])]))
 
       setActivityNotes("")
       setNextFollowUp("")
       setActMsg("Actividad guardada ✅")
 
+      // ✅ Luego recargamos de Airtable para que quede “real” y persistente
       const ctrl = new AbortController()
       await loadActivities(ctrl.signal)
     } catch {
-      pendingRef.current.delete(optimisticId)
-      setActivities((prev) => (prev || []).filter((x) => x.id !== optimisticId))
       setActErr("Failed to create activity")
     }
 
     setCreating(false)
   }
 
+  // Próximo follow-up (desde activities)
   const computedNextFollowUp = useMemo(() => {
-    const withNFU = (activities || []).find((a) => a?.fields?.__NextFollowUp)
-    return withNFU?.fields?.__NextFollowUp || ""
+    const withNFU = (activities || []).find((a) => a?.fields?.["Next Follow-up Date"])
+    return withNFU?.fields?.["Next Follow-up Date"] || ""
   }, [activities])
 
   const statusPill = useMemo(() => {
@@ -432,19 +374,39 @@ export default function LeadProfile() {
           <h3 style={h3}>Contact Info</h3>
 
           <label style={label}>Email</label>
-          <input style={input} value={f.Email || ""} onChange={(e) => updateField("Email", e.target.value)} />
+          <input
+            style={input}
+            value={f.Email || ""}
+            onChange={(e) => updateField("Email", e.target.value)}
+          />
 
           <label style={label}>Phone</label>
-          <input style={input} value={f.Phone || ""} onChange={(e) => updateField("Phone", e.target.value)} />
+          <input
+            style={input}
+            value={f.Phone || ""}
+            onChange={(e) => updateField("Phone", e.target.value)}
+          />
 
           <label style={label}>Position</label>
-          <input style={input} value={f.Position || ""} onChange={(e) => updateField("Position", e.target.value)} />
+          <input
+            style={input}
+            value={f.Position || ""}
+            onChange={(e) => updateField("Position", e.target.value)}
+          />
 
           <label style={label}>LinkedIn</label>
-          <input style={input} value={f["LinkedIn URL"] || ""} onChange={(e) => updateField("LinkedIn URL", e.target.value)} />
+          <input
+            style={input}
+            value={f["LinkedIn URL"] || ""}
+            onChange={(e) => updateField("LinkedIn URL", e.target.value)}
+          />
 
           <label style={label}>Status</label>
-          <select style={input} value={f.Status || "Not Contacted"} onChange={(e) => updateField("Status", e.target.value)}>
+          <select
+            style={input}
+            value={f.Status || "Not Contacted"}
+            onChange={(e) => updateField("Status", e.target.value)}
+          >
             <option>Not Contacted</option>
             <option>Contacted</option>
             <option>Replied</option>
@@ -457,7 +419,12 @@ export default function LeadProfile() {
           <input style={input} value={toDateInputValue(computedNextFollowUp)} readOnly />
 
           <label style={label}>Notes (general)</label>
-          <textarea style={textarea} rows={5} value={f.Notes || ""} onChange={(e) => updateField("Notes", e.target.value)} />
+          <textarea
+            style={textarea}
+            rows={5}
+            value={f.Notes || ""}
+            onChange={(e) => updateField("Notes", e.target.value)}
+          />
 
           <button type="button" style={btn} onClick={saveChanges} disabled={saving}>
             {saving ? "Saving..." : "Save Changes"}
@@ -472,7 +439,11 @@ export default function LeadProfile() {
           <h3 style={h3}>Add Activity</h3>
 
           <label style={label}>Outcome</label>
-          <select style={input} value={activityType} onChange={(e) => setActivityType(e.target.value)}>
+          <select
+            style={input}
+            value={activityType}
+            onChange={(e) => setActivityType(e.target.value)}
+          >
             <option>Email</option>
             <option>Call</option>
             <option>LinkedIn</option>
@@ -481,10 +452,20 @@ export default function LeadProfile() {
           </select>
 
           <label style={label}>Activity notes</label>
-          <textarea style={textarea} rows={4} value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} />
+          <textarea
+            style={textarea}
+            rows={4}
+            value={activityNotes}
+            onChange={(e) => setActivityNotes(e.target.value)}
+          />
 
           <label style={label}>Next follow-up (optional)</label>
-          <input style={input} type="date" value={nextFollowUp} onChange={(e) => setNextFollowUp(e.target.value)} />
+          <input
+            style={input}
+            type="date"
+            value={nextFollowUp}
+            onChange={(e) => setNextFollowUp(e.target.value)}
+          />
 
           <button type="button" style={btn} onClick={createActivity} disabled={creating}>
             {creating ? "Saving..." : "Add Activity"}
@@ -514,21 +495,28 @@ export default function LeadProfile() {
           ) : !activities.length ? (
             <div style={muted}>No activities yet.</div>
           ) : (
-            activities.map((a) => (
-              <div key={a.id} style={timelineItem}>
-                <div style={dot} />
-                <div>
-                  <strong>{a.fields?.__Outcome || "-"}</strong>
-                  <div style={note}>{a.fields?.__Notes || ""}</div>
+            activities.map((a) => {
+              const outcome = a.fields?.Outcome ?? a.fields?.["Activity Type"] ?? "-"
+              return (
+                <div key={a.id} style={timelineItem}>
+                  <div style={dot} />
+                  <div>
+                    <strong>{outcome}</strong>
+                    <div style={note}>{a.fields?.Notes || ""}</div>
 
-                  {a.fields?.__NextFollowUp ? (
-                    <small style={date}>Next FU: {toDateInputValue(a.fields.__NextFollowUp)}</small>
-                  ) : null}
+                    {a.fields?.["Next Follow-up Date"] ? (
+                      <small style={date}>
+                        Next FU: {toDateInputValue(a.fields?.["Next Follow-up Date"])}
+                      </small>
+                    ) : null}
 
-                  <small style={date}>{toDateInputValue(a.fields?.__ActivityDate || a.createdTime || "")}</small>
+                    <small style={date}>
+                      {toDateInputValue(a.fields?.["Activity Date"] || "")}
+                    </small>
+                  </div>
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>
