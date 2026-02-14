@@ -59,9 +59,9 @@ export default function LeadProfile() {
       ""
 
     const phone =
-      f.Phone ??
       f["Numero de telefono"] ??
       f["Número de teléfono"] ??
+      f.Phone ??
       f["Telefono"] ??
       f["Teléfono"] ??
       ""
@@ -72,21 +72,13 @@ export default function LeadProfile() {
       f["Linkedin"] ??
       ""
 
-    const nextFU =
-      f["Next Follow-up Date"] ??
-      f["Next Follow Up Date"] ??
-      f["Próximo seguimiento"] ??
-      f["Proximo seguimiento"] ??
-      null
-
     return {
       ...record,
       fields: {
         ...f,
         Notes: notes,
         Phone: phone,
-        "LinkedIn URL": linkedin,
-        "Next Follow-up Date": nextFU
+        "LinkedIn URL": linkedin
       }
     }
   }
@@ -94,14 +86,9 @@ export default function LeadProfile() {
   const toDateInputValue = (val) => {
     if (!val) return ""
     const s = String(val).trim()
-
-    // yyyy-mm-dd
     if (s.length >= 10 && s[4] === "-" && s[7] === "-") return s.slice(0, 10)
-
-    // dd/mm/yyyy -> yyyy-mm-dd
     const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
     if (m) return `${m[3]}-${m[2]}-${m[1]}`
-
     const d = new Date(s)
     if (Number.isNaN(d.getTime())) return ""
     const yyyy = d.getFullYear()
@@ -111,7 +98,6 @@ export default function LeadProfile() {
   }
 
   const normalizeDateForApi = (val) => {
-    // Airtable acepta "YYYY-MM-DD" para campo date
     const v = String(val || "").trim()
     if (!v) return null
     if (v.length >= 10 && v[4] === "-" && v[7] === "-") return v.slice(0, 10)
@@ -237,6 +223,8 @@ export default function LeadProfile() {
     setSaveErr("")
 
     try {
+      // ✅ IMPORTANTE: NO mandamos "Next Follow-up Date" a Contacts
+      // porque tu tabla Contacts no tiene ese campo.
       const payload = {
         id,
         fields: {
@@ -245,8 +233,7 @@ export default function LeadProfile() {
           Status: lead.fields.Status || "Not Contacted",
           Notes: lead.fields.Notes || "",
           Phone: lead.fields.Phone || "",
-          "LinkedIn URL": lead.fields["LinkedIn URL"] || "",
-          "Next Follow-up Date": normalizeDateForApi(lead.fields["Next Follow-up Date"])
+          "LinkedIn URL": lead.fields["LinkedIn URL"] || ""
         }
       }
 
@@ -267,7 +254,6 @@ export default function LeadProfile() {
 
       setSaveMsg("Guardado ✅")
 
-      // refresca real desde Airtable
       const ctrl = new AbortController()
       await loadLead(ctrl.signal)
     } catch (err) {
@@ -313,15 +299,20 @@ export default function LeadProfile() {
 
       const ctrl = new AbortController()
       await loadActivities(ctrl.signal)
-
-      const ctrl2 = new AbortController()
-      await loadLead(ctrl2.signal)
     } catch {
       setActErr("Failed to create activity")
     }
 
     setCreating(false)
   }
+
+  // ✅ Próximo follow-up (lo sacamos del activity más reciente que tenga fecha)
+  const computedNextFollowUp = useMemo(() => {
+    const withNFU = (activities || []).find(
+      (a) => a?.fields?.["Next Follow-up Date"]
+    )
+    return withNFU?.fields?.["Next Follow-up Date"] || ""
+  }, [activities])
 
   const statusPill = useMemo(() => {
     const s = lead?.fields?.Status
@@ -420,13 +411,9 @@ export default function LeadProfile() {
             <option>Closed Lost</option>
           </select>
 
-          <label style={label}>Next Follow-up</label>
-          <input
-            style={input}
-            type="date"
-            value={toDateInputValue(f["Next Follow-up Date"])}
-            onChange={(e) => updateField("Next Follow-up Date", e.target.value || null)}
-          />
+          {/* ✅ Next follow-up visible (derivado de Activities) */}
+          <label style={label}>Next Follow-up (from Activities)</label>
+          <input style={input} value={toDateInputValue(computedNextFollowUp)} readOnly />
 
           <label style={label}>Notes (general)</label>
           <textarea
@@ -520,6 +507,11 @@ export default function LeadProfile() {
                 <div>
                   <strong>{a.fields?.["Activity Type"] || "-"}</strong>
                   <div style={note}>{a.fields?.Notes || ""}</div>
+                  {a.fields?.["Next Follow-up Date"] ? (
+                    <small style={date}>
+                      Next FU: {toDateInputValue(a.fields?.["Next Follow-up Date"])}
+                    </small>
+                  ) : null}
                   <small style={date}>
                     {String(a.fields?.["Activity Date"] || "").replace("T", " ").slice(0, 16)}
                   </small>
