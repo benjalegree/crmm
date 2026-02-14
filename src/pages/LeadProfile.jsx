@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "react-router-dom"
 
 export default function LeadProfile() {
@@ -10,16 +10,21 @@ export default function LeadProfile() {
   const [loadingLead, setLoadingLead] = useState(true)
   const [loadingActs, setLoadingActs] = useState(true)
 
+  const [errLead, setErrLead] = useState("")
+  const [errActs, setErrActs] = useState("")
+
   const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState("")
   const [saveErr, setSaveErr] = useState("")
-  const [saveOk, setSaveOk] = useState("")
 
   const [activityType, setActivityType] = useState("Call")
   const [activityNotes, setActivityNotes] = useState("")
-  const [nextFollowUp, setNextFollowUp] = useState("")
+  const [nextFollowUp, setNextFollowUp] = useState("") // yyyy-mm-dd
   const [creating, setCreating] = useState(false)
+  const [actMsg, setActMsg] = useState("")
   const [actErr, setActErr] = useState("")
-  const [actOk, setActOk] = useState("")
+
+  const mountedRef = useRef(true)
 
   const readJson = async (res) => {
     try {
@@ -29,38 +34,47 @@ export default function LeadProfile() {
     }
   }
 
-  // ✅ Normaliza campos reales de Airtable -> campos “estándar” para tu UI
+  const safeErrMsg = (data, fallback) => {
+    return (
+      data?.error ||
+      data?.details?.error?.message ||
+      data?.details?.error ||
+      data?.details?.message ||
+      fallback
+    )
+  }
+
+  // ✅ Normaliza campos reales (en español/variantes) a claves que usa tu UI
   const normalizeContact = (record) => {
     if (!record || !record.fields) return record
     const f = record.fields
 
     const notes =
       f.Notes ??
-      f["Contact Notes"] ??
-      f["Permanent Notes"] ??
       f["Notas"] ??
       f["Observaciones"] ??
+      f["Notas (general)"] ??
+      f["Permanent Notes"] ??
+      f["Contact Notes"] ??
       ""
 
     const phone =
       f.Phone ??
       f["Numero de telefono"] ??
       f["Número de teléfono"] ??
-      f["Numero de teléfono"] ??
-      f["Teléfono"] ??
       f["Telefono"] ??
+      f["Teléfono"] ??
       ""
 
     const linkedin =
       f["LinkedIn URL"] ??
-      f.LinkedIn ??
-      f.Linkedin ??
+      f["LinkedIn"] ??
+      f["Linkedin"] ??
       ""
 
     const nextFU =
       f["Next Follow-up Date"] ??
       f["Next Follow Up Date"] ??
-      f["Next follow-up Date"] ??
       f["Próximo seguimiento"] ??
       f["Proximo seguimiento"] ??
       null
@@ -77,108 +91,152 @@ export default function LeadProfile() {
     }
   }
 
+  // ✅ convierte fechas para <input type="date">
+  const toDateInputValue = (val) => {
+    if (!val) return ""
+    // Airtable suele devolver "2026-02-13" o ISO
+    const s = String(val)
+    if (s.length >= 10 && s[4] === "-" && s[7] === "-") return s.slice(0, 10)
+    const d = new Date(s)
+    if (Number.isNaN(d.getTime())) return ""
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    const dd = String(d.getDate()).padStart(2, "0")
+    return `${yyyy}-${mm}-${dd}`
+  }
+
   useEffect(() => {
-    loadAll()
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    // cada vez que cambia el id: reset estados y carga
+    setLead(null)
+    setActivities([])
+    setErrLead("")
+    setErrActs("")
+    setSaveMsg("")
+    setSaveErr("")
+    setActMsg("")
+    setActErr("")
+
+    const leadAbort = new AbortController()
+    const actAbort = new AbortController()
+
+    loadLead(leadAbort.signal)
+    loadActivities(actAbort.signal)
+
+    return () => {
+      leadAbort.abort()
+      actAbort.abort()
+    }
     // eslint-disable-next-line
   }, [id])
 
-  const loadAll = async () => {
-    await Promise.all([loadLead(), loadActivities()])
-  }
-
-  const loadLead = async () => {
+  const loadLead = async (signal) => {
     setLoadingLead(true)
-    setSaveErr("")
-    setSaveOk("")
+    setErrLead("")
     try {
       const res = await fetch(`/api/crm?action=getContact&id=${id}`, {
-        credentials: "include"
+        credentials: "include",
+        signal
       })
       const data = await readJson(res)
+
+      if (!mountedRef.current) return
+
       if (!res.ok) {
         setLead(null)
+        setErrLead(safeErrMsg(data, "Failed to load lead"))
         setLoadingLead(false)
         return
       }
+
       setLead(normalizeContact(data))
-    } catch {
+      setLoadingLead(false)
+    } catch (e) {
+      if (!mountedRef.current) return
+      if (e?.name === "AbortError") return
       setLead(null)
+      setErrLead("Failed to load lead")
+      setLoadingLead(false)
     }
-    setLoadingLead(false)
   }
 
-  const loadActivities = async () => {
+  const loadActivities = async (signal) => {
     setLoadingActs(true)
+    setErrActs("")
     try {
       const res = await fetch(`/api/crm?action=getActivities&contactId=${id}`, {
-        credentials: "include"
+        credentials: "include",
+        signal
       })
       const data = await readJson(res)
+
+      if (!mountedRef.current) return
+
       if (!res.ok) {
         setActivities([])
+        setErrActs(safeErrMsg(data, "Failed to load activities"))
         setLoadingActs(false)
         return
       }
+
       setActivities(data.records || [])
-    } catch {
+      setLoadingActs(false)
+    } catch (e) {
+      if (!mountedRef.current) return
+      if (e?.name === "AbortError") return
       setActivities([])
+      setErrActs("Failed to load activities")
+      setLoadingActs(false)
     }
-    setLoadingActs(false)
   }
 
   const updateField = (field, value) => {
-    setLead((prev) => ({
-      ...prev,
-      fields: {
-        ...prev.fields,
-        [field]: value
+    setLead((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        fields: {
+          ...prev.fields,
+          [field]: value
+        }
       }
-    }))
-  }
-
-  const safeErrMsg = (data, fallback) => {
-    return (
-      data?.error ||
-      data?.details?.error?.message ||
-      data?.details?.error ||
-      data?.details?.message ||
-      fallback
-    )
+    })
   }
 
   const saveChanges = async (e) => {
-    if (e?.preventDefault) e.preventDefault()
-    if (!lead) return
+    e?.preventDefault?.()
+
+    if (!lead?.fields) return
 
     setSaving(true)
+    setSaveMsg("")
     setSaveErr("")
-    setSaveOk("")
 
     try {
-      const res = await fetch("/api/crm?action=updateContact", {
+      const payload = {
+        id,
+        fields: {
+          Email: lead.fields.Email || "",
+          Position: lead.fields.Position || "",
+          Status: lead.fields.Status || "Not Contacted",
+          Notes: lead.fields.Notes || "",
+          Phone: lead.fields.Phone || "",
+          "LinkedIn URL": lead.fields["LinkedIn URL"] || "",
+          "Next Follow-up Date": lead.fields["Next Follow-up Date"] || null
+        }
+      }
+
+      const res = await fetch(`/api/crm?action=updateContact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          id,
-          fields: {
-            Email: lead.fields.Email || "",
-            Position: lead.fields.Position || "",
-            Status: lead.fields.Status || "",
-
-            // ✅ notes generales (UI)
-            Notes: lead.fields.Notes || "",
-
-            // ✅ phone (UI)
-            Phone: lead.fields.Phone || "",
-
-            // ✅ linkedin (UI)
-            "LinkedIn URL": lead.fields["LinkedIn URL"] || "",
-
-            // ✅ next follow-up (contact)
-            "Next Follow-up Date": lead.fields["Next Follow-up Date"] || null
-          }
-        })
+        body: JSON.stringify(payload)
       })
 
       const data = await readJson(res)
@@ -189,9 +247,11 @@ export default function LeadProfile() {
         return
       }
 
-      setSaveOk("Guardado ✅")
-      await loadLead() // ✅ vuelve a traer lo guardado real desde Airtable
-    } catch {
+      setSaveMsg("Guardado ✅")
+      // ✅ refresca desde Airtable para ver lo real guardado
+      const ctrl = new AbortController()
+      await loadLead(ctrl.signal)
+    } catch (err) {
       setSaveErr("Failed to update contact")
     }
 
@@ -199,21 +259,21 @@ export default function LeadProfile() {
   }
 
   const createActivity = async (e) => {
-    if (e?.preventDefault) e.preventDefault()
+    e?.preventDefault?.()
 
     setCreating(true)
+    setActMsg("")
     setActErr("")
-    setActOk("")
 
     try {
-      const res = await fetch("/api/crm?action=createActivity", {
+      const res = await fetch(`/api/crm?action=createActivity`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           contactId: id,
           type: activityType,
-          notes: activityNotes,
+          notes: activityNotes || "",
           nextFollowUp: nextFollowUp || null
         })
       })
@@ -226,12 +286,20 @@ export default function LeadProfile() {
         return
       }
 
+      // ✅ agrega instantáneo al timeline (sin esperar)
+      setActivities((prev) => [data, ...(prev || [])])
+
       setActivityNotes("")
       setNextFollowUp("")
-      setActOk("Actividad guardada ✅")
+      setActMsg("Actividad guardada ✅")
 
-      // ✅ refresca timeline + refresca lead (por status/next followup auto)
-      await Promise.all([loadActivities(), loadLead()])
+      // ✅ refresca del server para orden/fechas exactas
+      const ctrl = new AbortController()
+      await loadActivities(ctrl.signal)
+
+      // opcional: si tu backend actualiza cosas por activity, refrescamos lead
+      const ctrl2 = new AbortController()
+      await loadLead(ctrl2.signal)
     } catch {
       setActErr("Failed to create activity")
     }
@@ -239,15 +307,43 @@ export default function LeadProfile() {
     setCreating(false)
   }
 
-  if (loadingLead) return <div>Loading...</div>
-  if (!lead) return <div>Lead not found</div>
-
-  const f = lead.fields || {}
-
   const statusPill = useMemo(() => {
-    if (!f.Status) return null
-    return <span style={pill}>{f.Status}</span>
-  }, [f.Status])
+    const s = lead?.fields?.Status
+    if (!s) return null
+    return <span style={pill}>{s}</span>
+  }, [lead?.fields?.Status])
+
+  if (loadingLead) return <div style={loadingBox}>Loading...</div>
+
+  if (errLead) {
+    return (
+      <div style={loadingBox}>
+        <div style={errBox}>{errLead}</div>
+        <button
+          type="button"
+          style={miniBtn}
+          onClick={() => {
+            const ctrl = new AbortController()
+            loadLead(ctrl.signal)
+            const ctrl2 = new AbortController()
+            loadActivities(ctrl2.signal)
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  if (!lead?.fields) {
+    return (
+      <div style={loadingBox}>
+        <div style={errBox}>Lead not found</div>
+      </div>
+    )
+  }
+
+  const f = lead.fields
 
   return (
     <div style={page}>
@@ -312,7 +408,7 @@ export default function LeadProfile() {
           <input
             style={input}
             type="date"
-            value={f["Next Follow-up Date"] ? String(f["Next Follow-up Date"]).slice(0, 10) : ""}
+            value={toDateInputValue(f["Next Follow-up Date"])}
             onChange={(e) => updateField("Next Follow-up Date", e.target.value || null)}
           />
 
@@ -324,13 +420,17 @@ export default function LeadProfile() {
             onChange={(e) => updateField("Notes", e.target.value)}
           />
 
-          {/* ✅ IMPORTANT: type="button" para que NO haga submit/reload */}
-          <button type="button" style={btn} onClick={saveChanges} disabled={saving}>
+          <button
+            type="button"
+            style={btn}
+            onClick={saveChanges}
+            disabled={saving}
+          >
             {saving ? "Saving..." : "Save Changes"}
           </button>
 
-          {saveErr ? <div style={err}>{saveErr}</div> : null}
-          {saveOk ? <div style={ok}>{saveOk}</div> : null}
+          {saveErr ? <div style={errBox}>{saveErr}</div> : null}
+          {saveMsg ? <div style={okBox}>{saveMsg}</div> : null}
         </div>
 
         {/* RIGHT */}
@@ -365,20 +465,33 @@ export default function LeadProfile() {
             onChange={(e) => setNextFollowUp(e.target.value)}
           />
 
-          {/* ✅ IMPORTANT: type="button" para que NO haga submit/reload */}
-          <button type="button" style={btn} onClick={createActivity} disabled={creating}>
+          <button
+            type="button"
+            style={btn}
+            onClick={createActivity}
+            disabled={creating}
+          >
             {creating ? "Saving..." : "Add Activity"}
           </button>
 
-          {actErr ? <div style={err}>{actErr}</div> : null}
-          {actOk ? <div style={ok}>{actOk}</div> : null}
+          {actErr ? <div style={errBox}>{actErr}</div> : null}
+          {actMsg ? <div style={okBox}>{actMsg}</div> : null}
 
           <div style={timelineHeader}>
             <h3 style={{ margin: 0 }}>Activity Timeline</h3>
-            <button type="button" style={miniBtn} onClick={loadActivities}>
+            <button
+              type="button"
+              style={miniBtn}
+              onClick={() => {
+                const ctrl = new AbortController()
+                loadActivities(ctrl.signal)
+              }}
+            >
               Refresh
             </button>
           </div>
+
+          {errActs ? <div style={errBox}>{errActs}</div> : null}
 
           {loadingActs ? (
             <div style={muted}>Loading activities...</div>
@@ -428,8 +541,8 @@ const label = { fontSize: 12, color: "rgba(0,0,0,0.6)", marginTop: 6 }
 const input = { padding: 12, borderRadius: 14, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.8)" }
 const textarea = { padding: 12, borderRadius: 14, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.8)", resize: "vertical" }
 const btn = { marginTop: 10, padding: 14, borderRadius: 14, border: "none", background: "#111", color: "#fff", fontWeight: 800, cursor: "pointer" }
-const err = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(255,0,0,0.08)", color: "#7a1d1d", border: "1px solid rgba(255,0,0,0.12)" }
-const ok = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(0,200,120,0.10)", color: "#0f5132", border: "1px solid rgba(0,200,120,0.16)" }
+const errBox = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(255,0,0,0.08)", color: "#7a1d1d", border: "1px solid rgba(255,0,0,0.12)" }
+const okBox = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(0,200,120,0.10)", color: "#0f5132", border: "1px solid rgba(0,200,120,0.16)" }
 const timelineHeader = { marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }
 const miniBtn = { padding: "8px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.1)", background: "rgba(255,255,255,0.8)", fontWeight: 800, cursor: "pointer", fontSize: 12 }
 const muted = { marginTop: 10, fontSize: 13, color: "rgba(0,0,0,0.55)" }
@@ -437,3 +550,4 @@ const timelineItem = { display: "flex", gap: 12, padding: 14, borderRadius: 18, 
 const dot = { width: 10, height: 10, borderRadius: 999, marginTop: 6, background: "#145c43" }
 const note = { marginTop: 6, fontSize: 13, color: "rgba(0,0,0,0.75)" }
 const date = { display: "block", marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.55)" }
+const loadingBox = { padding: 30 }
