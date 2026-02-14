@@ -12,11 +12,14 @@ export default function LeadProfile() {
   const [activityType, setActivityType] = useState("Call")
   const [activityNotes, setActivityNotes] = useState("")
   const [nextFollowUp, setNextFollowUp] = useState("")
+  const [creating, setCreating] = useState(false)
   const [activityErr, setActivityErr] = useState("")
+  const [activityOk, setActivityOk] = useState("")
 
   useEffect(() => {
     loadLead()
     loadActivities()
+    // eslint-disable-next-line
   }, [id])
 
   const loadLead = async () => {
@@ -70,30 +73,47 @@ export default function LeadProfile() {
 
   const createActivity = async () => {
     setActivityErr("")
+    setActivityOk("")
+    setCreating(true)
 
-    const res = await fetch("/api/crm?action=createActivity", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        contactId: id,
-        type: activityType,
-        notes: activityNotes,
-        nextFollowUp: nextFollowUp || null
+    try {
+      const res = await fetch("/api/crm?action=createActivity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          contactId: id,
+          type: activityType,
+          notes: activityNotes,
+          nextFollowUp: nextFollowUp || null
+        })
       })
-    })
 
-    const data = await res.json().catch(() => ({}))
+      const data = await res.json().catch(() => ({}))
 
-    if (!res.ok) {
-      console.error("CREATE ACTIVITY FRONT ERROR:", data)
-      setActivityErr(data?.error || "Failed to create activity")
-      return
+      if (!res.ok) {
+        const msg =
+          data?.error ||
+          data?.details?.error?.message ||
+          "Failed to create activity"
+
+        setActivityErr(msg)
+        console.error("CREATE ACTIVITY ERROR:", data)
+        setCreating(false)
+        return
+      }
+
+      setActivityNotes("")
+      setNextFollowUp("")
+      setActivityOk("Activity saved ✅")
+      await loadActivities()
+
+    } catch (e) {
+      console.error("CREATE ACTIVITY CRASH:", e)
+      setActivityErr("Network/server error while creating activity")
     }
 
-    setActivityNotes("")
-    setNextFollowUp("")
-    loadActivities()
+    setCreating(false)
   }
 
   if (!lead) return null
@@ -162,7 +182,7 @@ export default function LeadProfile() {
             style={input}
           />
 
-          <button style={saveBtn} onClick={saveChanges}>
+          <button style={saveBtn} onClick={saveChanges} disabled={loading}>
             {loading ? "Saving..." : "Save Changes"}
           </button>
 
@@ -199,15 +219,20 @@ export default function LeadProfile() {
             style={input}
           />
 
-          <button style={saveBtn} onClick={createActivity}>
-            Add Activity
+          <button
+            style={{
+              ...saveBtn,
+              opacity: creating ? 0.75 : 1,
+              cursor: creating ? "not-allowed" : "pointer"
+            }}
+            onClick={createActivity}
+            disabled={creating}
+          >
+            {creating ? "Saving..." : "Add Activity"}
           </button>
 
-          {activityErr && (
-            <div style={errBox}>
-              {activityErr}
-            </div>
-          )}
+          {activityErr && <div style={errBox}>{activityErr}</div>}
+          {activityOk && <div style={okBox}>{activityOk}</div>}
 
           <h3 style={{ marginTop: 40 }}>Activity Timeline</h3>
 
@@ -215,9 +240,9 @@ export default function LeadProfile() {
             <div key={activity.id} style={timelineItem}>
               <div style={timelineDot} />
               <div>
-                <strong>{activity.fields["Activity Type"]}</strong>
-                <p>{activity.fields.Notes}</p>
-                <small>{activity.fields["Activity Date"]}</small>
+                <strong>{activity.fields?.["Activity Type"] || "-"}</strong>
+                <p>{activity.fields?.Notes || ""}</p>
+                <small>{activity.fields?.["Activity Date"] || ""}</small>
               </div>
             </div>
           ))}
@@ -234,9 +259,7 @@ export default function LeadProfile() {
 /* STYLES */
 /* ===================== */
 
-const page = {
-  width: "100%"
-}
+const page = { width: "100%" }
 
 const title = {
   fontSize: 30,
@@ -279,39 +302,3 @@ const input = {
 
 const saveBtn = {
   marginTop: 15,
-  padding: "12px 20px",
-  borderRadius: 20,
-  border: "none",
-  background: "#145c43",
-  color: "#fff",
-  fontWeight: 500,
-  cursor: "pointer"
-}
-
-const timelineItem = {
-  display: "flex",
-  gap: 15,
-  marginTop: 15,
-  padding: 15,
-  borderRadius: 20,
-  background: "rgba(255,255,255,0.6)",
-  backdropFilter: "blur(20px)"
-}
-
-const timelineDot = {
-  width: 12,
-  height: 12,
-  borderRadius: "50%",
-  background: "#145c43",
-  marginTop: 6
-}
-
-const errBox = {
-  marginTop: 10,
-  padding: "10px 12px",
-  borderRadius: 14,
-  background: "rgba(255, 59, 48, 0.12)",
-  border: "1px solid rgba(255, 59, 48, 0.25)",
-  color: "#b42318",
-  fontWeight: 600
-}
