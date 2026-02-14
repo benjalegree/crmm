@@ -26,10 +26,9 @@ export default function LeadProfile() {
 
   const mountedRef = useRef(true)
 
-  // ✅ guarda ids “pendientes” para que no desaparezcan si Airtable tarda
-  // key: id -> timestamp
+  // pending cache para que no se borren si Airtable tarda
   const pendingRef = useRef(new Map())
-  const PENDING_TTL_MS = 12000 // 12s (suficiente para index de Airtable)
+  const PENDING_TTL_MS = 12000
 
   const readJson = async (res) => {
     try {
@@ -194,7 +193,7 @@ export default function LeadProfile() {
     }
   }
 
-  // ✅ merge inteligente: NO pisa burbujas recientes que Airtable todavía no devuelve
+  // ✅ ahora al re-entrar, el backend ya trae las activities (por nombre/email)
   const loadActivities = async (signal) => {
     setLoadingActs(true)
     setErrActs("")
@@ -219,24 +218,18 @@ export default function LeadProfile() {
 
       setActivities((prev) => {
         const prevArr = prev || []
-
-        // map por id para evitar duplicados
         const map = new Map()
         for (const r of fetched) map.set(r.id, r)
 
-        // mantenemos “pendientes” que todavía no llegaron en fetched
         const now = Date.now()
         for (const p of prevArr) {
           const isPending = pendingRef.current.has(p.id)
-          if (!map.has(p.id)) {
-            if (isPending) {
-              const ts = pendingRef.current.get(p.id) || now
-              if (now - ts <= PENDING_TTL_MS) map.set(p.id, p)
-            }
+          if (!map.has(p.id) && isPending) {
+            const ts = pendingRef.current.get(p.id) || now
+            if (now - ts <= PENDING_TTL_MS) map.set(p.id, p)
           }
         }
 
-        // orden: fecha activityDate desc, fallback createdTime
         const merged = Array.from(map.values())
         merged.sort((a, b) => {
           const ad = a?.fields?.__ActivityDate ? new Date(a.fields.__ActivityDate) : new Date(a?.createdTime || 0)
@@ -259,13 +252,7 @@ export default function LeadProfile() {
   const updateField = (field, value) => {
     setLead((prev) => {
       if (!prev) return prev
-      return {
-        ...prev,
-        fields: {
-          ...prev.fields,
-          [field]: value
-        }
-      }
+      return { ...prev, fields: { ...prev.fields, [field]: value } }
     })
   }
 
@@ -298,7 +285,6 @@ export default function LeadProfile() {
       })
 
       const data = await readJson(res)
-
       if (!res.ok) {
         setSaveErr(safeErrMsg(data, "Failed to update contact"))
         setSaving(false)
@@ -322,7 +308,6 @@ export default function LeadProfile() {
     setActMsg("")
     setActErr("")
 
-    // ✅ optimistic: aparece ya y queda “pending”
     const optimisticId = `tmp_${Date.now()}`
     pendingRef.current.set(optimisticId, Date.now())
 
@@ -362,7 +347,6 @@ export default function LeadProfile() {
         return
       }
 
-      // ✅ reemplaza optimistic por real, y marca real como pending (por si GET aún no la trae)
       const real = normalizeActivity(data)
       pendingRef.current.delete(optimisticId)
       pendingRef.current.set(real.id, Date.now())
@@ -376,7 +360,6 @@ export default function LeadProfile() {
       setNextFollowUp("")
       setActMsg("Actividad guardada ✅")
 
-      // ✅ refresco: pero SIN borrar pending si Airtable tarda
       const ctrl = new AbortController()
       await loadActivities(ctrl.signal)
     } catch {
@@ -449,39 +432,19 @@ export default function LeadProfile() {
           <h3 style={h3}>Contact Info</h3>
 
           <label style={label}>Email</label>
-          <input
-            style={input}
-            value={f.Email || ""}
-            onChange={(e) => updateField("Email", e.target.value)}
-          />
+          <input style={input} value={f.Email || ""} onChange={(e) => updateField("Email", e.target.value)} />
 
           <label style={label}>Phone</label>
-          <input
-            style={input}
-            value={f.Phone || ""}
-            onChange={(e) => updateField("Phone", e.target.value)}
-          />
+          <input style={input} value={f.Phone || ""} onChange={(e) => updateField("Phone", e.target.value)} />
 
           <label style={label}>Position</label>
-          <input
-            style={input}
-            value={f.Position || ""}
-            onChange={(e) => updateField("Position", e.target.value)}
-          />
+          <input style={input} value={f.Position || ""} onChange={(e) => updateField("Position", e.target.value)} />
 
           <label style={label}>LinkedIn</label>
-          <input
-            style={input}
-            value={f["LinkedIn URL"] || ""}
-            onChange={(e) => updateField("LinkedIn URL", e.target.value)}
-          />
+          <input style={input} value={f["LinkedIn URL"] || ""} onChange={(e) => updateField("LinkedIn URL", e.target.value)} />
 
           <label style={label}>Status</label>
-          <select
-            style={input}
-            value={f.Status || "Not Contacted"}
-            onChange={(e) => updateField("Status", e.target.value)}
-          >
+          <select style={input} value={f.Status || "Not Contacted"} onChange={(e) => updateField("Status", e.target.value)}>
             <option>Not Contacted</option>
             <option>Contacted</option>
             <option>Replied</option>
@@ -494,12 +457,7 @@ export default function LeadProfile() {
           <input style={input} value={toDateInputValue(computedNextFollowUp)} readOnly />
 
           <label style={label}>Notes (general)</label>
-          <textarea
-            style={textarea}
-            rows={5}
-            value={f.Notes || ""}
-            onChange={(e) => updateField("Notes", e.target.value)}
-          />
+          <textarea style={textarea} rows={5} value={f.Notes || ""} onChange={(e) => updateField("Notes", e.target.value)} />
 
           <button type="button" style={btn} onClick={saveChanges} disabled={saving}>
             {saving ? "Saving..." : "Save Changes"}
@@ -514,11 +472,7 @@ export default function LeadProfile() {
           <h3 style={h3}>Add Activity</h3>
 
           <label style={label}>Outcome</label>
-          <select
-            style={input}
-            value={activityType}
-            onChange={(e) => setActivityType(e.target.value)}
-          >
+          <select style={input} value={activityType} onChange={(e) => setActivityType(e.target.value)}>
             <option>Email</option>
             <option>Call</option>
             <option>LinkedIn</option>
@@ -527,20 +481,10 @@ export default function LeadProfile() {
           </select>
 
           <label style={label}>Activity notes</label>
-          <textarea
-            style={textarea}
-            rows={4}
-            value={activityNotes}
-            onChange={(e) => setActivityNotes(e.target.value)}
-          />
+          <textarea style={textarea} rows={4} value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} />
 
           <label style={label}>Next follow-up (optional)</label>
-          <input
-            style={input}
-            type="date"
-            value={nextFollowUp}
-            onChange={(e) => setNextFollowUp(e.target.value)}
-          />
+          <input style={input} type="date" value={nextFollowUp} onChange={(e) => setNextFollowUp(e.target.value)} />
 
           <button type="button" style={btn} onClick={createActivity} disabled={creating}>
             {creating ? "Saving..." : "Add Activity"}
@@ -578,14 +522,10 @@ export default function LeadProfile() {
                   <div style={note}>{a.fields?.__Notes || ""}</div>
 
                   {a.fields?.__NextFollowUp ? (
-                    <small style={date}>
-                      Next FU: {toDateInputValue(a.fields.__NextFollowUp)}
-                    </small>
+                    <small style={date}>Next FU: {toDateInputValue(a.fields.__NextFollowUp)}</small>
                   ) : null}
 
-                  <small style={date}>
-                    {toDateInputValue(a.fields?.__ActivityDate || a.createdTime || "")}
-                  </small>
+                  <small style={date}>{toDateInputValue(a.fields?.__ActivityDate || a.createdTime || "")}</small>
                 </div>
               </div>
             ))
