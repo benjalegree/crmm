@@ -101,10 +101,6 @@ export default async function handler(req, res) {
       })
     }
 
-    /* =====================================================
-       AUTH REQUIRED BELOW
-    ====================================================== */
-
     const email = requireAuth()
     if (!email) return
 
@@ -317,65 +313,92 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       CREATE ACTIVITY (FIX DEFINITIVO)
+       CREATE ACTIVITY  ✅ FIX ROBUSTO (NO DEPENDE DE COMPANY ID)
+       - Si Company es lookup (nombre) NO rompe.
+       - Si Company es link (recordId recxxx) lo usa.
+       - Siempre crea la actividad.
     ====================================================== */
 
     if (action === "createActivity") {
-
       const { contactId, type, notes, nextFollowUp } = body
 
       if (!contactId || !type) {
         return res.status(400).json({ error: "Missing required fields" })
       }
 
+      // 1) Obtener contacto para asegurar ownership y (si existe) company recordId real
       const contactRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
         { headers: AIRTABLE_HEADERS }
       )
 
-      if (!contactRes.ok) {
-        return res.status(404).json({ error: "Contact not found" })
-      }
-
       const contactData = await contactRes.json()
 
-      const linkedCompanyId =
-        Array.isArray(contactData.fields.Company) &&
-        contactData.fields.Company.length > 0
-          ? contactData.fields.Company[0]
+      if (!contactRes.ok) {
+        console.error("CONTACT FETCH ERROR:", contactData)
+        return res.status(contactRes.status).json(contactData)
+      }
+
+      if (contactData.fields["Responsible Email"] !== email) {
+        return res.status(403).json({ error: "Forbidden" })
+      }
+
+      // 2) Company puede ser:
+      // - Link -> ["recXXXX"]
+      // - Lookup -> ["Nombre empresa"] o string
+      // Solo usamos companyId si es recordId válido
+      const rawCompany = contactData.fields.Company
+      const candidate =
+        Array.isArray(rawCompany) && rawCompany.length > 0
+          ? rawCompany[0]
           : null
 
-      const activityRes = await fetch(
+      const linkedCompanyId =
+        typeof candidate === "string" && candidate.startsWith("rec")
+          ? candidate
+          : null
+
+      // 3) Crear fields SIN mandar Related Company si no es recXXX
+      const fieldsToSend = {
+        "Activity Type": type,
+        "Related Contact": [contactId],
+        "Activity Date": new Date().toISOString(),
+        "Owner Email": email,
+        "Notes": notes || "",
+        "Next Follow-up Date": nextFollowUp || null
+      }
+
+      if (linkedCompanyId) {
+        fieldsToSend["Related Company"] = [linkedCompanyId]
+      } else {
+        // NO enviamos Related Company para que Airtable no rechace por formato inválido
+        fieldsToSend["Related Company"] = []
+      }
+
+      const response = await fetch(
         `https://api.airtable.com/v0/${baseId}/Activities`,
         {
           method: "POST",
           headers: AIRTABLE_HEADERS,
-          body: JSON.stringify({
-            fields: {
-              "Activity Type": type,
-              "Related Contact": [contactId],
-              "Related Company": linkedCompanyId ? [linkedCompanyId] : [],
-              "Activity Date": new Date().toISOString(),
-              "Owner Email": email,
-              "Notes": notes || "",
-              "Next Follow-up Date": nextFollowUp || null
-            }
-          })
+          body: JSON.stringify({ fields: fieldsToSend })
         }
       )
 
-      const activityData = await activityRes.json()
+      const data = await response.json()
 
-      if (!activityRes.ok) {
-        console.error("Activity creation error:", activityData)
-        return res.status(activityRes.status).json(activityData)
+      if (!response.ok) {
+        console.error("ACTIVITY CREATE ERROR:", data)
+        return res.status(response.status).json(data)
       }
 
-      return res.status(200).json(activityData)
+      return res.status(200).json(data)
     }
 
     /* =====================================================
-       GET ACTIVITIES
+       GET ACTIVITIES ✅ FIX ROBUSTO
+       - En vez de depender de una formula frágil con ARRAYJOIN/FIND,
+         traemos por Owner Email y filtramos en server por contactId.
+       - Así SIEMPRE aparecen las nuevas.
     ====================================================== */
 
     if (action === "getActivities") {
@@ -385,7 +408,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Missing contact ID" })
       }
 
-      const formula = `AND({Owner Email}="${email}", FIND("${contactId}", ARRAYJOIN({Related Contact})))`
+      // Traemos todas las actividades del owner (filtro estable)
+      const formula = `{Owner Email}="${email}"`
 
       const response = await fetch(
         `https://api.airtable.com/v0/${baseId}/Activities?filterByFormula=${encodeURIComponent(formula)}`,
@@ -393,12 +417,20 @@ export default async function handler(req, res) {
       )
 
       if (!response.ok) {
-        return res.status(response.status).json({ error: "Failed to fetch activities" })
+        const errData = await response.json().catch(() => ({}))
+        console.error("GET ACTIVITIES FETCH ERROR:", errData)
+        return res.status(response.status).json({ error: "Failed to fetch activities", details: errData })
       }
 
       const data = await response.json()
 
-      const records = (data.records || []).sort(
+      // Filtramos por contacto de forma segura
+      const filtered = (data.records || []).filter(r => {
+        const rel = r.fields?.["Related Contact"]
+        return Array.isArray(rel) && rel.includes(contactId)
+      })
+
+      const records = filtered.sort(
         (a, b) =>
           new Date(b.fields["Activity Date"]) -
           new Date(a.fields["Activity Date"])
@@ -408,11 +440,10 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       DASHBOARD (intacto)
+       DASHBOARD INTELIGENTE SaaS B2B
     ====================================================== */
 
     if (action === "getDashboardStats") {
-
       const contactsRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Contacts?filterByFormula=${encodeURIComponent(
           `{Responsible Email}="${email}"`
@@ -429,6 +460,10 @@ export default async function handler(req, res) {
 
       const totalLeads = contacts.length
 
+      const activeLeads = contacts.filter(c =>
+        c.fields.Status !== "Closed Lost"
+      ).length
+
       const meetingsBooked = contacts.filter(c =>
         c.fields.Status === "Meeting Booked"
       ).length
@@ -442,11 +477,58 @@ export default async function handler(req, res) {
           ? ((closedWon / totalLeads) * 100).toFixed(1)
           : 0
 
+      const winRate =
+        meetingsBooked > 0
+          ? ((closedWon / meetingsBooked) * 100).toFixed(1)
+          : 0
+
+      let atRiskLeads = 0
+      let coolingLeads = 0
+      let leadsWithoutFollowUp = 0
+      let totalDaysWithoutContact = 0
+      let countedLeads = 0
+
+      const now = new Date()
+
+      contacts.forEach(contact => {
+        const lastActivity = contact.fields["Last Activity Date"]
+        const nextFollowUp = contact.fields["Next Follow-up Date"]
+
+        if (!nextFollowUp) {
+          leadsWithoutFollowUp++
+        }
+
+        if (lastActivity) {
+          const diffTime = Math.abs(now - new Date(lastActivity))
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+          totalDaysWithoutContact += diffDays
+          countedLeads++
+
+          if (diffDays >= 7) {
+            atRiskLeads++
+          } else if (diffDays >= 5) {
+            coolingLeads++
+          }
+        }
+      })
+
+      const avgDaysWithoutContact =
+        countedLeads > 0
+          ? (totalDaysWithoutContact / countedLeads).toFixed(1)
+          : 0
+
       return res.status(200).json({
         totalLeads,
+        activeLeads,
         meetingsBooked,
         closedWon,
-        conversionRate
+        conversionRate,
+        winRate,
+        atRiskLeads,
+        coolingLeads,
+        leadsWithoutFollowUp,
+        avgDaysWithoutContact
       })
     }
 
