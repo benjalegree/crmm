@@ -21,7 +21,6 @@ export default async function handler(req, res) {
       "Content-Type": "application/json"
     }
 
-    // Evita caches raros en deploy
     res.setHeader("Cache-Control", "no-store")
 
     /* =====================================================
@@ -62,15 +61,11 @@ export default async function handler(req, res) {
         : "HttpOnly; SameSite=Lax; Path=/"
 
     const normalizeDate = (val) => {
-      // devuelve "YYYY-MM-DD" o null
       const v = String(val || "").trim()
       if (!v) return null
-
       if (v.length >= 10 && v[4] === "-" && v[7] === "-") return v.slice(0, 10)
-
       const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
       if (m) return `${m[3]}-${m[2]}-${m[1]}`
-
       const d = new Date(v)
       if (Number.isNaN(d.getTime())) return null
       const yyyy = d.getFullYear()
@@ -79,19 +74,16 @@ export default async function handler(req, res) {
       return `${yyyy}-${mm}-${dd}`
     }
 
-    // Airtable list con paginación offset
     const fetchAllAirtableRecords = async (tableName, params = {}) => {
       const out = []
       let offset = null
 
       while (true) {
         const usp = new URLSearchParams()
-
         Object.entries(params).forEach(([k, v]) => {
           if (v === undefined || v === null || v === "") return
           usp.set(k, v)
         })
-
         if (offset) usp.set("offset", offset)
 
         const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(
@@ -115,84 +107,81 @@ export default async function handler(req, res) {
       return out
     }
 
-    // PATCH robusto: intenta con variantes si el campo no existe
-    const patchWithFieldFallbacks = async (table, id, fields) => {
-      const attempt = async (payloadFields) => {
-        const r = await fetch(
-          `https://api.airtable.com/v0/${baseId}/${table}/${id}`,
-          {
-            method: "PATCH",
-            headers: AIRTABLE_HEADERS,
-            body: JSON.stringify({ fields: payloadFields })
-          }
-        )
-        const data = await readJson(r)
-        return { ok: r.ok, status: r.status, data }
-      }
-
-      // 1) intento directo
-      let r1 = await attempt(fields)
-      if (r1.ok) return r1
-
-      // 2) si error de campo desconocido, probamos variantes comunes
-      const errType = r1.data?.error?.type
-      if (errType !== "UNKNOWN_FIELD_NAME") return r1
-
-      const variants = []
-
-      // Notes variants
-      if (Object.prototype.hasOwnProperty.call(fields, "Notes")) {
-        const base = { ...fields }
-        const val = base.Notes
-        delete base.Notes
-        variants.push({ ...base, "Notas": val })
-        variants.push({ ...base, "Observaciones": val })
-        variants.push({ ...base, "Notas (general)": val })
-        variants.push({ ...base, "Permanent Notes": val })
-      }
-
-      // Phone variants
-      if (Object.prototype.hasOwnProperty.call(fields, "Phone")) {
-        const base = { ...fields }
-        const val = base.Phone
-        delete base.Phone
-        variants.push({ ...base, "Numero de telefono": val })
-        variants.push({ ...base, "Número de teléfono": val })
-        variants.push({ ...base, "Telefono": val })
-        variants.push({ ...base, "Teléfono": val })
-      }
-
-      // Next Follow-up Date variants
-      if (Object.prototype.hasOwnProperty.call(fields, "Next Follow-up Date")) {
-        const base = { ...fields }
-        const val = base["Next Follow-up Date"]
-        delete base["Next Follow-up Date"]
-        variants.push({ ...base, "Next Follow Up Date": val })
-        variants.push({ ...base, "Próximo seguimiento": val })
-        variants.push({ ...base, "Proximo seguimiento": val })
-      }
-
-      // LinkedIn variants
-      if (Object.prototype.hasOwnProperty.call(fields, "LinkedIn URL")) {
-        const base = { ...fields }
-        const val = base["LinkedIn URL"]
-        delete base["LinkedIn URL"]
-        variants.push({ ...base, LinkedIn: val })
-        variants.push({ ...base, Linkedin: val })
-      }
-
-      for (const v of variants) {
-        const rx = await attempt(v)
-        if (rx.ok) return rx
-      }
-
-      // si nada funcionó, devolvemos el primero para debug real
-      return r1
-    }
-
     const forbidIfNotOwner = (record, email) => {
       if (!record?.fields) return false
       return record.fields["Responsible Email"] !== email
+    }
+
+    // ✅ helper: elige el nombre real del campo en Airtable
+    const pickExistingFieldName = (existingFields, candidates = []) => {
+      const keys = new Set(Object.keys(existingFields || {}))
+      for (const c of candidates) {
+        if (keys.has(c)) return c
+      }
+      return null
+    }
+
+    // ✅ arma fields para PATCH sin romper si no existe el campo
+    const buildSafeContactPatchFields = (existingFields, incoming = {}) => {
+      const out = {}
+
+      // Email (en tu base existe "Email")
+      if ("Email" in incoming) {
+        const k = pickExistingFieldName(existingFields, ["Email", "E-mail", "Mail"])
+        if (k) out[k] = String(incoming.Email || "")
+      }
+
+      // Position (en tu base existe "Position")
+      if ("Position" in incoming) {
+        const k = pickExistingFieldName(existingFields, ["Position", "Puesto", "Cargo"])
+        if (k) out[k] = String(incoming.Position || "")
+      }
+
+      // Status (en tu base existe "Status")
+      if ("Status" in incoming) {
+        const k = pickExistingFieldName(existingFields, ["Status", "Estado"])
+        if (k) out[k] = String(incoming.Status || "")
+      }
+
+      // Notes (en tu base existe "Notes")
+      if ("Notes" in incoming) {
+        const k = pickExistingFieldName(existingFields, [
+          "Notes",
+          "Notas",
+          "Observaciones",
+          "Contact Notes",
+          "Permanent Notes"
+        ])
+        if (k) out[k] = String(incoming.Notes || "")
+      }
+
+      // Phone (en tu base existe "Numero de telefono")
+      if ("Phone" in incoming) {
+        const k = pickExistingFieldName(existingFields, [
+          "Numero de telefono",
+          "Número de teléfono",
+          "Phone",
+          "Telefono",
+          "Teléfono"
+        ])
+        if (k) out[k] = String(incoming.Phone || "")
+      }
+
+      // LinkedIn (en tu base existe "LinkedIn URL")
+      if ("LinkedIn URL" in incoming) {
+        const k = pickExistingFieldName(existingFields, [
+          "LinkedIn URL",
+          "LinkedIn",
+          "Linkedin"
+        ])
+        if (k) out[k] = String(incoming["LinkedIn URL"] || "")
+      }
+
+      // 🚫 IMPORTANTE: NO intentamos guardar Next Follow-up Date en Contacts
+      // porque en tu tabla Contacts NO existe (según screenshot).
+      // El próximo follow-up se guarda en Activities.
+
+      return out
     }
 
     /* =====================================================
@@ -259,7 +248,10 @@ export default async function handler(req, res) {
       } catch (e) {
         return res
           .status(e.status || 500)
-          .json({ error: "Failed to fetch companies", details: e.details || String(e.message || e) })
+          .json({
+            error: "Failed to fetch companies",
+            details: e.details || String(e.message || e)
+          })
       }
     }
 
@@ -295,7 +287,6 @@ export default async function handler(req, res) {
       const { id, fields } = body
       if (!id || !fields) return res.status(400).json({ error: "Missing data" })
 
-      // check ownership
       const check = await fetch(`https://api.airtable.com/v0/${baseId}/Companies/${id}`, {
         headers: AIRTABLE_HEADERS
       })
@@ -332,7 +323,6 @@ export default async function handler(req, res) {
           filterByFormula: formula
         })
 
-        // opcional: map de companies para extra (no rompe si falla)
         let companies = []
         try {
           companies = await fetchAllAirtableRecords("Companies")
@@ -362,7 +352,10 @@ export default async function handler(req, res) {
       } catch (e) {
         return res
           .status(e.status || 500)
-          .json({ error: "Failed to fetch contacts", details: e.details || String(e.message || e) })
+          .json({
+            error: "Failed to fetch contacts",
+            details: e.details || String(e.message || e)
+          })
       }
     }
 
@@ -391,14 +384,16 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       UPDATE CONTACT  ✅ robusto con fallbacks
+       UPDATE CONTACT ✅ (ARREGLADO)
+       - No rompe si mandan campos que no existen
+       - Mapea Phone → "Numero de telefono"
+       - Guarda Notes en Contacts
     ====================================================== */
 
     if (action === "updateContact") {
       const { id, fields } = body
       if (!id || !fields) return res.status(400).json({ error: "Missing data" })
 
-      // check ownership
       const check = await fetch(`https://api.airtable.com/v0/${baseId}/Contacts/${id}`, {
         headers: AIRTABLE_HEADERS
       })
@@ -410,23 +405,32 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
-      // normalizamos fecha si viene
-      const safeFields = { ...fields }
-      if (Object.prototype.hasOwnProperty.call(safeFields, "Next Follow-up Date")) {
-        safeFields["Next Follow-up Date"] = normalizeDate(safeFields["Next Follow-up Date"])
+      // ✅ Armamos patch seguro contra nombres inexistentes
+      const safePatchFields = buildSafeContactPatchFields(existing.fields || {}, fields)
+
+      // si no hay nada para guardar, evitamos patch vacío
+      if (!Object.keys(safePatchFields).length) {
+        return res.status(200).json(existing)
       }
 
-      const r = await patchWithFieldFallbacks("Contacts", id, safeFields)
+      const r = await fetch(`https://api.airtable.com/v0/${baseId}/Contacts/${id}`, {
+        method: "PATCH",
+        headers: AIRTABLE_HEADERS,
+        body: JSON.stringify({ fields: safePatchFields })
+      })
+      const data = await readJson(r)
 
       if (!r.ok) {
-        return res.status(r.status).json({ error: "Failed to update contact", details: r.data })
+        return res.status(r.status).json({ error: "Failed to update contact", details: data })
       }
 
-      return res.status(200).json(r.data)
+      return res.status(200).json(data)
     }
 
     /* =====================================================
-       CREATE ACTIVITY ✅ robusto, fechas, no rompe con lookups
+       CREATE ACTIVITY ✅
+       - Guarda historial en Activities
+       - Next follow-up va acá (tu modelo correcto)
     ====================================================== */
 
     if (action === "createActivity") {
@@ -436,7 +440,6 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Missing required fields" })
       }
 
-      // validar ownership + company recXXX
       const contactRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
         { headers: AIRTABLE_HEADERS }
@@ -466,9 +469,11 @@ export default async function handler(req, res) {
         "Related Contact": [contactId],
         "Activity Date": new Date().toISOString(),
         "Owner Email": email,
-        "Notes": String(notes || ""),
-        "Next Follow-up Date": normalizeDate(nextFollowUp)
+        "Notes": String(notes || "")
       }
+
+      const nfu = normalizeDate(nextFollowUp)
+      if (nfu) fieldsToSend["Next Follow-up Date"] = nfu
 
       if (linkedCompanyId) {
         fieldsToSend["Related Company"] = [linkedCompanyId]
@@ -493,7 +498,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       GET ACTIVITIES (paginado)
+       GET ACTIVITIES
     ====================================================== */
 
     if (action === "getActivities") {
@@ -516,12 +521,15 @@ export default async function handler(req, res) {
       } catch (e) {
         return res
           .status(e.status || 500)
-          .json({ error: "Failed to fetch activities", details: e.details || String(e.message || e) })
+          .json({
+            error: "Failed to fetch activities",
+            details: e.details || String(e.message || e)
+          })
       }
     }
 
     /* =====================================================
-       GET CALENDAR (para la vista Calendar)
+       GET CALENDAR
     ====================================================== */
 
     if (action === "getCalendar") {
@@ -534,12 +542,15 @@ export default async function handler(req, res) {
       } catch (e) {
         return res
           .status(e.status || 500)
-          .json({ error: "Failed to fetch calendar", details: e.details || String(e.message || e) })
+          .json({
+            error: "Failed to fetch calendar",
+            details: e.details || String(e.message || e)
+          })
       }
     }
 
     /* =====================================================
-       DASHBOARD STATS (mantiene tu lógica)
+       DASHBOARD STATS (misma lógica)
     ====================================================== */
 
     if (action === "getDashboardStats") {
@@ -570,6 +581,10 @@ export default async function handler(req, res) {
 
         contacts.forEach((contact) => {
           const lastActivity = contact.fields?.["Last Activity Date"]
+
+          // ⚠️ Si no tenés "Next Follow-up Date" en Contacts, esto queda vacío.
+          // Tu modelo correcto es: Next Follow-up en Activities.
+          // Para no romperte el dashboard, dejamos esta métrica como "sin dato".
           const nextFollowUp = contact.fields?.["Next Follow-up Date"]
 
           if (!nextFollowUp) {
