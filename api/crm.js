@@ -61,11 +61,15 @@ export default async function handler(req, res) {
         : "HttpOnly; SameSite=Lax; Path=/"
 
     const normalizeDate = (val) => {
+      // devuelve "YYYY-MM-DD" o null
       const v = String(val || "").trim()
       if (!v) return null
+
       if (v.length >= 10 && v[4] === "-" && v[7] === "-") return v.slice(0, 10)
+
       const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
       if (m) return `${m[3]}-${m[2]}-${m[1]}`
+
       const d = new Date(v)
       if (Number.isNaN(d.getTime())) return null
       const yyyy = d.getFullYear()
@@ -74,16 +78,19 @@ export default async function handler(req, res) {
       return `${yyyy}-${mm}-${dd}`
     }
 
+    // Airtable list con paginación offset
     const fetchAllAirtableRecords = async (tableName, params = {}) => {
       const out = []
       let offset = null
 
       while (true) {
         const usp = new URLSearchParams()
+
         Object.entries(params).forEach(([k, v]) => {
           if (v === undefined || v === null || v === "") return
           usp.set(k, v)
         })
+
         if (offset) usp.set("offset", offset)
 
         const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(
@@ -125,25 +132,21 @@ export default async function handler(req, res) {
     const buildSafeContactPatchFields = (existingFields, incoming = {}) => {
       const out = {}
 
-      // Email (en tu base existe "Email")
       if ("Email" in incoming) {
         const k = pickExistingFieldName(existingFields, ["Email", "E-mail", "Mail"])
         if (k) out[k] = String(incoming.Email || "")
       }
 
-      // Position (en tu base existe "Position")
       if ("Position" in incoming) {
         const k = pickExistingFieldName(existingFields, ["Position", "Puesto", "Cargo"])
         if (k) out[k] = String(incoming.Position || "")
       }
 
-      // Status (en tu base existe "Status")
       if ("Status" in incoming) {
         const k = pickExistingFieldName(existingFields, ["Status", "Estado"])
         if (k) out[k] = String(incoming.Status || "")
       }
 
-      // Notes (en tu base existe "Notes")
       if ("Notes" in incoming) {
         const k = pickExistingFieldName(existingFields, [
           "Notes",
@@ -155,7 +158,6 @@ export default async function handler(req, res) {
         if (k) out[k] = String(incoming.Notes || "")
       }
 
-      // Phone (en tu base existe "Numero de telefono")
       if ("Phone" in incoming) {
         const k = pickExistingFieldName(existingFields, [
           "Numero de telefono",
@@ -167,7 +169,6 @@ export default async function handler(req, res) {
         if (k) out[k] = String(incoming.Phone || "")
       }
 
-      // LinkedIn (en tu base existe "LinkedIn URL")
       if ("LinkedIn URL" in incoming) {
         const k = pickExistingFieldName(existingFields, [
           "LinkedIn URL",
@@ -177,11 +178,85 @@ export default async function handler(req, res) {
         if (k) out[k] = String(incoming["LinkedIn URL"] || "")
       }
 
-      // 🚫 IMPORTANTE: NO intentamos guardar Next Follow-up Date en Contacts
-      // porque en tu tabla Contacts NO existe (según screenshot).
-      // El próximo follow-up se guarda en Activities.
-
+      // 🚫 NO guardamos Next Follow-up Date en Contacts
       return out
+    }
+
+    // ✅ CREATE (POST) con fallbacks por nombres de campos
+    const createWithFallbacks = async (table, fields) => {
+      const attempt = async (payloadFields) => {
+        const r = await fetch(`https://api.airtable.com/v0/${baseId}/${table}`, {
+          method: "POST",
+          headers: AIRTABLE_HEADERS,
+          body: JSON.stringify({ fields: payloadFields })
+        })
+        const data = await readJson(r)
+        return { ok: r.ok, status: r.status, data }
+      }
+
+      // 1) intento directo
+      let r1 = await attempt(fields)
+      if (r1.ok) return r1
+
+      const type = r1.data?.error?.type
+
+      // Si el error es por campo desconocido o valor inválido, probamos variantes
+      const variants = []
+
+      // ✅ Outcome vs Activity Type (tu tabla usa Outcome)
+      if (Object.prototype.hasOwnProperty.call(fields, "Outcome")) {
+        const base = { ...fields }
+        const val = base.Outcome
+        delete base.Outcome
+        variants.push({ ...base, "Activity Type": val })
+      }
+      if (Object.prototype.hasOwnProperty.call(fields, "Activity Type")) {
+        const base = { ...fields }
+        const val = base["Activity Type"]
+        delete base["Activity Type"]
+        variants.push({ ...base, Outcome: val })
+      }
+
+      // ✅ Activity Date: si mandaron datetime y era date-only, forzamos YYYY-MM-DD
+      if (Object.prototype.hasOwnProperty.call(fields, "Activity Date")) {
+        const base = { ...fields }
+        base["Activity Date"] = normalizeDate(base["Activity Date"])
+        variants.push(base)
+      }
+
+      // ✅ Notes variantes (por si)
+      if (Object.prototype.hasOwnProperty.call(fields, "Notes")) {
+        const base = { ...fields }
+        const val = base.Notes
+        delete base.Notes
+        variants.push({ ...base, "Notas": val })
+        variants.push({ ...base, "Observaciones": val })
+      }
+
+      // ✅ Owner Email variantes (por si)
+      if (Object.prototype.hasOwnProperty.call(fields, "Owner Email")) {
+        const base = { ...fields }
+        const val = base["Owner Email"]
+        delete base["Owner Email"]
+        variants.push({ ...base, "Responsible Email": val })
+        variants.push({ ...base, "Responsible": val })
+      }
+
+      // Si el error original no era de campos/valores, igual probamos 1 ronda
+      if (type === "UNKNOWN_FIELD_NAME" || type === "INVALID_VALUE_FOR_COLUMN") {
+        for (const v of variants) {
+          const rx = await attempt(v)
+          if (rx.ok) return rx
+        }
+      } else {
+        // probamos igual 1 fallback clave Outcome <-> Activity Type
+        for (const v of variants.slice(0, 2)) {
+          const rx = await attempt(v)
+          if (rx.ok) return rx
+        }
+      }
+
+      return r1
     }
 
     /* =====================================================
@@ -384,10 +459,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       UPDATE CONTACT ✅ (ARREGLADO)
-       - No rompe si mandan campos que no existen
-       - Mapea Phone → "Numero de telefono"
-       - Guarda Notes en Contacts
+       UPDATE CONTACT ✅
     ====================================================== */
 
     if (action === "updateContact") {
@@ -405,10 +477,8 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
-      // ✅ Armamos patch seguro contra nombres inexistentes
       const safePatchFields = buildSafeContactPatchFields(existing.fields || {}, fields)
 
-      // si no hay nada para guardar, evitamos patch vacío
       if (!Object.keys(safePatchFields).length) {
         return res.status(200).json(existing)
       }
@@ -428,9 +498,10 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       CREATE ACTIVITY ✅
-       - Guarda historial en Activities
-       - Next follow-up va acá (tu modelo correcto)
+       CREATE ACTIVITY ✅✅ ARREGLADO PARA TU BASE
+       - Escribe en Outcome (como tu tabla)
+       - Activity Date como YYYY-MM-DD (date-only)
+       - Next Follow-up Date ok
     ====================================================== */
 
     if (action === "createActivity") {
@@ -440,6 +511,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Missing required fields" })
       }
 
+      // validar ownership + company recXXX
       const contactRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
         { headers: AIRTABLE_HEADERS }
@@ -464,12 +536,16 @@ export default async function handler(req, res) {
       const linkedCompanyId =
         typeof candidate === "string" && candidate.startsWith("rec") ? candidate : null
 
+      // ✅ IMPORTANTE: Activity Date date-only
+      const activityDate = normalizeDate(new Date())
+
       const fieldsToSend = {
-        "Activity Type": type,
+        // ✅ Tu tabla usa Outcome (según captura)
+        Outcome: String(type),
         "Related Contact": [contactId],
-        "Activity Date": new Date().toISOString(),
+        "Activity Date": activityDate,
         "Owner Email": email,
-        "Notes": String(notes || "")
+        Notes: String(notes || "")
       }
 
       const nfu = normalizeDate(nextFollowUp)
@@ -479,22 +555,17 @@ export default async function handler(req, res) {
         fieldsToSend["Related Company"] = [linkedCompanyId]
       }
 
-      const r = await fetch(`https://api.airtable.com/v0/${baseId}/Activities`, {
-        method: "POST",
-        headers: AIRTABLE_HEADERS,
-        body: JSON.stringify({ fields: fieldsToSend })
-      })
-
-      const data = await readJson(r)
+      // ✅ create robusto con fallbacks (Outcome <-> Activity Type, fechas, etc)
+      const r = await createWithFallbacks("Activities", fieldsToSend)
 
       if (!r.ok) {
         return res.status(r.status).json({
           error: "Failed to create activity",
-          details: data
+          details: r.data
         })
       }
 
-      return res.status(200).json(data)
+      return res.status(200).json(r.data)
     }
 
     /* =====================================================
@@ -513,8 +584,10 @@ export default async function handler(req, res) {
 
         records.sort(
           (a, b) =>
-            new Date(b.fields?.["Activity Date"] || 0) -
-            new Date(a.fields?.["Activity Date"] || 0)
+            new Date(a.fields?.["Activity Date"] || 0) <
+            new Date(b.fields?.["Activity Date"] || 0)
+              ? 1
+              : -1
         )
 
         return res.status(200).json({ records })
@@ -550,7 +623,7 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       DASHBOARD STATS (misma lógica)
+       DASHBOARD STATS (tu lógica)
     ====================================================== */
 
     if (action === "getDashboardStats") {
@@ -581,10 +654,6 @@ export default async function handler(req, res) {
 
         contacts.forEach((contact) => {
           const lastActivity = contact.fields?.["Last Activity Date"]
-
-          // ⚠️ Si no tenés "Next Follow-up Date" en Contacts, esto queda vacío.
-          // Tu modelo correcto es: Next Follow-up en Activities.
-          // Para no romperte el dashboard, dejamos esta métrica como "sin dato".
           const nextFollowUp = contact.fields?.["Next Follow-up Date"]
 
           if (!nextFollowUp) {
