@@ -21,6 +21,38 @@ export default async function handler(req, res) {
       "Content-Type": "application/json"
     }
 
+    const safeJson = async (resp) => {
+      try {
+        return await resp.json()
+      } catch {
+        return {}
+      }
+    }
+
+    const airtableGet = (url) => fetch(url, { headers: AIRTABLE_HEADERS })
+
+    const airtablePatch = (url, payload) =>
+      fetch(url, {
+        method: "PATCH",
+        headers: AIRTABLE_HEADERS,
+        body: JSON.stringify(payload)
+      })
+
+    const airtablePost = (url, payload) =>
+      fetch(url, {
+        method: "POST",
+        headers: AIRTABLE_HEADERS,
+        body: JSON.stringify(payload)
+      })
+
+    const pickDefined = (obj) => {
+      const out = {}
+      Object.keys(obj || {}).forEach((k) => {
+        if (obj[k] !== undefined) out[k] = obj[k]
+      })
+      return out
+    }
+
     /* =====================================================
        SESSION HELPERS
     ====================================================== */
@@ -29,12 +61,7 @@ export default async function handler(req, res) {
       const cookie = req.headers.cookie
       if (!cookie) return null
       if (!cookie.includes("session=")) return null
-
-      return cookie
-        .split("session=")[1]
-        ?.split(";")[0]
-        ?.trim()
-        ?.toLowerCase()
+      return cookie.split("session=")[1]?.split(";")[0]?.trim()?.toLowerCase()
     }
 
     const requireAuth = () => {
@@ -50,34 +77,6 @@ export default async function handler(req, res) {
       process.env.NODE_ENV === "production"
         ? "HttpOnly; Secure; SameSite=Lax; Path=/"
         : "HttpOnly; SameSite=Lax; Path=/"
-
-    const safeJson = async (resp) => {
-      try {
-        return await resp.json()
-      } catch {
-        return {}
-      }
-    }
-
-    const airtableGet = async (url) => {
-      return fetch(url, { headers: AIRTABLE_HEADERS })
-    }
-
-    const airtablePatch = async (url, payload) => {
-      return fetch(url, {
-        method: "PATCH",
-        headers: AIRTABLE_HEADERS,
-        body: JSON.stringify(payload)
-      })
-    }
-
-    const airtablePost = async (url, payload) => {
-      return fetch(url, {
-        method: "POST",
-        headers: AIRTABLE_HEADERS,
-        body: JSON.stringify(payload)
-      })
-    }
 
     /* =====================================================
        LOGIN
@@ -118,15 +117,8 @@ export default async function handler(req, res) {
 
     if (action === "me") {
       const email = getSessionEmail()
-
-      if (!email) {
-        return res.status(401).json({ authenticated: false })
-      }
-
-      return res.status(200).json({
-        authenticated: true,
-        email
-      })
+      if (!email) return res.status(401).json({ authenticated: false })
+      return res.status(200).json({ authenticated: true, email })
     }
 
     const email = requireAuth()
@@ -145,14 +137,13 @@ export default async function handler(req, res) {
         )}`
       )
 
+      const data = await safeJson(response)
       if (!response.ok) {
-        const err = await safeJson(response)
         return res
           .status(response.status)
-          .json({ error: "Failed to fetch companies", details: err })
+          .json({ error: "Failed to fetch companies", details: data })
       }
 
-      const data = await safeJson(response)
       return res.status(200).json(data)
     }
 
@@ -168,16 +159,14 @@ export default async function handler(req, res) {
         `https://api.airtable.com/v0/${baseId}/Companies/${id}`
       )
 
+      const data = await safeJson(response)
       if (!response.ok) {
-        const err = await safeJson(response)
         return res
           .status(response.status)
-          .json({ error: "Company not found", details: err })
+          .json({ error: "Company not found", details: data })
       }
 
-      const data = await safeJson(response)
-
-      if (data.fields?.["Responsible Email"] !== email) {
+      if ((data.fields?.["Responsible Email"] || "").toLowerCase() !== email) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
@@ -192,40 +181,38 @@ export default async function handler(req, res) {
       const { id, fields } = body
       if (!id || !fields) return res.status(400).json({ error: "Missing data" })
 
+      // check ownership
       const check = await airtableGet(
         `https://api.airtable.com/v0/${baseId}/Companies/${id}`
       )
-
+      const existing = await safeJson(check)
       if (!check.ok) {
-        const err = await safeJson(check)
         return res
           .status(check.status)
-          .json({ error: "Company not found", details: err })
+          .json({ error: "Company not found", details: existing })
       }
 
-      const existing = await safeJson(check)
-      if (existing.fields?.["Responsible Email"] !== email) {
+      if ((existing.fields?.["Responsible Email"] || "").toLowerCase() !== email) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
       const response = await airtablePatch(
         `https://api.airtable.com/v0/${baseId}/Companies/${id}`,
-        { fields }
+        { fields: pickDefined(fields) }
       )
 
+      const data = await safeJson(response)
       if (!response.ok) {
-        const err = await safeJson(response)
         return res
           .status(response.status)
-          .json({ error: "Failed to update company", details: err })
+          .json({ error: "Failed to update company", details: data })
       }
 
-      const data = await safeJson(response)
       return res.status(200).json(data)
     }
 
     /* =====================================================
-       GET CONTACTS (con enrich opcional)
+       GET CONTACTS
     ====================================================== */
 
     if (action === "getContacts") {
@@ -237,17 +224,16 @@ export default async function handler(req, res) {
         )}`
       )
 
+      const contactsData = await safeJson(contactsRes)
       if (!contactsRes.ok) {
-        const err = await safeJson(contactsRes)
         return res
           .status(contactsRes.status)
-          .json({ error: "Failed to fetch contacts", details: err })
+          .json({ error: "Failed to fetch contacts", details: contactsData })
       }
 
-      const contactsData = await safeJson(contactsRes)
       const contacts = contactsData.records || []
 
-      // Enrich: Website de la company (sin romper si no existe)
+      // Enrich opcional
       const companiesRes = await airtableGet(
         `https://api.airtable.com/v0/${baseId}/Companies`
       )
@@ -255,14 +241,11 @@ export default async function handler(req, res) {
       const companies = companiesData.records || []
 
       const companiesMap = {}
-      companies.forEach((c) => {
-        companiesMap[c.id] = c.fields || {}
-      })
+      companies.forEach((c) => (companiesMap[c.id] = c.fields || {}))
 
-      const enrichedContacts = contacts.map((contact) => {
+      const enriched = contacts.map((contact) => {
         const companyId = contact.fields?.Company?.[0]
         const companyData = companyId ? companiesMap[companyId] : null
-
         return {
           ...contact,
           fields: {
@@ -272,7 +255,7 @@ export default async function handler(req, res) {
         }
       })
 
-      return res.status(200).json({ records: enrichedContacts })
+      return res.status(200).json({ records: enriched })
     }
 
     /* =====================================================
@@ -287,16 +270,14 @@ export default async function handler(req, res) {
         `https://api.airtable.com/v0/${baseId}/Contacts/${id}`
       )
 
+      const data = await safeJson(response)
       if (!response.ok) {
-        const err = await safeJson(response)
         return res
           .status(response.status)
-          .json({ error: "Contact not found", details: err })
+          .json({ error: "Contact not found", details: data })
       }
 
-      const data = await safeJson(response)
-
-      if (data.fields?.["Responsible Email"] !== email) {
+      if ((data.fields?.["Responsible Email"] || "").toLowerCase() !== email) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
@@ -314,40 +295,34 @@ export default async function handler(req, res) {
       const check = await airtableGet(
         `https://api.airtable.com/v0/${baseId}/Contacts/${id}`
       )
-
+      const existing = await safeJson(check)
       if (!check.ok) {
-        const err = await safeJson(check)
         return res
           .status(check.status)
-          .json({ error: "Contact not found", details: err })
+          .json({ error: "Contact not found", details: existing })
       }
 
-      const existing = await safeJson(check)
-      if (existing.fields?.["Responsible Email"] !== email) {
+      if ((existing.fields?.["Responsible Email"] || "").toLowerCase() !== email) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
       const response = await airtablePatch(
         `https://api.airtable.com/v0/${baseId}/Contacts/${id}`,
-        { fields }
+        { fields: pickDefined(fields) }
       )
 
+      const data = await safeJson(response)
       if (!response.ok) {
-        const err = await safeJson(response)
         return res
           .status(response.status)
-          .json({ error: "Failed to update contact", details: err })
+          .json({ error: "Failed to update contact", details: data })
       }
 
-      const data = await safeJson(response)
       return res.status(200).json(data)
     }
 
     /* =====================================================
-       CREATE ACTIVITY ✅ FIX REAL
-       - NO manda Next Follow-up Date a Activities
-       - Guarda follow-up y last activity en CONTACT
-       - Actualiza Status automático según tipo
+       CREATE ACTIVITY (NO rompe si falla el patch del contacto)
     ====================================================== */
 
     if (action === "createActivity") {
@@ -357,7 +332,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Missing required fields" })
       }
 
-      // 1) Traer contact y validar ownership
+      // 1) Load contact + ownership
       const contactRes = await airtableGet(
         `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`
       )
@@ -370,37 +345,32 @@ export default async function handler(req, res) {
         })
       }
 
-      if (contactData.fields?.["Responsible Email"] !== email) {
+      if ((contactData.fields?.["Responsible Email"] || "").toLowerCase() !== email) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
-      // 2) Detectar company link real recXXX (si existe)
+      // 2) Detect Company link recXXX
       const rawCompany = contactData.fields?.Company
       const candidate =
         Array.isArray(rawCompany) && rawCompany.length > 0 ? rawCompany[0] : null
       const linkedCompanyId =
-        typeof candidate === "string" && candidate.startsWith("rec")
-          ? candidate
-          : null
+        typeof candidate === "string" && candidate.startsWith("rec") ? candidate : null
 
-      // 3) Crear Activity
+      // 3) Create Activity
       const fieldsToSend = {
-        "Activity Type": type,
+        "Activity Type": String(type),
         "Related Contact": [contactId],
         "Activity Date": new Date().toISOString(),
         "Owner Email": email,
-        "Notes": notes || ""
+        "Notes": typeof notes === "string" ? notes : ""
       }
 
-      if (linkedCompanyId) {
-        fieldsToSend["Related Company"] = [linkedCompanyId]
-      }
+      if (linkedCompanyId) fieldsToSend["Related Company"] = [linkedCompanyId]
 
       const activityRes = await airtablePost(
         `https://api.airtable.com/v0/${baseId}/Activities`,
         { fields: fieldsToSend }
       )
-
       const activityData = await safeJson(activityRes)
 
       if (!activityRes.ok) {
@@ -410,55 +380,58 @@ export default async function handler(req, res) {
         })
       }
 
-      // 4) Patch contacto: Last Activity Date + Next Follow-up Date + Status auto
-      // (esto hace que dashboard y calendar funcionen bien)
-      const nowISO = new Date().toISOString()
+      // 4) Patch contact (no bloquear si esto falla)
+      const patchFields = {}
+      patchFields["Last Activity Date"] = new Date().toISOString()
 
+      if (nextFollowUp) patchFields["Next Follow-up Date"] = nextFollowUp
+
+      // status auto (solo si aplica)
       const currentStatus = contactData.fields?.Status || ""
       let nextStatus = currentStatus
 
-      // Auto status (opcional, pero útil)
       if (!currentStatus || currentStatus === "Not Contacted") {
         if (type === "Call" || type === "Email" || type === "LinkedIn") {
           nextStatus = "Contacted"
         }
       }
       if (type === "Meeting") nextStatus = "Meeting Booked"
+      if (nextStatus && nextStatus !== currentStatus) patchFields["Status"] = nextStatus
 
-      const contactPatchFields = {
-        "Last Activity Date": nowISO
+      let contactPatchError = null
+
+      try {
+        if (Object.keys(patchFields).length > 0) {
+          const patchRes = await airtablePatch(
+            `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
+            { fields: patchFields }
+          )
+          if (!patchRes.ok) {
+            const patchData = await safeJson(patchRes)
+            contactPatchError = patchData
+          }
+        }
+      } catch (e) {
+        contactPatchError = { message: String(e?.message || e) }
       }
-
-      if (nextFollowUp) {
-        contactPatchFields["Next Follow-up Date"] = nextFollowUp
-      }
-
-      if (nextStatus && nextStatus !== currentStatus) {
-        contactPatchFields["Status"] = nextStatus
-      }
-
-      // Solo patch si hay algo
-      await airtablePatch(
-        `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
-        { fields: contactPatchFields }
-      )
 
       return res.status(200).json({
         success: true,
         activity: activityData,
-        contactUpdated: contactPatchFields
+        contactUpdated: patchFields,
+        contactPatchError
       })
     }
 
     /* =====================================================
-       GET ACTIVITIES (rápido y correcto)
+       GET ACTIVITIES (sin “failed” silencioso)
     ====================================================== */
 
     if (action === "getActivities") {
       const { contactId } = req.query
       if (!contactId) return res.status(400).json({ error: "Missing contact ID" })
 
-      // Seguridad: validar que el contacto es tuyo
+      // Validate ownership by contact
       const contactRes = await airtableGet(
         `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`
       )
@@ -471,7 +444,14 @@ export default async function handler(req, res) {
         })
       }
 
-      if (contactData.fields?.["Responsible Email"] !== email) {
+      const owner = (contactData.fields?.["Responsible Email"] || "").toLowerCase()
+      if (!owner) {
+        return res.status(400).json({
+          error: "Contact missing Responsible Email field",
+          details: contactData.fields || {}
+        })
+      }
+      if (owner !== email) {
         return res.status(403).json({ error: "Forbidden" })
       }
 
@@ -483,14 +463,12 @@ export default async function handler(req, res) {
         )}`
       )
 
+      const data = await safeJson(response)
       if (!response.ok) {
-        const err = await safeJson(response)
         return res
           .status(response.status)
-          .json({ error: "Failed to fetch activities", details: err })
+          .json({ error: "Failed to fetch activities", details: data })
       }
-
-      const data = await safeJson(response)
 
       const records = (data.records || []).sort(
         (a, b) =>
@@ -512,12 +490,14 @@ export default async function handler(req, res) {
         )}`
       )
 
+      const contactsData = await safeJson(contactsRes)
       if (!contactsRes.ok) {
-        const err = await safeJson(contactsRes)
-        return res.status(500).json({ error: "Failed to load contacts", details: err })
+        return res.status(500).json({
+          error: "Failed to load contacts",
+          details: contactsData
+        })
       }
 
-      const contactsData = await safeJson(contactsRes)
       const contacts = contactsData.records || []
 
       const totalLeads = contacts.length
