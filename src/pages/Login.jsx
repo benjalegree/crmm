@@ -17,13 +17,12 @@ export default function Login() {
   const login = async () => {
     if (!normalizedEmail) return
     if (!isValidEmail) {
-      setError("Ingresá un email válido.")
+      setError("Email inválido.")
       return
     }
 
     setLoading(true)
     setError("")
-
     try {
       const res = await fetch("/api/crm?action=login", {
         method: "POST",
@@ -38,10 +37,9 @@ export default function Login() {
         navigate("/dashboard")
         return
       }
-
-      setError(data?.error || "No se pudo iniciar sesión.")
-    } catch (err) {
-      setError("Error de servidor.")
+      setError(data?.error || "Login failed")
+    } catch {
+      setError("Server error")
     } finally {
       setLoading(false)
     }
@@ -53,116 +51,53 @@ export default function Login() {
 
   return (
     <div style={styles.page}>
-      {/* Background */}
-      <div style={styles.bg} aria-hidden="true" />
-      <div style={styles.grain} aria-hidden="true" />
+      <div style={styles.wallpaper} aria-hidden="true" />
+      <div style={styles.vignette} aria-hidden="true" />
 
-      <div style={styles.wrap}>
-        <div style={styles.card}>
-          {/* Brand */}
-          <div style={styles.header}>
-            <div style={styles.mark} aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M6 14.5c0 2.9 2.3 5.2 5.2 5.2h1.6c2.9 0 5.2-2.3 5.2-5.2V9.5c0-2.9-2.3-5.2-5.2-5.2h-1.6C8.3 4.3 6 6.6 6 9.5v5z"
-                  stroke="rgba(255,255,255,0.95)"
-                  strokeWidth="1.8"
-                />
-                <path
-                  d="M9 9.4h6"
-                  stroke="rgba(255,255,255,0.95)"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
+      <div style={styles.window} role="dialog" aria-label="PsicoFunnel Login">
+        <div style={styles.titlebar} aria-hidden="true">
+          <div style={styles.traffic}>
+            <span style={{ ...styles.dot, background: "#ff5f57" }} />
+            <span style={{ ...styles.dot, background: "#febc2e" }} />
+            <span style={{ ...styles.dot, background: "#28c840" }} />
+          </div>
+        </div>
 
-            <div style={styles.brandText}>
-              <div style={styles.title}>PsicoFunnel CRM</div>
-              <div style={styles.sub}>Iniciar sesión</div>
-            </div>
+        <div style={styles.panel}>
+          <div style={styles.brand}>
+            <div style={styles.brandText}>PsicoFunnel</div>
           </div>
 
-          {/* Input */}
           <div style={styles.form}>
-            <label style={styles.label}>Email</label>
-
-            <div
-              style={{
-                ...styles.inputShell,
-                borderColor: error
-                  ? "rgba(255,59,48,0.55)"
-                  : "rgba(0,0,0,0.10)"
-              }}
-            >
-              <span style={styles.icon} aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M4.5 7.5A3 3 0 0 1 7.5 4.5h9A3 3 0 0 1 19.5 7.5v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9z"
-                    stroke="rgba(0,0,0,0.55)"
-                    strokeWidth="1.6"
-                  />
-                  <path
-                    d="M6.8 8.3 12 12l5.2-3.7"
-                    stroke="rgba(0,0,0,0.55)"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-
+            <div style={styles.field}>
               <input
-                placeholder="tu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={onKeyDown}
+                placeholder="Email"
                 autoComplete="email"
                 inputMode="email"
-                style={styles.input}
+                spellCheck={false}
+                style={{
+                  ...styles.input,
+                  borderBottomColor: error ? "rgba(255,80,80,0.55)" : "rgba(255,255,255,0.28)"
+                }}
               />
             </div>
 
-            {error ? <div style={styles.error}>{error}</div> : <div style={styles.helper} />}
-          </div>
+            <button
+              onClick={login}
+              disabled={loading || !isValidEmail}
+              style={{
+                ...styles.button,
+                opacity: loading || !isValidEmail ? 0.55 : 1,
+                cursor: loading || !isValidEmail ? "not-allowed" : "pointer"
+              }}
+            >
+              {loading ? "Logging in..." : "Login"}
+            </button>
 
-          {/* CTA */}
-          <button
-            onClick={login}
-            disabled={loading || !isValidEmail}
-            style={{
-              ...styles.button,
-              opacity: loading || !isValidEmail ? 0.55 : 1,
-              cursor: loading || !isValidEmail ? "not-allowed" : "pointer"
-            }}
-          >
-            <span style={styles.btnLabel}>
-              {loading ? "Ingresando..." : "Entrar"}
-            </span>
-
-            <span style={styles.btnIcon} aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M5 12h12"
-                  stroke="rgba(255,255,255,0.95)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M13 6l6 6-6 6"
-                  stroke="rgba(255,255,255,0.95)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </button>
-
-          {/* Tiny footer (sin textos raros) */}
-          <div style={styles.tiny}>
-            <span style={styles.dot} aria-hidden="true" />
-            <span style={styles.tinyText}>Conexión segura</span>
+            {!!error && <div style={styles.error}>{error}</div>}
           </div>
         </div>
       </div>
@@ -173,191 +108,144 @@ export default function Login() {
 const styles = {
   page: {
     minHeight: "100vh",
-    width: "100%",
     display: "grid",
     placeItems: "center",
     position: "relative",
     overflow: "hidden",
-    background: "#f5f5f7",
+    background: "#cfd7df",
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
   },
 
-  bg: {
-    position: "absolute",
-    inset: "-35%",
-    background:
-      "radial-gradient(900px 560px at 22% 18%, rgba(0,122,255,0.18), rgba(0,0,0,0) 60%)," +
-      "radial-gradient(900px 520px at 78% 22%, rgba(175,82,222,0.14), rgba(0,0,0,0) 60%)," +
-      "radial-gradient(1100px 700px at 50% 90%, rgba(52,199,89,0.10), rgba(0,0,0,0) 62%)",
-    filter: "blur(18px)",
-    transform: "translateZ(0)"
-  },
-
-  grain: {
+  // Fondo suave tipo macOS (sin textos)
+  wallpaper: {
     position: "absolute",
     inset: 0,
-    opacity: 0.06,
-    backgroundImage:
-      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E\")"
+    background:
+      "radial-gradient(1200px 700px at 20% 15%, rgba(255,255,255,0.65), rgba(255,255,255,0) 55%)," +
+      "radial-gradient(1100px 680px at 80% 20%, rgba(255,255,255,0.40), rgba(255,255,255,0) 55%)," +
+      "linear-gradient(180deg, rgba(215,225,235,1), rgba(195,205,215,1))",
+    filter: "blur(0px)"
   },
 
-  wrap: {
-    position: "relative",
-    padding: 24,
-    width: "100%",
-    display: "grid",
-    placeItems: "center"
+  vignette: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "radial-gradient(900px 600px at 50% 40%, rgba(0,0,0,0), rgba(0,0,0,0.10) 70%, rgba(0,0,0,0.16) 100%)",
+    pointerEvents: "none"
   },
 
-  card: {
-    width: 390,
+  // Ventana
+  window: {
+    width: 980,
     maxWidth: "92vw",
-    borderRadius: 26,
-    padding: 22,
-    background: "rgba(255,255,255,0.72)",
-    border: "1px solid rgba(0,0,0,0.08)",
-    boxShadow:
-      "0 28px 70px rgba(0,0,0,0.10), 0 2px 12px rgba(0,0,0,0.05)",
-    backdropFilter: "blur(18px)",
-    WebkitBackdropFilter: "blur(18px)"
+    height: 520,
+    maxHeight: "82vh",
+    borderRadius: 8,
+    overflow: "hidden",
+    boxShadow: "0 30px 90px rgba(0,0,0,0.28)",
+    border: "1px solid rgba(0,0,0,0.14)",
+    background:
+      "linear-gradient(135deg, rgba(210,220,230,0.35), rgba(20,70,92,0.80))"
   },
 
-  header: {
+  titlebar: {
+    height: 32,
     display: "flex",
     alignItems: "center",
-    gap: 12,
-    padding: "4px 2px 14px 2px"
+    padding: "0 10px",
+    background: "rgba(255,255,255,0.06)",
+    borderBottom: "1px solid rgba(255,255,255,0.08)"
   },
 
-  mark: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
+  traffic: {
+    display: "flex",
+    gap: 7,
+    alignItems: "center"
+  },
+
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 99,
+    boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.18)"
+  },
+
+  // Panel interior estilo screenshot (gradiente/blur)
+  panel: {
+    height: "calc(100% - 32px)",
     display: "grid",
     placeItems: "center",
+    position: "relative",
     background:
-      "linear-gradient(180deg, rgba(0,0,0,0.94), rgba(0,0,0,0.78))",
-    boxShadow: "0 16px 34px rgba(0,0,0,0.20)"
+      "radial-gradient(900px 520px at 30% 15%, rgba(255,255,255,0.20), rgba(255,255,255,0) 55%)," +
+      "radial-gradient(900px 520px at 70% 25%, rgba(255,255,255,0.12), rgba(255,255,255,0) 55%)," +
+      "linear-gradient(145deg, rgba(95,125,145,0.55), rgba(4,38,55,0.92))",
+    filter: "saturate(1.04)"
   },
 
-  brandText: { display: "grid", gap: 2 },
-
-  title: {
-    fontSize: 18,
-    fontWeight: 750,
-    letterSpacing: -0.2,
-    color: "rgba(0,0,0,0.92)",
-    lineHeight: 1.1
+  brand: {
+    position: "absolute",
+    top: 86,
+    left: "50%",
+    transform: "translateX(-50%)",
+    textAlign: "center"
   },
 
-  sub: {
-    fontSize: 12.5,
-    color: "rgba(0,0,0,0.55)"
+  brandText: {
+    fontSize: 38,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    color: "rgba(255,255,255,0.92)",
+    textShadow: "0 10px 30px rgba(0,0,0,0.25)"
   },
 
   form: {
+    width: 360,
+    maxWidth: "78vw",
     display: "grid",
-    gap: 10,
-    marginTop: 6
-  },
-
-  label: {
-    fontSize: 12,
-    fontWeight: 650,
-    color: "rgba(0,0,0,0.72)",
-    letterSpacing: 0.2
-  },
-
-  inputShell: {
-    display: "flex",
+    gap: 18,
     alignItems: "center",
-    gap: 10,
-    padding: "10px 12px",
-    borderRadius: 16,
-    border: "1px solid rgba(0,0,0,0.10)",
-    background: "rgba(255,255,255,0.78)",
-    boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 22px rgba(0,0,0,0.06)"
+    justifyItems: "center",
+    marginTop: 40
   },
 
-  icon: {
-    width: 30,
-    height: 30,
-    borderRadius: 12,
-    display: "grid",
-    placeItems: "center",
-    background: "rgba(0,0,0,0.04)",
-    border: "1px solid rgba(0,0,0,0.05)"
+  field: {
+    width: "100%"
   },
 
   input: {
     width: "100%",
-    border: "none",
-    outline: "none",
     background: "transparent",
-    fontSize: 14.5,
-    color: "rgba(0,0,0,0.92)"
-  },
-
-  helper: {
-    height: 16
-  },
-
-  error: {
-    marginTop: -4,
-    fontSize: 12.5,
-    fontWeight: 650,
-    color: "rgba(255,59,48,0.95)"
-  },
-
-  button: {
-    width: "100%",
-    marginTop: 14,
-    padding: "12px 14px",
-    borderRadius: 16,
-    border: "1px solid rgba(0,0,0,0.12)",
-    background:
-      "linear-gradient(180deg, rgba(0,0,0,0.92), rgba(0,0,0,0.80))",
-    color: "white",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    boxShadow:
-      "0 18px 40px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.10)"
-  },
-
-  btnLabel: {
-    fontSize: 14.5,
-    fontWeight: 750,
+    border: "none",
+    borderBottom: "1px solid rgba(255,255,255,0.28)",
+    padding: "10px 6px",
+    fontSize: 14,
+    color: "rgba(255,255,255,0.90)",
+    outline: "none",
     letterSpacing: 0.2
   },
 
-  btnIcon: {
-    display: "grid",
-    placeItems: "center",
-    opacity: 0.95
-  },
-
-  tiny: {
-    marginTop: 14,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    color: "rgba(0,0,0,0.55)",
-    fontSize: 12
-  },
-
-  dot: {
-    width: 7,
-    height: 7,
+  button: {
+    width: 140,
+    height: 34,
     borderRadius: 999,
-    background: "rgba(0,122,255,0.9)"
+    border: "1px solid rgba(255,255,255,0.26)",
+    background: "rgba(0,0,0,0.10)",
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 13,
+    letterSpacing: 0.3,
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.18)"
   },
 
-  tinyText: {
-    fontWeight: 600
+  error: {
+    marginTop: 4,
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "rgba(255,120,120,0.95)",
+    textShadow: "0 8px 24px rgba(0,0,0,0.20)"
   }
 }
