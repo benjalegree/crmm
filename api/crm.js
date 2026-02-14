@@ -572,34 +572,79 @@ export default async function handler(req, res) {
        GET ACTIVITIES
     ====================================================== */
 
-    if (action === "getActivities") {
-      const { contactId } = req.query
-      if (!contactId) return res.status(400).json({ error: "Missing contact ID" })
+if (action === "getActivities") {
+  const { contactId } = req.query
+  if (!contactId) return res.status(400).json({ error: "Missing contact ID" })
 
-      try {
-        const formula = `AND(FIND("${contactId}", ARRAYJOIN({Related Contact})), {Owner Email}="${email}")`
-        const records = await fetchAllAirtableRecords("Activities", {
-          filterByFormula: formula
+  try {
+    // 1) intento original (por recordId) — a veces no matchea por como Airtable evalúa linked fields
+    const formulaById = `AND(FIND("${contactId}", ARRAYJOIN({Related Contact})), {Owner Email}="${email}")`
+    let records = await fetchAllAirtableRecords("Activities", {
+      filterByFormula: formulaById
+    })
+
+    // 2) fallback: buscar nombre/email del contacto y filtrar por lookup/texto
+    if (!records.length) {
+      const cRes = await fetch(
+        `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
+        { headers: AIRTABLE_HEADERS }
+      )
+      const cData = await readJson(cRes)
+
+      if (cRes.ok) {
+        const fullName =
+          cData?.fields?.["Full Name"] ||
+          cData?.fields?.Name ||
+          cData?.fields?.["Contact Name"] ||
+          ""
+
+        const contactEmail = cData?.fields?.Email || ""
+
+        const esc = (s) => String(s || "").replace(/"/g, '\\"')
+
+        const parts = []
+        if (fullName) {
+          // Contact Name suele ser lookup, por eso ARRAYJOIN
+          parts.push(`FIND("${esc(fullName)}", ARRAYJOIN({Contact Name}))`)
+          parts.push(`FIND("${esc(fullName)}", ARRAYJOIN({Related Contact}))`)
+        }
+        if (contactEmail) {
+          parts.push(`FIND("${esc(contactEmail)}", ARRAYJOIN({Contact Name}))`)
+          parts.push(`FIND("${esc(contactEmail)}", ARRAYJOIN({Related Contact}))`)
+        }
+
+        const formulaByNameOrEmail =
+          parts.length
+            ? `AND({Owner Email}="${email}", OR(${parts.join(",")}))`
+            : `{Owner Email}="${email}"`
+
+        records = await fetchAllAirtableRecords("Activities", {
+          filterByFormula: formulaByNameOrEmail
         })
-
-        records.sort(
-          (a, b) =>
-            new Date(a.fields?.["Activity Date"] || 0) <
-            new Date(b.fields?.["Activity Date"] || 0)
-              ? 1
-              : -1
-        )
-
-        return res.status(200).json({ records })
-      } catch (e) {
-        return res
-          .status(e.status || 500)
-          .json({
-            error: "Failed to fetch activities",
-            details: e.details || String(e.message || e)
-          })
       }
     }
+
+    // orden por fecha (date-only) + fallback createdTime
+    records.sort((a, b) => {
+      const ad = a?.fields?.["Activity Date"]
+        ? new Date(a.fields["Activity Date"])
+        : new Date(a?.createdTime || 0)
+
+      const bd = b?.fields?.["Activity Date"]
+        ? new Date(b.fields["Activity Date"])
+        : new Date(b?.createdTime || 0)
+
+      return bd - ad
+    })
+
+    return res.status(200).json({ records })
+  } catch (e) {
+    return res
+      .status(e.status || 500)
+      .json({ error: "Failed to fetch activities", details: e.details || String(e.message || e) })
+  }
+}
+
 
     /* =====================================================
        GET CALENDAR
