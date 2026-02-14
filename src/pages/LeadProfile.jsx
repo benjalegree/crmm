@@ -78,6 +78,23 @@ export default function LeadProfile() {
     }
   }
 
+  // ✅ Normaliza Activity fields para que el UI siempre encuentre lo mismo
+  const normalizeActivity = (rec) => {
+    if (!rec) return rec
+    const f = rec.fields || {}
+    return {
+      ...rec,
+      fields: {
+        ...f,
+        // Outcome es el principal en tu base, pero fallback por si cambia
+        __Outcome: f.Outcome ?? f["Activity Type"] ?? f["Activity_Type"] ?? "",
+        __Notes: f.Notes ?? f["Notas"] ?? f["Observaciones"] ?? "",
+        __ActivityDate: f["Activity Date"] ?? f["ActivityDate"] ?? "",
+        __NextFollowUp: f["Next Follow-up Date"] ?? f["Next Follow Up Date"] ?? ""
+      }
+    }
+  }
+
   const toDateInputValue = (val) => {
     if (!val) return ""
     const s = String(val).trim()
@@ -185,7 +202,8 @@ export default function LeadProfile() {
         return
       }
 
-      setActivities(data.records || [])
+      const recs = (data.records || []).map(normalizeActivity)
+      setActivities(recs)
       setLoadingActs(false)
     } catch (e) {
       if (!mountedRef.current) return
@@ -246,10 +264,9 @@ export default function LeadProfile() {
       }
 
       setSaveMsg("Guardado ✅")
-
       const ctrl = new AbortController()
       await loadLead(ctrl.signal)
-    } catch (err) {
+    } catch {
       setSaveErr("Failed to update contact")
     }
 
@@ -262,6 +279,21 @@ export default function LeadProfile() {
     setCreating(true)
     setActMsg("")
     setActErr("")
+
+    // ✅ optimistic bubble (para que aparezca instantáneo)
+    const optimisticId = `tmp_${Date.now()}`
+    const optimistic = normalizeActivity({
+      id: optimisticId,
+      fields: {
+        Outcome: activityType,
+        Notes: activityNotes || "",
+        "Activity Date": normalizeDateForApi(new Date()),
+        "Next Follow-up Date": normalizeDateForApi(nextFollowUp) || ""
+      },
+      createdTime: new Date().toISOString()
+    })
+
+    setActivities((prev) => [optimistic, ...(prev || [])])
 
     try {
       const res = await fetch(`/api/crm?action=createActivity`, {
@@ -279,18 +311,29 @@ export default function LeadProfile() {
       const data = await readJson(res)
 
       if (!res.ok) {
+        // si falla, removemos la optimistic
+        setActivities((prev) => (prev || []).filter((x) => x.id !== optimisticId))
         setActErr(safeErrMsg(data, "Failed to create activity"))
         setCreating(false)
         return
       }
 
+      // ✅ reemplaza optimistic por la real
+      const real = normalizeActivity(data)
+      setActivities((prev) => {
+        const filtered = (prev || []).filter((x) => x.id !== optimisticId)
+        return [real, ...filtered]
+      })
+
       setActivityNotes("")
       setNextFollowUp("")
       setActMsg("Actividad guardada ✅")
 
+      // ✅ refresco definitivo (por si Airtable agrega lookups / formulas)
       const ctrl = new AbortController()
       await loadActivities(ctrl.signal)
     } catch {
+      setActivities((prev) => (prev || []).filter((x) => x.id !== optimisticId))
       setActErr("Failed to create activity")
     }
 
@@ -298,8 +341,8 @@ export default function LeadProfile() {
   }
 
   const computedNextFollowUp = useMemo(() => {
-    const withNFU = (activities || []).find((a) => a?.fields?.["Next Follow-up Date"])
-    return withNFU?.fields?.["Next Follow-up Date"] || ""
+    const withNFU = (activities || []).find((a) => a?.fields?.__NextFollowUp)
+    return withNFU?.fields?.__NextFollowUp || ""
   }, [activities])
 
   const statusPill = useMemo(() => {
@@ -479,28 +522,25 @@ export default function LeadProfile() {
           ) : !activities.length ? (
             <div style={muted}>No activities yet.</div>
           ) : (
-            activities.map((a) => {
-              const outcome = a.fields?.Outcome ?? a.fields?.["Activity Type"] ?? "-"
-              return (
-                <div key={a.id} style={timelineItem}>
-                  <div style={dot} />
-                  <div>
-                    <strong>{outcome}</strong>
-                    <div style={note}>{a.fields?.Notes || ""}</div>
+            activities.map((a) => (
+              <div key={a.id} style={timelineItem}>
+                <div style={dot} />
+                <div>
+                  <strong>{a.fields?.__Outcome || "-"}</strong>
+                  <div style={note}>{a.fields?.__Notes || ""}</div>
 
-                    {a.fields?.["Next Follow-up Date"] ? (
-                      <small style={date}>
-                        Next FU: {toDateInputValue(a.fields?.["Next Follow-up Date"])}
-                      </small>
-                    ) : null}
-
+                  {a.fields?.__NextFollowUp ? (
                     <small style={date}>
-                      {toDateInputValue(a.fields?.["Activity Date"] || "")}
+                      Next FU: {toDateInputValue(a.fields.__NextFollowUp)}
                     </small>
-                  </div>
+                  ) : null}
+
+                  <small style={date}>
+                    {toDateInputValue(a.fields?.__ActivityDate || a.createdTime || "")}
+                  </small>
                 </div>
-              )
-            })
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -510,10 +550,20 @@ export default function LeadProfile() {
 
 /* styles */
 const page = { width: "100%" }
-const headerRow = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }
+const headerRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 18
+}
 const topRight = { display: "flex", alignItems: "center", gap: 12 }
 const title = { fontSize: 34, fontWeight: 800, margin: 0, color: "#0f3d2e" }
-const pill = { fontSize: 12, padding: "6px 10px", borderRadius: 999, background: "rgba(0,0,0,0.06)" }
+const pill = {
+  fontSize: 12,
+  padding: "6px 10px",
+  borderRadius: 999,
+  background: "rgba(0,0,0,0.06)"
+}
 const mutedSmall = { fontSize: 12, color: "rgba(0,0,0,0.5)" }
 const grid = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 26 }
 const card = {
@@ -529,15 +579,70 @@ const card = {
 }
 const h3 = { margin: 0, fontSize: 18, fontWeight: 800, color: "#145c43" }
 const label = { fontSize: 12, color: "rgba(0,0,0,0.6)", marginTop: 6 }
-const input = { padding: 12, borderRadius: 14, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.8)" }
-const textarea = { padding: 12, borderRadius: 14, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.8)", resize: "vertical" }
-const btn = { marginTop: 10, padding: 14, borderRadius: 14, border: "none", background: "#111", color: "#fff", fontWeight: 800, cursor: "pointer" }
-const errBox = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(255,0,0,0.08)", color: "#7a1d1d", border: "1px solid rgba(255,0,0,0.12)" }
-const okBox = { marginTop: 10, padding: 12, borderRadius: 14, background: "rgba(0,200,120,0.10)", color: "#0f5132", border: "1px solid rgba(0,200,120,0.16)" }
-const timelineHeader = { marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }
-const miniBtn = { padding: "8px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.1)", background: "rgba(255,255,255,0.8)", fontWeight: 800, cursor: "pointer", fontSize: 12 }
+const input = {
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid rgba(0,0,0,0.08)",
+  background: "rgba(255,255,255,0.8)"
+}
+const textarea = {
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid rgba(0,0,0,0.08)",
+  background: "rgba(255,255,255,0.8)",
+  resize: "vertical"
+}
+const btn = {
+  marginTop: 10,
+  padding: 14,
+  borderRadius: 14,
+  border: "none",
+  background: "#111",
+  color: "#fff",
+  fontWeight: 800,
+  cursor: "pointer"
+}
+const errBox = {
+  marginTop: 10,
+  padding: 12,
+  borderRadius: 14,
+  background: "rgba(255,0,0,0.08)",
+  color: "#7a1d1d",
+  border: "1px solid rgba(255,0,0,0.12)"
+}
+const okBox = {
+  marginTop: 10,
+  padding: 12,
+  borderRadius: 14,
+  background: "rgba(0,200,120,0.10)",
+  color: "#0f5132",
+  border: "1px solid rgba(0,200,120,0.16)"
+}
+const timelineHeader = {
+  marginTop: 18,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center"
+}
+const miniBtn = {
+  padding: "8px 10px",
+  borderRadius: 12,
+  border: "1px solid rgba(0,0,0,0.1)",
+  background: "rgba(255,255,255,0.8)",
+  fontWeight: 800,
+  cursor: "pointer",
+  fontSize: 12
+}
 const muted = { marginTop: 10, fontSize: 13, color: "rgba(0,0,0,0.55)" }
-const timelineItem = { display: "flex", gap: 12, padding: 14, borderRadius: 18, background: "rgba(255,255,255,0.65)", border: "1px solid rgba(0,0,0,0.06)", marginTop: 10 }
+const timelineItem = {
+  display: "flex",
+  gap: 12,
+  padding: 14,
+  borderRadius: 18,
+  background: "rgba(255,255,255,0.65)",
+  border: "1px solid rgba(0,0,0,0.06)",
+  marginTop: 10
+}
 const dot = { width: 10, height: 10, borderRadius: 999, marginTop: 6, background: "#145c43" }
 const note = { marginTop: 6, fontSize: 13, color: "rgba(0,0,0,0.75)" }
 const date = { display: "block", marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.55)" }
