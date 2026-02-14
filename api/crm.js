@@ -61,15 +61,11 @@ export default async function handler(req, res) {
         : "HttpOnly; SameSite=Lax; Path=/"
 
     const normalizeDate = (val) => {
-      // devuelve "YYYY-MM-DD" o null
       const v = String(val || "").trim()
       if (!v) return null
-
       if (v.length >= 10 && v[4] === "-" && v[7] === "-") return v.slice(0, 10)
-
       const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
       if (m) return `${m[3]}-${m[2]}-${m[1]}`
-
       const d = new Date(v)
       if (Number.isNaN(d.getTime())) return null
       const yyyy = d.getFullYear()
@@ -78,19 +74,16 @@ export default async function handler(req, res) {
       return `${yyyy}-${mm}-${dd}`
     }
 
-    // Airtable list con paginación offset
     const fetchAllAirtableRecords = async (tableName, params = {}) => {
       const out = []
       let offset = null
 
       while (true) {
         const usp = new URLSearchParams()
-
         Object.entries(params).forEach(([k, v]) => {
           if (v === undefined || v === null || v === "") return
           usp.set(k, v)
         })
-
         if (offset) usp.set("offset", offset)
 
         const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(
@@ -119,7 +112,6 @@ export default async function handler(req, res) {
       return record.fields["Responsible Email"] !== email
     }
 
-    // ✅ helper: elige el nombre real del campo en Airtable
     const pickExistingFieldName = (existingFields, candidates = []) => {
       const keys = new Set(Object.keys(existingFields || {}))
       for (const c of candidates) {
@@ -128,7 +120,6 @@ export default async function handler(req, res) {
       return null
     }
 
-    // ✅ arma fields para PATCH sin romper si no existe el campo
     const buildSafeContactPatchFields = (existingFields, incoming = {}) => {
       const out = {}
 
@@ -170,19 +161,13 @@ export default async function handler(req, res) {
       }
 
       if ("LinkedIn URL" in incoming) {
-        const k = pickExistingFieldName(existingFields, [
-          "LinkedIn URL",
-          "LinkedIn",
-          "Linkedin"
-        ])
+        const k = pickExistingFieldName(existingFields, ["LinkedIn URL", "LinkedIn", "Linkedin"])
         if (k) out[k] = String(incoming["LinkedIn URL"] || "")
       }
 
-      // 🚫 NO guardamos Next Follow-up Date en Contacts
       return out
     }
 
-    // ✅ CREATE (POST) con fallbacks por nombres de campos
     const createWithFallbacks = async (table, fields) => {
       const attempt = async (payloadFields) => {
         const r = await fetch(`https://api.airtable.com/v0/${baseId}/${table}`, {
@@ -194,16 +179,12 @@ export default async function handler(req, res) {
         return { ok: r.ok, status: r.status, data }
       }
 
-      // 1) intento directo
       let r1 = await attempt(fields)
       if (r1.ok) return r1
 
       const type = r1.data?.error?.type
-
-      // Si el error es por campo desconocido o valor inválido, probamos variantes
       const variants = []
 
-      // ✅ Outcome vs Activity Type (tu tabla usa Outcome)
       if (Object.prototype.hasOwnProperty.call(fields, "Outcome")) {
         const base = { ...fields }
         const val = base.Outcome
@@ -217,39 +198,26 @@ export default async function handler(req, res) {
         variants.push({ ...base, Outcome: val })
       }
 
-      // ✅ Activity Date: si mandaron datetime y era date-only, forzamos YYYY-MM-DD
       if (Object.prototype.hasOwnProperty.call(fields, "Activity Date")) {
         const base = { ...fields }
         base["Activity Date"] = normalizeDate(base["Activity Date"])
         variants.push(base)
       }
 
-      // ✅ Notes variantes (por si)
       if (Object.prototype.hasOwnProperty.call(fields, "Notes")) {
         const base = { ...fields }
         const val = base.Notes
         delete base.Notes
-        variants.push({ ...base, "Notas": val })
-        variants.push({ ...base, "Observaciones": val })
+        variants.push({ ...base, Notas: val })
+        variants.push({ ...base, Observaciones: val })
       }
 
-      // ✅ Owner Email variantes (por si)
-      if (Object.prototype.hasOwnProperty.call(fields, "Owner Email")) {
-        const base = { ...fields }
-        const val = base["Owner Email"]
-        delete base["Owner Email"]
-        variants.push({ ...base, "Responsible Email": val })
-        variants.push({ ...base, "Responsible": val })
-      }
-
-      // Si el error original no era de campos/valores, igual probamos 1 ronda
       if (type === "UNKNOWN_FIELD_NAME" || type === "INVALID_VALUE_FOR_COLUMN") {
         for (const v of variants) {
           const rx = await attempt(v)
           if (rx.ok) return rx
         }
       } else {
-        // probamos igual 1 fallback clave Outcome <-> Activity Type
         for (const v of variants.slice(0, 2)) {
           const rx = await attempt(v)
           if (rx.ok) return rx
@@ -316,121 +284,13 @@ export default async function handler(req, res) {
     if (action === "getCompanies") {
       try {
         const formula = `{Responsible Email}="${email}"`
-        const records = await fetchAllAirtableRecords("Companies", {
-          filterByFormula: formula
-        })
+        const records = await fetchAllAirtableRecords("Companies", { filterByFormula: formula })
         return res.status(200).json({ records })
       } catch (e) {
-        return res
-          .status(e.status || 500)
-          .json({
-            error: "Failed to fetch companies",
-            details: e.details || String(e.message || e)
-          })
-      }
-    }
-
-    /* =====================================================
-       GET COMPANY
-    ====================================================== */
-
-    if (action === "getCompany") {
-      const { id } = req.query
-      if (!id) return res.status(400).json({ error: "Missing company ID" })
-
-      const r = await fetch(`https://api.airtable.com/v0/${baseId}/Companies/${id}`, {
-        headers: AIRTABLE_HEADERS
-      })
-      const data = await readJson(r)
-
-      if (!r.ok) {
-        return res.status(r.status).json({ error: "Company not found", details: data })
-      }
-
-      if (forbidIfNotOwner(data, email)) {
-        return res.status(403).json({ error: "Forbidden" })
-      }
-
-      return res.status(200).json(data)
-    }
-
-    /* =====================================================
-       UPDATE COMPANY
-    ====================================================== */
-
-    if (action === "updateCompany") {
-      const { id, fields } = body
-      if (!id || !fields) return res.status(400).json({ error: "Missing data" })
-
-      const check = await fetch(`https://api.airtable.com/v0/${baseId}/Companies/${id}`, {
-        headers: AIRTABLE_HEADERS
-      })
-      const existing = await readJson(check)
-      if (!check.ok) {
-        return res.status(check.status).json({ error: "Company not found", details: existing })
-      }
-      if (forbidIfNotOwner(existing, email)) {
-        return res.status(403).json({ error: "Forbidden" })
-      }
-
-      const r = await fetch(`https://api.airtable.com/v0/${baseId}/Companies/${id}`, {
-        method: "PATCH",
-        headers: AIRTABLE_HEADERS,
-        body: JSON.stringify({ fields })
-      })
-      const data = await readJson(r)
-
-      if (!r.ok) {
-        return res.status(r.status).json({ error: "Failed to update company", details: data })
-      }
-
-      return res.status(200).json(data)
-    }
-
-    /* =====================================================
-       GET CONTACTS (ENRICHED)
-    ====================================================== */
-
-    if (action === "getContacts") {
-      try {
-        const formula = `{Responsible Email}="${email}"`
-        const contacts = await fetchAllAirtableRecords("Contacts", {
-          filterByFormula: formula
+        return res.status(e.status || 500).json({
+          error: "Failed to fetch companies",
+          details: e.details || String(e.message || e)
         })
-
-        let companies = []
-        try {
-          companies = await fetchAllAirtableRecords("Companies")
-        } catch {
-          companies = []
-        }
-
-        const companiesMap = {}
-        companies.forEach((c) => {
-          companiesMap[c.id] = c.fields || {}
-        })
-
-        const enrichedContacts = contacts.map((contact) => {
-          const companyId = contact.fields?.Company?.[0]
-          const companyData = companyId ? companiesMap[companyId] : null
-
-          return {
-            ...contact,
-            fields: {
-              ...contact.fields,
-              CompanyWebsite: companyData?.Website || ""
-            }
-          }
-        })
-
-        return res.status(200).json({ records: enrichedContacts })
-      } catch (e) {
-        return res
-          .status(e.status || 500)
-          .json({
-            error: "Failed to fetch contacts",
-            details: e.details || String(e.message || e)
-          })
       }
     }
 
@@ -447,13 +307,8 @@ export default async function handler(req, res) {
       })
       const data = await readJson(r)
 
-      if (!r.ok) {
-        return res.status(r.status).json({ error: "Contact not found", details: data })
-      }
-
-      if (forbidIfNotOwner(data, email)) {
-        return res.status(403).json({ error: "Forbidden" })
-      }
+      if (!r.ok) return res.status(r.status).json({ error: "Contact not found", details: data })
+      if (forbidIfNotOwner(data, email)) return res.status(403).json({ error: "Forbidden" })
 
       return res.status(200).json(data)
     }
@@ -470,12 +325,8 @@ export default async function handler(req, res) {
         headers: AIRTABLE_HEADERS
       })
       const existing = await readJson(check)
-      if (!check.ok) {
-        return res.status(check.status).json({ error: "Contact not found", details: existing })
-      }
-      if (forbidIfNotOwner(existing, email)) {
-        return res.status(403).json({ error: "Forbidden" })
-      }
+      if (!check.ok) return res.status(check.status).json({ error: "Contact not found", details: existing })
+      if (forbidIfNotOwner(existing, email)) return res.status(403).json({ error: "Forbidden" })
 
       const safePatchFields = buildSafeContactPatchFields(existing.fields || {}, fields)
 
@@ -490,18 +341,12 @@ export default async function handler(req, res) {
       })
       const data = await readJson(r)
 
-      if (!r.ok) {
-        return res.status(r.status).json({ error: "Failed to update contact", details: data })
-      }
-
+      if (!r.ok) return res.status(r.status).json({ error: "Failed to update contact", details: data })
       return res.status(200).json(data)
     }
 
     /* =====================================================
-       CREATE ACTIVITY ✅✅ ARREGLADO PARA TU BASE
-       - Escribe en Outcome (como tu tabla)
-       - Activity Date como YYYY-MM-DD (date-only)
-       - Next Follow-up Date ok
+       CREATE ACTIVITY ✅ (Outcome + date-only)
     ====================================================== */
 
     if (action === "createActivity") {
@@ -511,7 +356,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Missing required fields" })
       }
 
-      // validar ownership + company recXXX
+      // validar ownership
       const contactRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
         { headers: AIRTABLE_HEADERS }
@@ -530,20 +375,13 @@ export default async function handler(req, res) {
       }
 
       const rawCompany = contactData.fields?.Company
-      const candidate =
-        Array.isArray(rawCompany) && rawCompany.length > 0 ? rawCompany[0] : null
-
-      const linkedCompanyId =
-        typeof candidate === "string" && candidate.startsWith("rec") ? candidate : null
-
-      // ✅ IMPORTANTE: Activity Date date-only
-      const activityDate = normalizeDate(new Date())
+      const candidate = Array.isArray(rawCompany) && rawCompany.length > 0 ? rawCompany[0] : null
+      const linkedCompanyId = typeof candidate === "string" && candidate.startsWith("rec") ? candidate : null
 
       const fieldsToSend = {
-        // ✅ Tu tabla usa Outcome (según captura)
         Outcome: String(type),
         "Related Contact": [contactId],
-        "Activity Date": activityDate,
+        "Activity Date": normalizeDate(new Date()),
         "Owner Email": email,
         Notes: String(notes || "")
       }
@@ -551,11 +389,8 @@ export default async function handler(req, res) {
       const nfu = normalizeDate(nextFollowUp)
       if (nfu) fieldsToSend["Next Follow-up Date"] = nfu
 
-      if (linkedCompanyId) {
-        fieldsToSend["Related Company"] = [linkedCompanyId]
-      }
+      if (linkedCompanyId) fieldsToSend["Related Company"] = [linkedCompanyId]
 
-      // ✅ create robusto con fallbacks (Outcome <-> Activity Type, fechas, etc)
       const r = await createWithFallbacks("Activities", fieldsToSend)
 
       if (!r.ok) {
@@ -569,172 +404,102 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       GET ACTIVITIES
+       GET ACTIVITIES ✅✅ SUPER ROBUSTO
+       - Trae por Owner Email y filtra en backend por contacto
+       - Evita el bug de filterByFormula con ARRAYJOIN / lookups
     ====================================================== */
 
-if (action === "getActivities") {
-  const { contactId } = req.query
-  if (!contactId) return res.status(400).json({ error: "Missing contact ID" })
+    if (action === "getActivities") {
+      const { contactId } = req.query
+      if (!contactId) return res.status(400).json({ error: "Missing contact ID" })
 
-  try {
-    // 1) intento original (por recordId) — a veces no matchea por como Airtable evalúa linked fields
-    const formulaById = `AND(FIND("${contactId}", ARRAYJOIN({Related Contact})), {Owner Email}="${email}")`
-    let records = await fetchAllAirtableRecords("Activities", {
-      filterByFormula: formulaById
-    })
+      try {
+        // 1) Traemos el contacto (para validar owner y tener nombre como fallback)
+        const contactRes = await fetch(`https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`, {
+          headers: AIRTABLE_HEADERS
+        })
+        const contactData = await readJson(contactRes)
 
-    // 2) fallback: buscar nombre/email del contacto y filtrar por lookup/texto
-    if (!records.length) {
-      const cRes = await fetch(
-        `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
-        { headers: AIRTABLE_HEADERS }
-      )
-      const cData = await readJson(cRes)
+        if (!contactRes.ok) {
+          return res.status(contactRes.status).json({ error: "Contact not found", details: contactData })
+        }
+        if (contactData.fields?.["Responsible Email"] !== email) {
+          return res.status(403).json({ error: "Forbidden" })
+        }
 
-      if (cRes.ok) {
-        const fullName =
-          cData?.fields?.["Full Name"] ||
-          cData?.fields?.Name ||
-          cData?.fields?.["Contact Name"] ||
+        const contactName =
+          contactData.fields?.["Full Name"] ||
+          contactData.fields?.["Name"] ||
+          contactData.fields?.["Contact Name"] ||
           ""
 
-        const contactEmail = cData?.fields?.Email || ""
+        // 2) Traemos TODAS las activities del owner
+        const ownerFormula = `{Owner Email}="${email}"`
+        const all = await fetchAllAirtableRecords("Activities", { filterByFormula: ownerFormula })
 
-        const esc = (s) => String(s || "").replace(/"/g, '\\"')
+        // 3) Filtramos por contacto en backend (ID y fallback por nombre)
+        const filtered = (all || []).filter((rec) => {
+          const f = rec.fields || {}
+          const rel = f["Related Contact"]
 
-        const parts = []
-        if (fullName) {
-          // Contact Name suele ser lookup, por eso ARRAYJOIN
-          parts.push(`FIND("${esc(fullName)}", ARRAYJOIN({Contact Name}))`)
-          parts.push(`FIND("${esc(fullName)}", ARRAYJOIN({Related Contact}))`)
-        }
-        if (contactEmail) {
-          parts.push(`FIND("${esc(contactEmail)}", ARRAYJOIN({Contact Name}))`)
-          parts.push(`FIND("${esc(contactEmail)}", ARRAYJOIN({Related Contact}))`)
-        }
+          // Caso normal: Airtable devuelve array de recordIds ["rec..."]
+          if (Array.isArray(rel) && rel.includes(contactId)) return true
 
-        const formulaByNameOrEmail =
-          parts.length
-            ? `AND({Owner Email}="${email}", OR(${parts.join(",")}))`
-            : `{Owner Email}="${email}"`
+          // Fallback: a veces es lookup / string / otro formato
+          const relStr = Array.isArray(rel) ? rel.join(" ") : String(rel || "")
+          if (relStr.includes(contactId)) return true
 
-        records = await fetchAllAirtableRecords("Activities", {
-          filterByFormula: formulaByNameOrEmail
+          // Fallback por nombre (si tu view devuelve nombres)
+          if (contactName && relStr.toLowerCase().includes(String(contactName).toLowerCase())) return true
+
+          return false
+        })
+
+        // 4) Orden: más nuevas primero (por Activity Date date-only)
+        filtered.sort((a, b) => {
+          const da = new Date(a.fields?.["Activity Date"] || 0).getTime()
+          const db = new Date(b.fields?.["Activity Date"] || 0).getTime()
+          return db - da
+        })
+
+        return res.status(200).json({ records: filtered })
+      } catch (e) {
+        return res.status(e.status || 500).json({
+          error: "Failed to fetch activities",
+          details: e.details || String(e.message || e)
         })
       }
     }
 
-    // orden por fecha (date-only) + fallback createdTime
-    records.sort((a, b) => {
-      const ad = a?.fields?.["Activity Date"]
-        ? new Date(a.fields["Activity Date"])
-        : new Date(a?.createdTime || 0)
+    /* =====================================================
+       GET CONTACTS (si lo usás)
+    ====================================================== */
 
-      const bd = b?.fields?.["Activity Date"]
-        ? new Date(b.fields["Activity Date"])
-        : new Date(b?.createdTime || 0)
-
-      return bd - ad
-    })
-
-    return res.status(200).json({ records })
-  } catch (e) {
-    return res
-      .status(e.status || 500)
-      .json({ error: "Failed to fetch activities", details: e.details || String(e.message || e) })
-  }
-}
-
+    if (action === "getContacts") {
+      try {
+        const formula = `{Responsible Email}="${email}"`
+        const contacts = await fetchAllAirtableRecords("Contacts", { filterByFormula: formula })
+        return res.status(200).json({ records: contacts })
+      } catch (e) {
+        return res.status(e.status || 500).json({
+          error: "Failed to fetch contacts",
+          details: e.details || String(e.message || e)
+        })
+      }
+    }
 
     /* =====================================================
-       GET CALENDAR
+       GET CALENDAR (si lo usás)
     ====================================================== */
 
     if (action === "getCalendar") {
       try {
         const formula = `{Owner Email}="${email}"`
-        const records = await fetchAllAirtableRecords("Activities", {
-          filterByFormula: formula
-        })
+        const records = await fetchAllAirtableRecords("Activities", { filterByFormula: formula })
         return res.status(200).json({ records })
       } catch (e) {
-        return res
-          .status(e.status || 500)
-          .json({
-            error: "Failed to fetch calendar",
-            details: e.details || String(e.message || e)
-          })
-      }
-    }
-
-    /* =====================================================
-       DASHBOARD STATS (tu lógica)
-    ====================================================== */
-
-    if (action === "getDashboardStats") {
-      try {
-        const contacts = await fetchAllAirtableRecords("Contacts", {
-          filterByFormula: `{Responsible Email}="${email}"`
-        })
-
-        const totalLeads = contacts.length
-
-        const activeLeads = contacts.filter((c) => c.fields?.Status !== "Closed Lost").length
-        const meetingsBooked = contacts.filter((c) => c.fields?.Status === "Meeting Booked").length
-        const closedWon = contacts.filter((c) => c.fields?.Status === "Closed Won").length
-
-        const conversionRate =
-          totalLeads > 0 ? ((closedWon / totalLeads) * 100).toFixed(1) : 0
-
-        const winRate =
-          meetingsBooked > 0 ? ((closedWon / meetingsBooked) * 100).toFixed(1) : 0
-
-        let atRiskLeads = 0
-        let coolingLeads = 0
-        let leadsWithoutFollowUp = 0
-        let totalDaysWithoutContact = 0
-        let countedLeads = 0
-
-        const now = new Date()
-
-        contacts.forEach((contact) => {
-          const lastActivity = contact.fields?.["Last Activity Date"]
-          const nextFollowUp = contact.fields?.["Next Follow-up Date"]
-
-          if (!nextFollowUp) {
-            leadsWithoutFollowUp++
-          }
-
-          if (lastActivity) {
-            const diffTime = Math.abs(now - new Date(lastActivity))
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-
-            totalDaysWithoutContact += diffDays
-            countedLeads++
-
-            if (diffDays >= 7) atRiskLeads++
-            else if (diffDays >= 5) coolingLeads++
-          }
-        })
-
-        const avgDaysWithoutContact =
-          countedLeads > 0 ? (totalDaysWithoutContact / countedLeads).toFixed(1) : 0
-
-        return res.status(200).json({
-          totalLeads,
-          activeLeads,
-          meetingsBooked,
-          closedWon,
-          conversionRate,
-          winRate,
-          atRiskLeads,
-          coolingLeads,
-          leadsWithoutFollowUp,
-          avgDaysWithoutContact
-        })
-      } catch (e) {
-        return res.status(500).json({
-          error: "Failed to load dashboard stats",
+        return res.status(e.status || 500).json({
+          error: "Failed to fetch calendar",
           details: e.details || String(e.message || e)
         })
       }
