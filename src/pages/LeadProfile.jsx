@@ -12,6 +12,7 @@ export default function LeadProfile() {
   const [activityType, setActivityType] = useState("Call")
   const [activityNotes, setActivityNotes] = useState("")
   const [nextFollowUp, setNextFollowUp] = useState("")
+  const [activityErr, setActivityErr] = useState("")
 
   useEffect(() => {
     loadLead()
@@ -67,51 +68,84 @@ export default function LeadProfile() {
     setLoading(false)
   }
 
-const createActivity = async () => {
+  const createActivity = async () => {
+    setActivityErr("")
 
-  if (!activityType) return
-
-  const res = await fetch("/api/crm?action=createActivity", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
-      contactId: id,
-      type: activityType,
-      notes: activityNotes,
-      nextFollowUp: nextFollowUp || null
+    const res = await fetch("/api/crm?action=createActivity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        contactId: id,
+        type: activityType,
+        notes: activityNotes,
+        nextFollowUp: nextFollowUp || null
+      })
     })
-  })
 
-  if (res.ok) {
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      console.error("CREATE ACTIVITY FRONT ERROR:", data)
+      setActivityErr(data?.error || "Failed to create activity")
+      return
+    }
+
     setActivityNotes("")
     setNextFollowUp("")
     loadActivities()
-  } else {
-    console.error("Failed to create activity")
   }
-}
 
   if (!lead) return null
 
   const f = lead.fields
 
   return (
-    <div style={{ width: "100%" }}>
+    <div style={page}>
 
-      <h1 style={{ fontSize: 28, marginBottom: 30 }}>{f["Full Name"]}</h1>
+      <h1 style={title}>{f["Full Name"]}</h1>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
+      <div style={grid}>
 
+        {/* LEFT COLUMN */}
         <div style={glassCard}>
-          <h3>Contact Info</h3>
 
-          <input style={input} value={f.Email || ""} onChange={e => updateField("Email", e.target.value)} />
-          <input style={input} value={f["Numero de telefono"] || ""} onChange={e => updateField("Numero de telefono", e.target.value)} />
-          <input style={input} value={f.Position || ""} onChange={e => updateField("Position", e.target.value)} />
-          <input style={input} value={f["LinkedIn URL"] || ""} onChange={e => updateField("LinkedIn URL", e.target.value)} />
+          <h3 style={sectionTitle}>Contact Info</h3>
 
-          <select style={input} value={f.Status || ""} onChange={e => updateField("Status", e.target.value)}>
+          <label>Email</label>
+          <input
+            value={f.Email || ""}
+            onChange={e => updateField("Email", e.target.value)}
+            style={input}
+          />
+
+          <label>Phone</label>
+          <input
+            value={f["Numero de telefono"] || ""}
+            onChange={e => updateField("Numero de telefono", e.target.value)}
+            style={input}
+          />
+
+          <label>Position</label>
+          <input
+            value={f.Position || ""}
+            onChange={e => updateField("Position", e.target.value)}
+            style={input}
+          />
+
+          <label>LinkedIn</label>
+          <input
+            value={f["LinkedIn URL"] || ""}
+            onChange={e => updateField("LinkedIn URL", e.target.value)}
+            style={input}
+          />
+
+          <label>Status</label>
+          <select
+            value={f.Status || ""}
+            onChange={e => updateField("Status", e.target.value)}
+            style={input}
+          >
             <option>Not Contacted</option>
             <option>Contacted</option>
             <option>Replied</option>
@@ -120,22 +154,30 @@ const createActivity = async () => {
             <option>Closed Lost</option>
           </select>
 
+          <label>Notes</label>
           <textarea
             rows="4"
-            style={input}
             value={f.Notes || ""}
             onChange={e => updateField("Notes", e.target.value)}
+            style={input}
           />
 
-          <button style={btn} onClick={saveChanges}>
+          <button style={saveBtn} onClick={saveChanges}>
             {loading ? "Saving..." : "Save Changes"}
           </button>
+
         </div>
 
+        {/* RIGHT COLUMN */}
         <div style={glassCard}>
-          <h3>Add Activity</h3>
 
-          <select style={input} value={activityType} onChange={e => setActivityType(e.target.value)}>
+          <h3 style={sectionTitle}>Add Activity</h3>
+
+          <select
+            value={activityType}
+            onChange={e => setActivityType(e.target.value)}
+            style={input}
+          >
             <option>Call</option>
             <option>Email</option>
             <option>LinkedIn</option>
@@ -143,38 +185,70 @@ const createActivity = async () => {
           </select>
 
           <textarea
+            placeholder="Activity notes..."
             rows="3"
-            style={input}
             value={activityNotes}
             onChange={e => setActivityNotes(e.target.value)}
-            placeholder="Activity notes..."
+            style={input}
           />
 
           <input
             type="date"
-            style={input}
             value={nextFollowUp}
             onChange={e => setNextFollowUp(e.target.value)}
+            style={input}
           />
 
-          <button style={btn} onClick={createActivity}>
+          <button style={saveBtn} onClick={createActivity}>
             Add Activity
           </button>
+
+          {activityErr && (
+            <div style={errBox}>
+              {activityErr}
+            </div>
+          )}
 
           <h3 style={{ marginTop: 40 }}>Activity Timeline</h3>
 
           {activities.map(activity => (
             <div key={activity.id} style={timelineItem}>
-              <strong>{activity.fields["Activity Type"]}</strong>
-              <p>{activity.fields.Notes}</p>
-              <small>{activity.fields["Activity Date"]}</small>
+              <div style={timelineDot} />
+              <div>
+                <strong>{activity.fields["Activity Type"]}</strong>
+                <p>{activity.fields.Notes}</p>
+                <small>{activity.fields["Activity Date"]}</small>
+              </div>
             </div>
           ))}
+
         </div>
 
       </div>
+
     </div>
   )
+}
+
+/* ===================== */
+/* STYLES */
+/* ===================== */
+
+const page = {
+  width: "100%"
+}
+
+const title = {
+  fontSize: 30,
+  fontWeight: 700,
+  color: "#0f3d2e",
+  marginBottom: 30
+}
+
+const grid = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 30
 }
 
 const glassCard = {
@@ -183,30 +257,61 @@ const glassCard = {
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(40px)",
   border: "1px solid rgba(255,255,255,0.4)",
+  boxShadow: "0 8px 30px rgba(0,0,0,0.05)",
   display: "flex",
   flexDirection: "column",
   gap: 15
+}
+
+const sectionTitle = {
+  marginBottom: 10,
+  fontWeight: 600,
+  color: "#145c43"
 }
 
 const input = {
   padding: 12,
   borderRadius: 16,
   border: "1px solid rgba(0,0,0,0.05)",
-  background: "rgba(255,255,255,0.8)"
+  background: "rgba(255,255,255,0.7)",
+  outline: "none"
 }
 
-const btn = {
+const saveBtn = {
+  marginTop: 15,
   padding: "12px 20px",
   borderRadius: 20,
   border: "none",
   background: "#145c43",
   color: "#fff",
+  fontWeight: 500,
   cursor: "pointer"
 }
 
 const timelineItem = {
+  display: "flex",
+  gap: 15,
   marginTop: 15,
   padding: 15,
   borderRadius: 20,
-  background: "rgba(255,255,255,0.6)"
+  background: "rgba(255,255,255,0.6)",
+  backdropFilter: "blur(20px)"
+}
+
+const timelineDot = {
+  width: 12,
+  height: 12,
+  borderRadius: "50%",
+  background: "#145c43",
+  marginTop: 6
+}
+
+const errBox = {
+  marginTop: 10,
+  padding: "10px 12px",
+  borderRadius: 14,
+  background: "rgba(255, 59, 48, 0.12)",
+  border: "1px solid rgba(255, 59, 48, 0.25)",
+  color: "#b42318",
+  fontWeight: 600
 }
