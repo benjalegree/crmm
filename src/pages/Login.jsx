@@ -7,194 +7,381 @@ export default function Login() {
   const [error, setError] = useState("")
   const navigate = useNavigate()
 
-  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email])
-
-  const isValidEmail = useMemo(() => {
-    if (!normalizedEmail) return false
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
-  }, [normalizedEmail])
-
   const login = async () => {
-    if (!normalizedEmail) return
-    if (!isValidEmail) {
-      setError("Email inválido.")
-      return
-    }
+    if (!email) return
 
     setLoading(true)
     setError("")
+
     try {
       const res = await fetch("/api/crm?action=login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email: normalizedEmail })
+        body: JSON.stringify({ email })
       })
 
-      const data = await res.json().catch(() => ({}))
+      const data = await res.json()
 
-      if (res.ok && data?.success) {
+      if (res.ok && data.success) {
         navigate("/dashboard")
-        return
+      } else {
+        setError(data.error || "Login failed")
       }
-      setError(data?.error || "No se pudo iniciar sesión.")
-    } catch {
-      setError("Error de servidor.")
-    } finally {
-      setLoading(false)
+    } catch (err) {
+      setError("Server error")
     }
+
+    setLoading(false)
   }
 
-  const onKeyDown = (e) => {
-    if (e.key === "Enter") login()
-  }
+  const styles = useMemo(
+    () => ({
+      page: {
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: "28px",
+        background:
+          "radial-gradient(1200px 800px at 15% 20%, rgba(10, 86, 54, 0.12), transparent 55%)," +
+          "radial-gradient(1000px 700px at 85% 80%, rgba(10, 86, 54, 0.10), transparent 55%)," +
+          "linear-gradient(180deg, #F7F8F7 0%, #F2F4F2 55%, #EEF1EF 100%)",
+        color: "#0E1A12",
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif'
+      },
+      shell: {
+        width: "100%",
+        maxWidth: "980px",
+        display: "grid",
+        gridTemplateColumns: "1.2fr 0.8fr",
+        gap: "22px",
+        alignItems: "stretch"
+      },
+      shellMobile: {
+        gridTemplateColumns: "1fr",
+        maxWidth: "520px"
+      },
+
+      leftPanel: {
+        position: "relative",
+        borderRadius: "28px",
+        padding: "34px",
+        overflow: "hidden",
+        background:
+          "linear-gradient(135deg, rgba(8, 58, 36, 0.92) 0%, rgba(9, 84, 53, 0.92) 50%, rgba(11, 66, 43, 0.92) 100%)",
+        boxShadow: "0 24px 60px rgba(0,0,0,0.16)",
+        color: "rgba(255,255,255,0.92)"
+      },
+      leftGlow: {
+        position: "absolute",
+        inset: "-40%",
+        background:
+          "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.14), transparent 45%)," +
+          "radial-gradient(circle at 70% 80%, rgba(255,255,255,0.10), transparent 55%)," +
+          "radial-gradient(circle at 60% 30%, rgba(122, 255, 190, 0.10), transparent 55%)",
+        filter: "blur(2px)"
+      },
+      noise: {
+        position: "absolute",
+        inset: 0,
+        opacity: 0.06,
+        backgroundImage:
+          "url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%222%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22160%22 height=%22160%22 filter=%22url(%23n)%22 opacity=%220.35%22/%3E%3C/svg%3E')",
+        mixBlendMode: "overlay",
+        pointerEvents: "none"
+      },
+      leftContent: {
+        position: "relative",
+        zIndex: 1,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        gap: "22px"
+      },
+      brandRow: {
+        display: "flex",
+        alignItems: "center",
+        gap: "12px"
+      },
+      mark: {
+        width: "38px",
+        height: "38px",
+        borderRadius: "12px",
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.10) 100%)",
+        border: "1px solid rgba(255,255,255,0.20)",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+        display: "grid",
+        placeItems: "center",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)"
+      },
+      markDot: {
+        width: "10px",
+        height: "10px",
+        borderRadius: "999px",
+        background: "rgba(190,255,222,0.95)",
+        boxShadow: "0 0 0 6px rgba(190,255,222,0.14)"
+      },
+      brandText: {
+        display: "flex",
+        flexDirection: "column",
+        lineHeight: 1.15
+      },
+      brandName: {
+        fontSize: "14px",
+        letterSpacing: "0.3px",
+        fontWeight: 650,
+        margin: 0
+      },
+      brandSub: {
+        fontSize: "12px",
+        opacity: 0.78,
+        marginTop: "3px"
+      },
+      heroTitle: {
+        margin: "0",
+        fontSize: "30px",
+        letterSpacing: "-0.5px",
+        fontWeight: 750
+      },
+      heroDesc: {
+        margin: "10px 0 0 0",
+        fontSize: "14px",
+        opacity: 0.86,
+        maxWidth: "48ch",
+        lineHeight: 1.5
+      },
+      chips: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "10px",
+        marginTop: "18px"
+      },
+      chip: {
+        fontSize: "12px",
+        padding: "8px 10px",
+        borderRadius: "999px",
+        border: "1px solid rgba(255,255,255,0.18)",
+        background: "rgba(255,255,255,0.10)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)"
+      },
+      bottomNote: {
+        fontSize: "12px",
+        opacity: 0.72,
+        lineHeight: 1.5
+      },
+
+      card: {
+        borderRadius: "28px",
+        background: "rgba(255,255,255,0.72)",
+        border: "1px solid rgba(18, 44, 28, 0.10)",
+        boxShadow: "0 24px 60px rgba(0,0,0,0.10)",
+        padding: "26px",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: "14px"
+      },
+      cardTitle: {
+        margin: 0,
+        fontSize: "18px",
+        fontWeight: 750,
+        letterSpacing: "-0.2px",
+        color: "#0E1A12"
+      },
+      cardSubtitle: {
+        margin: "0 0 6px 0",
+        fontSize: "13px",
+        color: "rgba(14, 26, 18, 0.72)",
+        lineHeight: 1.5
+      },
+
+      label: {
+        fontSize: "12px",
+        fontWeight: 650,
+        color: "rgba(14, 26, 18, 0.70)",
+        marginTop: "8px"
+      },
+      inputWrap: {
+        position: "relative",
+        marginTop: "6px"
+      },
+      input: {
+        width: "100%",
+        padding: "14px 14px",
+        borderRadius: "14px",
+        border: "1px solid rgba(18, 44, 28, 0.14)",
+        background: "rgba(255,255,255,0.92)",
+        outline: "none",
+        fontSize: "14px",
+        color: "#0E1A12",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6)"
+      },
+      hint: {
+        marginTop: "8px",
+        fontSize: "12px",
+        color: "rgba(14, 26, 18, 0.58)"
+      },
+
+      button: {
+        marginTop: "14px",
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: "14px",
+        border: "1px solid rgba(8, 58, 36, 0.20)",
+        background:
+          "linear-gradient(180deg, rgba(8,58,36,0.98) 0%, rgba(7,48,30,0.98) 100%)",
+        color: "rgba(255,255,255,0.96)",
+        fontSize: "14px",
+        fontWeight: 700,
+        letterSpacing: "0.2px",
+        cursor: "pointer",
+        boxShadow:
+          "0 16px 30px rgba(8,58,36,0.22), inset 0 1px 0 rgba(255,255,255,0.18)",
+        transition: "transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease"
+      },
+      buttonDisabled: {
+        opacity: 0.65,
+        cursor: "not-allowed"
+      },
+
+      error: {
+        margin: "10px 0 0 0",
+        fontSize: "12px",
+        color: "#B42318",
+        background: "rgba(180, 35, 24, 0.08)",
+        border: "1px solid rgba(180, 35, 24, 0.18)",
+        padding: "10px 12px",
+        borderRadius: "14px"
+      },
+
+      footer: {
+        marginTop: "10px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "10px",
+        fontSize: "12px",
+        color: "rgba(14, 26, 18, 0.55)"
+      },
+      link: {
+        color: "rgba(8, 58, 36, 0.92)",
+        textDecoration: "none",
+        fontWeight: 700
+      },
+
+      // simple responsive helper (JS-driven)
+      hiddenOnMobile: {
+        display: "block"
+      }
+    }),
+    []
+  )
+
+  // lightweight responsive toggle without CSS files
+  const isNarrow =
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 860px)").matches : false
 
   return (
-    <div style={styles.screen}>
-      {/* Fullscreen macOS-like wallpaper */}
-      <div style={styles.wallpaper} aria-hidden="true" />
-      <div style={styles.vignette} aria-hidden="true" />
-      <div style={styles.grain} aria-hidden="true" />
+    <div style={styles.page}>
+      <div style={{ ...styles.shell, ...(isNarrow ? styles.shellMobile : null) }}>
+        {/* Left / brand panel */}
+        <section style={{ ...styles.leftPanel, ...(isNarrow ? { display: "none" } : null) }}>
+          <div style={styles.leftGlow} />
+          <div style={styles.noise} />
 
-      {/* Centered content, but NO card/window */}
-      <main style={styles.center}>
-        <h1 style={styles.brand}>PsicoFunnel</h1>
+          <div style={styles.leftContent}>
+            <div>
+              <div style={styles.brandRow}>
+                <div style={styles.mark} aria-hidden="true">
+                  <div style={styles.markDot} />
+                </div>
+                <div style={styles.brandText}>
+                  <p style={styles.brandName}>PsicoFunnel CRM</p>
+                  <div style={styles.brandSub}>Acceso interno • Estilo premium</div>
+                </div>
+              </div>
 
-        <div style={styles.form}>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Email"
-            autoComplete="email"
-            inputMode="email"
-            spellCheck={false}
-            style={{
-              ...styles.input,
-              borderBottomColor: error
-                ? "rgba(255,100,100,0.70)"
-                : "rgba(255,255,255,0.28)"
-            }}
-          />
+              <div style={{ marginTop: "26px" }}>
+                <h1 style={styles.heroTitle}>Ingresar al panel</h1>
+                <p style={styles.heroDesc}>
+                  Diseño limpio, enfoque ejecutivo y un verde inglés sobrio. Todo listo para trabajar sin
+                  ruido.
+                </p>
+
+                <div style={styles.chips}>
+                  <span style={styles.chip}>Seguridad por cookie</span>
+                  <span style={styles.chip}>UI minimal</span>
+                  <span style={styles.chip}>Experiencia </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={styles.bottomNote}>
+              Tip: usa el mismo email con el que tenés sesión en el CRM. Si el backend responde OK, te
+              manda directo al dashboard.
+            </div>
+          </div>
+        </section>
+
+        {/* Right / login card */}
+        <section style={styles.card}>
+          <div>
+            <h2 style={styles.cardTitle}>Acceso</h2>
+            <p style={styles.cardSubtitle}>Ingresá tu email para entrar al dashboard.</p>
+          </div>
+
+          <div>
+            <div style={styles.label}>Email</div>
+            <div style={styles.inputWrap}>
+              <input
+                placeholder="tu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={styles.input}
+                autoComplete="email"
+                inputMode="email"
+              />
+            </div>
+            <div style={styles.hint}>No se comparte con terceros. Solo para autenticar sesión.</div>
+          </div>
 
           <button
             onClick={login}
-            disabled={loading || !isValidEmail}
+            disabled={loading}
             style={{
               ...styles.button,
-              opacity: loading || !isValidEmail ? 0.55 : 1,
-              cursor: loading || !isValidEmail ? "not-allowed" : "pointer"
+              ...(loading ? styles.buttonDisabled : null)
+            }}
+            onMouseDown={(e) => {
+              if (!loading) e.currentTarget.style.transform = "translateY(1px)"
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = "translateY(0px)"
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0px)"
             }}
           >
-            {loading ? "Ingresando..." : "Login"}
+            {loading ? "Ingresando..." : "Entrar"}
           </button>
 
-          {!!error && <div style={styles.error}>{error}</div>}
-        </div>
-      </main>
+          {error && <p style={styles.error}>{error}</p>}
+
+          <div style={styles.footer}>
+            <span>© {new Date().getFullYear()} PsicoFunnel</span>
+            <a style={styles.link} href="/" onClick={(e) => e.preventDefault()}>
+              Soporte
+            </a>
+          </div>
+        </section>
+      </div>
     </div>
   )
-}
-
-const styles = {
-  screen: {
-    minHeight: "100vh",
-    width: "100%",
-    position: "relative",
-    overflow: "hidden",
-    background: "#cfd7df",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
-  },
-
-  // Fondo full-screen (inspirado en el screenshot)
-  wallpaper: {
-    position: "absolute",
-    inset: 0,
-    background:
-      "radial-gradient(1200px 700px at 20% 15%, rgba(255,255,255,0.65), rgba(255,255,255,0) 55%)," +
-      "radial-gradient(1000px 650px at 70% 20%, rgba(255,255,255,0.35), rgba(255,255,255,0) 55%)," +
-      "radial-gradient(900px 560px at 60% 80%, rgba(0,0,0,0), rgba(0,0,0,0.12) 70%)," +
-      "linear-gradient(145deg, rgba(155,180,200,0.65), rgba(4,38,55,0.95))",
-    filter: "saturate(1.05) contrast(1.02)"
-  },
-
-  vignette: {
-    position: "absolute",
-    inset: 0,
-    background:
-      "radial-gradient(900px 600px at 50% 40%, rgba(0,0,0,0), rgba(0,0,0,0.10) 72%, rgba(0,0,0,0.18) 100%)",
-    pointerEvents: "none"
-  },
-
-  grain: {
-    position: "absolute",
-    inset: 0,
-    opacity: 0.06,
-    backgroundImage:
-      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E\")",
-    pointerEvents: "none"
-  },
-
-  center: {
-    position: "relative",
-    minHeight: "100vh",
-    width: "100%",
-    display: "grid",
-    placeItems: "center",
-    alignContent: "center",
-    gap: 26,
-    padding: "40px 18px"
-  },
-
-  brand: {
-    margin: 0,
-    fontSize: 44,
-    fontWeight: 700,
-    letterSpacing: 0.8,
-    color: "rgba(255,255,255,0.92)",
-    textShadow: "0 16px 40px rgba(0,0,0,0.32)"
-  },
-
-  form: {
-    width: 380,
-    maxWidth: "82vw",
-    display: "grid",
-    gap: 18,
-    justifyItems: "center"
-  },
-
-  input: {
-    width: "100%",
-    background: "transparent",
-    border: "none",
-    borderBottom: "1px solid rgba(255,255,255,0.28)",
-    padding: "12px 8px",
-    fontSize: 15,
-    color: "rgba(255,255,255,0.92)",
-    outline: "none",
-    letterSpacing: 0.2
-  },
-
-  button: {
-    width: 150,
-    height: 36,
-    borderRadius: 999,
-    border: "1px solid rgba(255,255,255,0.26)",
-    background: "rgba(0,0,0,0.10)",
-    color: "rgba(255,255,255,0.90)",
-    fontSize: 13,
-    letterSpacing: 0.35,
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
-    boxShadow: "0 14px 34px rgba(0,0,0,0.22)"
-  },
-
-  error: {
-    marginTop: 2,
-    fontSize: 12.5,
-    fontWeight: 650,
-    color: "rgba(255,120,120,0.95)",
-    textShadow: "0 10px 26px rgba(0,0,0,0.25)"
-  }
 }
