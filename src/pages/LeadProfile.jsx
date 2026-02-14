@@ -44,7 +44,6 @@ export default function LeadProfile() {
     )
   }
 
-  // Normaliza campos (por si hay nombres distintos en Airtable)
   const normalizeContact = (record) => {
     if (!record || !record.fields) return record
     const f = record.fields
@@ -66,11 +65,7 @@ export default function LeadProfile() {
       f["Teléfono"] ??
       ""
 
-    const linkedin =
-      f["LinkedIn URL"] ??
-      f["LinkedIn"] ??
-      f["Linkedin"] ??
-      ""
+    const linkedin = f["LinkedIn URL"] ?? f["LinkedIn"] ?? f["Linkedin"] ?? ""
 
     return {
       ...record,
@@ -223,8 +218,6 @@ export default function LeadProfile() {
     setSaveErr("")
 
     try {
-      // ✅ IMPORTANTE: NO mandamos "Next Follow-up Date" a Contacts
-      // porque tu tabla Contacts no tiene ese campo.
       const payload = {
         id,
         fields: {
@@ -291,8 +284,6 @@ export default function LeadProfile() {
         return
       }
 
-      setActivities((prev) => [data, ...(prev || [])])
-
       setActivityNotes("")
       setNextFollowUp("")
       setActMsg("Actividad guardada ✅")
@@ -306,11 +297,8 @@ export default function LeadProfile() {
     setCreating(false)
   }
 
-  // ✅ Próximo follow-up (lo sacamos del activity más reciente que tenga fecha)
   const computedNextFollowUp = useMemo(() => {
-    const withNFU = (activities || []).find(
-      (a) => a?.fields?.["Next Follow-up Date"]
-    )
+    const withNFU = (activities || []).find((a) => a?.fields?.["Next Follow-up Date"])
     return withNFU?.fields?.["Next Follow-up Date"] || ""
   }, [activities])
 
@@ -411,7 +399,6 @@ export default function LeadProfile() {
             <option>Closed Lost</option>
           </select>
 
-          {/* ✅ Next follow-up visible (derivado de Activities) */}
           <label style={label}>Next Follow-up (from Activities)</label>
           <input style={input} value={toDateInputValue(computedNextFollowUp)} readOnly />
 
@@ -423,12 +410,7 @@ export default function LeadProfile() {
             onChange={(e) => updateField("Notes", e.target.value)}
           />
 
-          <button
-            type="button"
-            style={btn}
-            onClick={saveChanges}
-            disabled={saving}
-          >
+          <button type="button" style={btn} onClick={saveChanges} disabled={saving}>
             {saving ? "Saving..." : "Save Changes"}
           </button>
 
@@ -440,7 +422,7 @@ export default function LeadProfile() {
         <div style={card}>
           <h3 style={h3}>Add Activity</h3>
 
-          <label style={label}>Type</label>
+          <label style={label}>Outcome</label>
           <select
             style={input}
             value={activityType}
@@ -450,6 +432,7 @@ export default function LeadProfile() {
             <option>Call</option>
             <option>LinkedIn</option>
             <option>Meeting</option>
+            <option>Positive response</option>
           </select>
 
           <label style={label}>Activity notes</label>
@@ -468,12 +451,7 @@ export default function LeadProfile() {
             onChange={(e) => setNextFollowUp(e.target.value)}
           />
 
-          <button
-            type="button"
-            style={btn}
-            onClick={createActivity}
-            disabled={creating}
-          >
+          <button type="button" style={btn} onClick={createActivity} disabled={creating}>
             {creating ? "Saving..." : "Add Activity"}
           </button>
 
@@ -501,23 +479,28 @@ export default function LeadProfile() {
           ) : !activities.length ? (
             <div style={muted}>No activities yet.</div>
           ) : (
-            activities.map((a) => (
-              <div key={a.id} style={timelineItem}>
-                <div style={dot} />
-                <div>
-                  <strong>{a.fields?.["Activity Type"] || "-"}</strong>
-                  <div style={note}>{a.fields?.Notes || ""}</div>
-                  {a.fields?.["Next Follow-up Date"] ? (
+            activities.map((a) => {
+              const outcome = a.fields?.Outcome ?? a.fields?.["Activity Type"] ?? "-"
+              return (
+                <div key={a.id} style={timelineItem}>
+                  <div style={dot} />
+                  <div>
+                    <strong>{outcome}</strong>
+                    <div style={note}>{a.fields?.Notes || ""}</div>
+
+                    {a.fields?.["Next Follow-up Date"] ? (
+                      <small style={date}>
+                        Next FU: {toDateInputValue(a.fields?.["Next Follow-up Date"])}
+                      </small>
+                    ) : null}
+
                     <small style={date}>
-                      Next FU: {toDateInputValue(a.fields?.["Next Follow-up Date"])}
+                      {toDateInputValue(a.fields?.["Activity Date"] || "")}
                     </small>
-                  ) : null}
-                  <small style={date}>
-                    {String(a.fields?.["Activity Date"] || "").replace("T", " ").slice(0, 16)}
-                  </small>
+                  </div>
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>
