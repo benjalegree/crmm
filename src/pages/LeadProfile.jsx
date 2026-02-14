@@ -28,6 +28,27 @@ export default function LeadProfile() {
     // eslint-disable-next-line
   }, [id])
 
+  const readJson = async (res) => {
+    try {
+      return await res.json()
+    } catch {
+      return {}
+    }
+  }
+
+  const fmtError = (res, data, fallback) => {
+    const parts = []
+    parts.push(fallback || "Request failed")
+    if (res?.status) parts.push(`(HTTP ${res.status})`)
+    const msg =
+      data?.error ||
+      data?.details?.error?.message ||
+      data?.details?.message ||
+      ""
+    if (msg) parts.push(`- ${msg}`)
+    return parts.join(" ")
+  }
+
   const loadAll = async () => {
     await Promise.all([loadLead(), loadActivities()])
   }
@@ -39,19 +60,19 @@ export default function LeadProfile() {
       const res = await fetch(`/api/crm?action=getContact&id=${id}`, {
         credentials: "include"
       })
-      const data = await res.json().catch(() => ({}))
+      const data = await readJson(res)
 
       if (!res.ok) {
-        setLeadErr(data?.error || "Failed to load lead")
         setLead(null)
+        setLeadErr(fmtError(res, data, "Failed to load lead"))
         setLeadLoading(false)
         return
       }
 
       setLead(data)
     } catch (e) {
-      setLeadErr("Network/server error while loading lead")
       setLead(null)
+      setLeadErr("Network/server error while loading lead")
     }
     setLeadLoading(false)
   }
@@ -63,19 +84,19 @@ export default function LeadProfile() {
       const res = await fetch(`/api/crm?action=getActivities&contactId=${id}`, {
         credentials: "include"
       })
-      const data = await res.json().catch(() => ({}))
+      const data = await readJson(res)
 
       if (!res.ok) {
-        setActErr(data?.error || "Failed to load activities")
         setActivities([])
+        setActErr(fmtError(res, data, "Failed to load activities"))
         setActLoading(false)
         return
       }
 
       setActivities(data.records || [])
     } catch (e) {
-      setActErr("Network/server error while loading activities")
       setActivities([])
+      setActErr("Network/server error while loading activities")
     }
     setActLoading(false)
   }
@@ -115,10 +136,10 @@ export default function LeadProfile() {
         })
       })
 
-      const data = await res.json().catch(() => ({}))
+      const data = await readJson(res)
 
       if (!res.ok) {
-        setSaveErr(data?.error || "Failed to save lead changes")
+        setSaveErr(fmtError(res, data, "Failed to save lead changes"))
         setSavingLead(false)
         return
       }
@@ -126,7 +147,7 @@ export default function LeadProfile() {
       setSaveOk("Saved ✅")
       await loadLead()
     } catch (e) {
-      setSaveErr("Network/server error while saving")
+      setSaveErr("Network/server error while saving lead")
     }
 
     setSavingLead(false)
@@ -150,14 +171,10 @@ export default function LeadProfile() {
         })
       })
 
-      const data = await res.json().catch(() => ({}))
+      const data = await readJson(res)
 
       if (!res.ok) {
-        const msg =
-          data?.error ||
-          data?.details?.error?.message ||
-          "Failed to create activity"
-        setActivityCreateErr(msg)
+        setActivityCreateErr(fmtError(res, data, "Failed to create activity"))
         setCreating(false)
         return
       }
@@ -166,7 +183,6 @@ export default function LeadProfile() {
       setNextFollowUp("")
       setActivityOk("Activity saved ✅")
 
-      // recargar activities + lead (porque el backend actualiza Status / followup / last activity)
       await Promise.all([loadActivities(), loadLead()])
     } catch (e) {
       setActivityCreateErr("Network/server error while creating activity")
@@ -175,9 +191,7 @@ export default function LeadProfile() {
     setCreating(false)
   }
 
-  if (leadLoading) {
-    return <div style={loadingPage}>Loading lead...</div>
-  }
+  if (leadLoading) return <div style={loadingPage}>Loading lead...</div>
 
   if (leadErr) {
     return (
@@ -201,13 +215,6 @@ export default function LeadProfile() {
         <h1 style={title}>{f["Full Name"] || "Lead"}</h1>
         <div style={metaRight}>
           {f.Status ? <span style={pill}>{f.Status}</span> : null}
-          {f["Last Activity Date"] ? (
-            <span style={metaSmall}>
-              Last: {String(f["Last Activity Date"]).slice(0, 10)}
-            </span>
-          ) : (
-            <span style={metaSmall}>No activity yet</span>
-          )}
         </div>
       </div>
 
@@ -333,20 +340,13 @@ export default function LeadProfile() {
 
           <div style={timelineHeader}>
             <h3 style={{ margin: 0 }}>Activity Timeline</h3>
-            <button style={miniBtn} onClick={loadActivities}>
-              Refresh
-            </button>
+            <button style={miniBtn} onClick={loadActivities}>Refresh</button>
           </div>
 
           {actLoading ? (
             <div style={muted}>Loading activities...</div>
           ) : actErr ? (
-            <div style={errBox}>
-              {actErr}
-              <div style={{ marginTop: 10 }}>
-                <button style={miniBtn} onClick={loadActivities}>Retry</button>
-              </div>
-            </div>
+            <div style={errBox}>{actErr}</div>
           ) : activities.length === 0 ? (
             <div style={muted}>No activities yet.</div>
           ) : (
@@ -392,16 +392,7 @@ const headerRow = {
   marginBottom: 18
 }
 
-const metaRight = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10
-}
-
-const metaSmall = {
-  fontSize: 12,
-  color: "rgba(0,0,0,0.55)"
-}
+const metaRight = { display: "flex", alignItems: "center", gap: 10 }
 
 const pill = {
   fontSize: 12,
@@ -417,11 +408,7 @@ const title = {
   margin: 0
 }
 
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: 30
-}
+const grid = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }
 
 const glassCard = {
   padding: 30,
@@ -435,17 +422,9 @@ const glassCard = {
   gap: 12
 }
 
-const sectionTitle = {
-  margin: "0 0 8px 0",
-  fontWeight: 700,
-  color: "#145c43"
-}
+const sectionTitle = { margin: "0 0 8px 0", fontWeight: 700, color: "#145c43" }
 
-const label = {
-  fontSize: 12,
-  color: "rgba(0,0,0,0.65)",
-  marginTop: 6
-}
+const label = { fontSize: 12, color: "rgba(0,0,0,0.65)", marginTop: 6 }
 
 const input = {
   padding: 12,
@@ -520,11 +499,7 @@ const timelineHeader = {
   justifyContent: "space-between"
 }
 
-const muted = {
-  marginTop: 10,
-  fontSize: 13,
-  color: "rgba(0,0,0,0.55)"
-}
+const muted = { marginTop: 10, fontSize: 13, color: "rgba(0,0,0,0.55)" }
 
 const miniBtn = {
   padding: "8px 10px",
@@ -562,7 +537,4 @@ const timelineText = {
   lineHeight: 1.35
 }
 
-const timelineSmall = {
-  fontSize: 12,
-  color: "rgba(0,0,0,0.55)"
-}
+const timelineSmall = { fontSize: 12, color: "rgba(0,0,0,0.55)" }
