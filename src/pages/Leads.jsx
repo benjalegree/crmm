@@ -5,6 +5,8 @@ export default function Leads() {
   const navigate = useNavigate()
 
   const [leads, setLeads] = useState([])
+  const [companies, setCompanies] = useState([])
+
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState("")
 
@@ -14,9 +16,9 @@ export default function Leads() {
   const [sortDir, setSortDir] = useState("asc")
 
   const [showPanel, setShowPanel] = useState(false)
-  const [primaryKey, setPrimaryKey] = useState("Full Name") // lo que “va al frente” en cada fila
+  const [primaryKey, setPrimaryKey] = useState("Full Name")
 
-  // ✅ mismas columnas, pero ahora en formato “lista”
+  // ✅ columnas configurables (incluye Website)
   const [columns, setColumns] = useState([
     { key: "Full Name", label: "Name", visible: true },
     { key: "Position", label: "Position", visible: true },
@@ -28,31 +30,66 @@ export default function Leads() {
     { key: "Status", label: "Status", visible: true }
   ])
 
+  /* =========================
+     LOAD: Contacts + Companies
+  ========================= */
+
   useEffect(() => {
     const run = async () => {
       setLoading(true)
       setErr("")
       try {
-        const res = await fetch("/api/crm?action=getContacts", {
-          credentials: "include"
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          setErr(data?.error || "Failed to load leads")
+        const [resContacts, resCompanies] = await Promise.all([
+          fetch("/api/crm?action=getContacts", { credentials: "include" }),
+          fetch("/api/crm?action=getCompanies", { credentials: "include" })
+        ])
+
+        const dataContacts = await resContacts.json().catch(() => ({}))
+        const dataCompanies = await resCompanies.json().catch(() => ({}))
+
+        if (!resContacts.ok) {
+          setErr(dataContacts?.error || "Failed to load leads")
           setLeads([])
           setLoading(false)
           return
         }
-        setLeads(data.records || [])
+
+        // companies puede fallar sin romper la pantalla
+        const comps = resCompanies.ok ? (dataCompanies?.records || []) : []
+
+        setLeads(dataContacts.records || [])
+        setCompanies(comps)
         setLoading(false)
       } catch {
         setErr("Failed to load leads")
         setLeads([])
+        setCompanies([])
         setLoading(false)
       }
     }
+
     run()
   }, [])
+
+  /* =========================
+     COMPANIES MAP (recId -> {name, website})
+  ========================= */
+
+  const companiesMap = useMemo(() => {
+    const map = {}
+    for (const c of companies || []) {
+      const id = c?.id
+      const f = c?.fields || {}
+      const name = f["Company Name"] || f["Name"] || ""
+      const website = f["Website"] || f["URL"] || f["Company Website"] || ""
+      if (id) map[id] = { name, website }
+    }
+    return map
+  }, [companies])
+
+  /* =========================
+     Column helpers
+  ========================= */
 
   const toggleColumn = (key) => {
     setColumns((cols) =>
@@ -60,10 +97,15 @@ export default function Leads() {
     )
   }
 
-  const visibleColumns = useMemo(() => columns.filter((c) => c.visible), [columns])
+  const visibleColumns = useMemo(() => {
+    // ✅ aseguro que haya al menos 1 columna visible (y que primary exista)
+    const vis = columns.filter((c) => c.visible)
+    if (!vis.length) return [columns[0]]
+    return vis
+  }, [columns])
 
   const allStatuses = useMemo(() => {
-    const base = [
+    return [
       "Not Contacted",
       "Contacted",
       "Replied",
@@ -71,37 +113,56 @@ export default function Leads() {
       "Closed Won",
       "Closed Lost"
     ]
-    return base
   }, [])
 
   const normalizeStr = (v) => String(v || "").toLowerCase()
 
+  const getCompanyIdFromContact = (fields) => {
+    const raw = fields?.Company
+    if (Array.isArray(raw) && raw.length) return raw[0]
+    if (typeof raw === "string" && raw) return raw
+    return null
+  }
+
   const getField = (fields, key) => {
-    // tu backend ya te trae CompanyWebsite en getContacts (enriched)
-    // CompanyName puede venir como lookup o array, lo normalizamos
+    const f = fields || {}
+
+    // ✅ CompanyName: resuelve por recordId o por lookup
     if (key === "CompanyName") {
-      const v = fields.CompanyName ?? fields.Company ?? ""
+      const cid = getCompanyIdFromContact(f)
+      if (cid && companiesMap[cid]?.name) return companiesMap[cid].name
+
+      const v = f.CompanyName ?? f["Company Name"] ?? f.Company ?? ""
       if (Array.isArray(v)) return v[0] || ""
       return v || ""
     }
 
+    // ✅ CompanyWebsite: resuelve por CompaniesMap y fallbacks
     if (key === "CompanyWebsite") {
-      return fields.CompanyWebsite || fields.Website || fields["Company Website"] || ""
+      const cid = getCompanyIdFromContact(f)
+      if (cid && companiesMap[cid]?.website) return companiesMap[cid].website
+
+      return (
+        f.CompanyWebsite ||
+        f["Company Website"] ||
+        f.Website ||
+        f.URL ||
+        ""
+      )
     }
 
-    if (key === "Full Name") return fields["Full Name"] || ""
-    if (key === "LinkedIn URL") return fields["LinkedIn URL"] || ""
+    if (key === "Full Name") return f["Full Name"] || ""
+    if (key === "LinkedIn URL") return f["LinkedIn URL"] || ""
 
-    if (key === "Company") {
-      return Array.isArray(fields.Company) ? fields.Company[0] : fields.Company || ""
-    }
-
-    return fields[key] || ""
+    return f[key] || ""
   }
+
+  /* =========================
+     FILTER + SORT
+  ========================= */
 
   const filteredSorted = useMemo(() => {
     const q = normalizeStr(search)
-
     let list = leads || []
 
     if (q) {
@@ -112,7 +173,8 @@ export default function Leads() {
           normalizeStr(getField(f, "Position")).includes(q) ||
           normalizeStr(getField(f, "CompanyName")).includes(q) ||
           normalizeStr(getField(f, "Email")).includes(q) ||
-          normalizeStr(getField(f, "Numero de telefono")).includes(q)
+          normalizeStr(getField(f, "Numero de telefono")).includes(q) ||
+          normalizeStr(getField(f, "CompanyWebsite")).includes(q)
         return hay
       })
     }
@@ -133,7 +195,7 @@ export default function Leads() {
     })
 
     return list
-  }, [leads, search, filterStatus, sortKey, sortDir])
+  }, [leads, search, filterStatus, sortKey, sortDir, companiesMap]) // companiesMap afecta CompanyName/Website
 
   const setSort = (key) => {
     if (sortKey === key) {
@@ -143,6 +205,26 @@ export default function Leads() {
     setSortKey(key)
     setSortDir("asc")
   }
+
+  /* =========================
+     GRID TEMPLATE (dinámico)
+  ========================= */
+
+  const colTemplate = useMemo(() => {
+    // ancho por columna (para que Website/Status no ocupen demasiado)
+    const w = (k) => {
+      if (k === "Full Name") return "2.2fr"
+      if (k === "CompanyName") return "1.6fr"
+      if (k === "Position") return "1.4fr"
+      if (k === "CompanyWebsite") return "1.0fr"
+      if (k === "LinkedIn URL") return "0.9fr"
+      if (k === "Status") return "0.9fr"
+      if (k === "Email") return "1.3fr"
+      if (k === "Numero de telefono") return "1.0fr"
+      return "1fr"
+    }
+    return visibleColumns.map((c) => w(c.key)).join(" ")
+  }, [visibleColumns])
 
   return (
     <div style={page}>
@@ -259,24 +341,22 @@ export default function Leads() {
         <div style={loadingBox}>Loading...</div>
       ) : (
         <div style={list}>
-          <div style={listHeader}>
-            <button style={headerBtn} onClick={() => setSort("Full Name")}>
-              Name {sortKey === "Full Name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-            </button>
-
-            <button style={headerBtn} onClick={() => setSort("Position")}>
-              Position {sortKey === "Position" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-            </button>
-
-            <button style={headerBtn} onClick={() => setSort("CompanyName")}>
-              Company {sortKey === "CompanyName" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-            </button>
-
-            <button style={headerBtn} onClick={() => setSort("Status")}>
-              Status {sortKey === "Status" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-            </button>
+          {/* HEADER dinámico */}
+          <div style={{ ...listHeader, gridTemplateColumns: colTemplate }}>
+            {visibleColumns.map((c) => (
+              <button
+                key={c.key}
+                style={headerBtn}
+                onClick={() => setSort(c.key)}
+                title={`Sort by ${c.label}`}
+              >
+                {c.label}{" "}
+                {sortKey === c.key ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              </button>
+            ))}
           </div>
 
+          {/* ROWS dinámicas */}
           {filteredSorted.map((lead) => (
             <LeadRow
               key={lead.id}
@@ -285,6 +365,7 @@ export default function Leads() {
               visibleColumns={visibleColumns}
               primaryKey={primaryKey}
               getField={getField}
+              colTemplate={colTemplate}
             />
           ))}
         </div>
@@ -294,75 +375,99 @@ export default function Leads() {
 }
 
 /* ========================= */
-/* ROW (LISTA COMO EN TU IMAGEN) */
+/* ROW dinámica */
 /* ========================= */
 
-function LeadRow({ lead, onOpen, visibleColumns, primaryKey, getField }) {
+function LeadRow({ lead, onOpen, visibleColumns, primaryKey, getField, colTemplate }) {
   const f = lead.fields || {}
 
   const primaryValue = getField(f, primaryKey)
   const name = getField(f, "Full Name")
   const position = getField(f, "Position")
   const companyName = getField(f, "CompanyName")
-  const status = getField(f, "Status")
-  const website = getField(f, "CompanyWebsite")
-  const linkedin = getField(f, "LinkedIn URL")
 
   return (
-    <div style={row} onClick={onOpen}>
-      {/* PRIMARY */}
-      <div style={colName}>
-        <div style={bigName}>
-          {primaryKey === "Full Name" ? (name || "—") : (String(primaryValue || "—"))}
-        </div>
-        <div style={miniLine}>
-          <span style={muted}>{position || "—"}</span>
-          <span style={dot}>•</span>
-          <span style={muted}>{companyName || "—"}</span>
-        </div>
-      </div>
+    <div style={{ ...row, gridTemplateColumns: colTemplate }} onClick={onOpen}>
+      {visibleColumns.map((col) => {
+        const key = col.key
+        const val = getField(f, key)
 
-      {/* POSITION */}
-      <div style={colText}>{position || "—"}</div>
+        // ✅ “Primary column” render premium (igual a tu diseño)
+        if (key === primaryKey) {
+          return (
+            <div key={key} style={colPrimary}>
+              <div style={bigName}>
+                {primaryKey === "Full Name" ? (name || "—") : (String(primaryValue || "—"))}
+              </div>
+              <div style={miniLine}>
+                <span style={muted}>{position || "—"}</span>
+                <span style={dot}>•</span>
+                <span style={muted}>{companyName || "—"}</span>
+              </div>
+            </div>
+          )
+        }
 
-      {/* COMPANY + WEBSITE BUTTON */}
-      <div style={colCompany}>
-        <div style={companyLine}>
-          <span style={companyText}>{companyName || "—"}</span>
-          {website ? (
-            <a
-              href={safeUrl(website)}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              style={siteBtn}
-              title="Open website"
-            >
-              Website ↗
-            </a>
-          ) : null}
-        </div>
+        // ✅ Status pill
+        if (key === "Status") {
+          return (
+            <div key={key} style={colRight}>
+              <span style={{ ...statusPill, ...statusColor(val) }}>{val || "—"}</span>
+            </div>
+          )
+        }
 
-        {linkedin ? (
-          <a
-            href={linkedin}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            style={miniLinkBtn}
-            title="Open LinkedIn"
-          >
-            LinkedIn ↗
-          </a>
-        ) : null}
-      </div>
+        // ✅ Website link button
+        if (key === "CompanyWebsite") {
+          return (
+            <div key={key} style={colText}>
+              {val ? (
+                <a
+                  href={safeUrl(val)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  style={siteBtn}
+                  title="Open website"
+                >
+                  Website ↗
+                </a>
+              ) : (
+                "—"
+              )}
+            </div>
+          )
+        }
 
-      {/* STATUS PILL */}
-      <div style={colStatus}>
-        <span style={{ ...statusPill, ...statusColor(status) }}>
-          {status || "—"}
-        </span>
-      </div>
+        // ✅ LinkedIn link button
+        if (key === "LinkedIn URL") {
+          return (
+            <div key={key} style={colText}>
+              {val ? (
+                <a
+                  href={val}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  style={miniLinkBtn}
+                  title="Open LinkedIn"
+                >
+                  LinkedIn ↗
+                </a>
+              ) : (
+                "—"
+              )}
+            </div>
+          )
+        }
+
+        // ✅ Default cells
+        return (
+          <div key={key} style={colText}>
+            {String(val || "—")}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -558,7 +663,6 @@ const list = {
 
 const listHeader = {
   display: "grid",
-  gridTemplateColumns: "2fr 1fr 1fr 0.8fr",
   gap: 12,
   padding: "16px 18px",
   borderBottom: "1px solid rgba(0,0,0,0.06)",
@@ -577,25 +681,32 @@ const headerBtn = {
 
 const row = {
   display: "grid",
-  gridTemplateColumns: "2fr 1fr 1fr 0.8fr",
   gap: 12,
   padding: "18px 18px",
   borderTop: "1px solid rgba(0,0,0,0.05)",
-  cursor: "pointer"
+  cursor: "pointer",
+  alignItems: "center"
 }
 
-const colName = { display: "flex", flexDirection: "column", gap: 6 }
-const bigName = { fontWeight: 900, color: "#0f3d2e", fontSize: 16 }
+const colPrimary = { display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }
+const bigName = { fontWeight: 900, color: "#0f3d2e", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
 
-const miniLine = { display: "flex", alignItems: "center", gap: 10 }
-const muted = { color: "rgba(0,0,0,0.55)", fontWeight: 700, fontSize: 12 }
+const miniLine = { display: "flex", alignItems: "center", gap: 10, minWidth: 0 }
+const muted = { color: "rgba(0,0,0,0.55)", fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
 const dot = { color: "rgba(0,0,0,0.20)", fontWeight: 900 }
 
-const colText = { color: "rgba(0,0,0,0.65)", fontWeight: 700, display: "flex", alignItems: "center" }
+const colText = {
+  color: "rgba(0,0,0,0.65)",
+  fontWeight: 700,
+  display: "flex",
+  alignItems: "center",
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+}
 
-const colCompany = { display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 }
-const companyLine = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }
-const companyText = { color: "rgba(0,0,0,0.70)", fontWeight: 800, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
+const colRight = { display: "flex", alignItems: "center", justifyContent: "flex-end" }
 
 const siteBtn = {
   padding: "8px 10px",
@@ -610,7 +721,6 @@ const siteBtn = {
 }
 
 const miniLinkBtn = {
-  width: "fit-content",
   padding: "8px 10px",
   borderRadius: 14,
   border: "1px solid rgba(0,0,0,0.10)",
@@ -618,10 +728,9 @@ const miniLinkBtn = {
   color: "rgba(0,0,0,0.70)",
   fontWeight: 900,
   textDecoration: "none",
-  fontSize: 12
+  fontSize: 12,
+  whiteSpace: "nowrap"
 }
-
-const colStatus = { display: "flex", alignItems: "center", justifyContent: "flex-end" }
 
 const statusPill = {
   padding: "10px 14px",
