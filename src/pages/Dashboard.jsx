@@ -1,14 +1,27 @@
 import { useEffect, useMemo, useState } from "react"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid
+} from "recharts"
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [calendar, setCalendar] = useState(null)
   const [user, setUser] = useState(null)
+
   const [contactsMap, setContactsMap] = useState({})
+
   const [err, setErr] = useState("")
   const [loading, setLoading] = useState(true)
+
   const [chartFilter, setChartFilter] = useState("All")
+
+  /* ---------------- Helpers ---------------- */
 
   const readJson = async (res) => {
     try {
@@ -19,7 +32,11 @@ export default function Dashboard() {
   }
 
   const safeErrMsg = (data, fallback) =>
-    data?.error || data?.details?.error?.message || data?.details?.error || data?.details?.message || fallback
+    data?.error ||
+    data?.details?.error?.message ||
+    data?.details?.error ||
+    data?.details?.message ||
+    fallback
 
   const toISODate = (d) => {
     const yyyy = d.getFullYear()
@@ -37,6 +54,7 @@ export default function Dashboard() {
   const normalizeOutcome = (a) => {
     const f = a?.fields || {}
     const raw = (f.Outcome ?? f["Activity Type"] ?? "").toString().trim().toLowerCase()
+
     if (raw.includes("call")) return "Call"
     if (raw.includes("email")) return "Email"
     if (raw.includes("meeting")) return "Meeting"
@@ -53,6 +71,7 @@ export default function Dashboard() {
     return t
   }
 
+  // ✅ SOLO FECHA (sin hora)
   const formatDateOnly = (val) => {
     const s = String(val || "").trim()
     if (!s) return "—"
@@ -64,13 +83,17 @@ export default function Dashboard() {
 
   const getActivityContact = (a) => {
     const f = a?.fields || {}
+
     const rel = f["Related Contact"]
     if (Array.isArray(rel) && rel.length) {
       const first = rel[0]
-      if (String(first || "").startsWith("rec")) return contactsMap[first] || "Contact"
+      if (String(first || "").startsWith("rec")) {
+        return contactsMap[first] || "Contact"
+      }
       const s = String(first || "").trim()
       if (s) return s
     }
+
     const candidates = [
       f["Contact Name"],
       f["Contact Name..."],
@@ -86,8 +109,11 @@ export default function Dashboard() {
       const s = String(c).trim()
       if (s && !s.startsWith("rec")) return s
     }
+
     return "Contact"
   }
+
+  /* ---------------- Load ---------------- */
 
   useEffect(() => {
     let alive = true
@@ -111,16 +137,32 @@ export default function Dashboard() {
 
         if (!alive) return
 
-        if (!meRes.ok) return fail(safeErrMsg(meData, "Failed to load session"))
-        if (!statsRes.ok) return fail(safeErrMsg(statsData, "Failed to load stats"))
-        if (!calRes.ok) return fail(safeErrMsg(calData, "Failed to load calendar"))
+        if (!meRes.ok) {
+          setErr(safeErrMsg(meData, "Failed to load session"))
+          setLoading(false)
+          return
+        }
+        if (!statsRes.ok) {
+          setErr(safeErrMsg(statsData, "Failed to load stats"))
+          setLoading(false)
+          return
+        }
+        if (!calRes.ok) {
+          setErr(safeErrMsg(calData, "Failed to load calendar"))
+          setLoading(false)
+          return
+        }
 
-        const records = contactsRes.ok ? contactsData?.records || [] : []
+        // si contacts falla, no rompemos
+        const records = contactsRes.ok ? (contactsData?.records || []) : []
         const map = {}
         for (const r of records) {
           const id = r?.id
           const f = r?.fields || {}
-          const name = f["Full Name"] || `${f["First Name"] || ""} ${f["Last Name"] || ""}`.trim() || f.Name
+          const name =
+            f["Full Name"] ||
+            `${f["First Name"] || ""} ${f["Last Name"] || ""}`.trim() ||
+            f.Name
           if (id && name) map[id] = name
         }
 
@@ -132,11 +174,7 @@ export default function Dashboard() {
       } catch (e) {
         if (!alive) return
         if (e?.name === "AbortError") return
-        fail("Failed to load dashboard")
-      }
-
-      function fail(msg) {
-        setErr(msg)
+        setErr("Failed to load dashboard")
         setLoading(false)
       }
     }
@@ -149,6 +187,8 @@ export default function Dashboard() {
     }
   }, [])
 
+  /* ---------------- Derived data ---------------- */
+
   const todayISO = useMemo(() => toISODate(new Date()), [])
   const calendarSafe = calendar || []
 
@@ -160,13 +200,26 @@ export default function Dashboard() {
     })
   }, [calendarSafe, todayISO])
 
-  const callsToday = useMemo(() => todayActivities.filter((a) => normalizeOutcome(a) === "Call").length, [todayActivities])
-  const emailsToday = useMemo(() => todayActivities.filter((a) => normalizeOutcome(a) === "Email").length, [todayActivities])
-  const meetingsToday = useMemo(() => todayActivities.filter((a) => normalizeOutcome(a) === "Meeting").length, [todayActivities])
+  const callsToday = useMemo(
+    () => todayActivities.filter((a) => normalizeOutcome(a) === "Call").length,
+    [todayActivities]
+  )
+  const emailsToday = useMemo(
+    () => todayActivities.filter((a) => normalizeOutcome(a) === "Email").length,
+    [todayActivities]
+  )
+  const meetingsToday = useMemo(
+    () => todayActivities.filter((a) => normalizeOutcome(a) === "Meeting").length,
+    [todayActivities]
+  )
 
   const recentActivities = useMemo(() => {
     const list = [...calendarSafe]
-    list.sort((a, b) => parseDateMs(b?.fields?.["Activity Date"]) - parseDateMs(a?.fields?.["Activity Date"]))
+    list.sort((a, b) => {
+      const da = parseDateMs(a?.fields?.["Activity Date"])
+      const db = parseDateMs(b?.fields?.["Activity Date"])
+      return db - da
+    })
     return list
   }, [calendarSafe])
 
@@ -178,8 +231,11 @@ export default function Dashboard() {
       const iso = toISODate(d)
       const label = d.toLocaleDateString(undefined, { weekday: "short" })
 
-      if (chartFilter === "All") days.push({ iso, name: label, calls: 0, emails: 0, meetings: 0 })
-      else days.push({ iso, name: label, value: 0 })
+      if (chartFilter === "All") {
+        days.push({ iso, name: label, calls: 0, emails: 0, meetings: 0 })
+      } else {
+        days.push({ iso, name: label, value: 0 })
+      }
     }
 
     const map = new Map(days.map((d) => [d.iso, d]))
@@ -206,9 +262,15 @@ export default function Dashboard() {
 
   const yTicks = useMemo(() => {
     let maxVal = 0
+
     if (chartFilter === "All") {
       for (const d of weeklyChartData) {
-        maxVal = Math.max(maxVal, Number(d.calls || 0), Number(d.emails || 0), Number(d.meetings || 0))
+        maxVal = Math.max(
+          maxVal,
+          Number(d.calls || 0),
+          Number(d.emails || 0),
+          Number(d.meetings || 0)
+        )
       }
     } else {
       maxVal = Math.max(0, ...weeklyChartData.map((d) => Number(d.value || 0)))
@@ -219,6 +281,8 @@ export default function Dashboard() {
     for (let t = 0; t <= top; t += 5) ticks.push(t)
     return ticks
   }, [weeklyChartData, chartFilter])
+
+  /* ---------------- UI states ---------------- */
 
   if (loading) return <div style={loadingText}>Loading...</div>
 
@@ -235,34 +299,34 @@ export default function Dashboard() {
 
   if (!stats || !user || !calendar) return <div style={loadingText}>Loading...</div>
 
+  /* ---------------- Render ---------------- */
+
   return (
     <div style={page}>
-      {/* Header como la ref (Welcome back + nombre) */}
-      <div style={header}>
+      <div style={topRow}>
         <div>
-          <div style={welcome}>Welcome back,</div>
-          <h1 style={h1}>{getName(user.email)}</h1>
+          <h1 style={title}>Dashboard</h1>
+          <div style={subtitle}>Welcome back, {getName(user.email)}.</div>
         </div>
 
-        <button type="button" style={btnPrimary} onClick={() => window.location.reload()}>
+        <button type="button" style={btnGhost} onClick={() => window.location.reload()}>
           Refresh
         </button>
       </div>
 
-      {/* KPI row */}
-      <div style={kpiRow}>
-        <Kpi title="Total leads" value={stats.totalLeads ?? 0} />
-        <Kpi title="Calls today" value={callsToday} />
-        <Kpi title="Emails today" value={emailsToday} />
-        <Kpi title="Meetings today" value={meetingsToday} />
+      <div style={grid}>
+        <StatCard title="Total leads" value={stats.totalLeads ?? 0} />
+        <StatCard title="Calls today" value={callsToday} />
+        <StatCard title="Emails today" value={emailsToday} />
+        <StatCard title="Meetings today" value={meetingsToday} />
       </div>
 
-      {/* Main grid */}
-      <div style={grid}>
-        <section style={panelWide}>
+      <div style={bottomGrid}>
+        {/* ✅ Izquierda: chart */}
+        <div style={panel}>
           <div style={panelHead}>
             <div>
-              <div style={panelTitle}>Hours activity</div>
+              <div style={panelTitle}>Weekly activity</div>
               <div style={panelSub}>Last 7 days</div>
             </div>
 
@@ -283,62 +347,129 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div style={chartBox}>
-            <div style={{ width: "100%", height: 280 }}>
+          <div style={chartWrap}>
+            <div style={{ width: "100%", height: 320 }}>
               <ResponsiveContainer>
-                <BarChart data={weeklyChartData} margin={{ top: 12, right: 10, left: 0, bottom: 0 }} barCategoryGap={14} barGap={6}>
-                  <CartesianGrid stroke="rgba(15,23,42,0.10)" strokeDasharray="0" vertical horizontal />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} stroke="rgba(15,23,42,0.45)" style={axisFont} />
-                  <YAxis tickLine={false} axisLine={false} stroke="rgba(15,23,42,0.45)" ticks={yTicks} domain={[0, yTicks[yTicks.length - 1] || 10]} style={axisFont} />
-                  <Tooltip cursor={false} contentStyle={tooltipStyle} labelStyle={tooltipLabel} itemStyle={tooltipItem} />
+                <BarChart
+                  data={weeklyChartData}
+                  margin={{ top: 10, right: 14, left: 0, bottom: 0 }}
+                  barCategoryGap={14}
+                  barGap={6}
+                >
+                  <CartesianGrid
+                    stroke="rgba(15,61,46,0.10)"
+                    strokeDasharray="0"
+                    vertical
+                    horizontal
+                  />
+
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    stroke="rgba(0,0,0,0.35)"
+                    style={axisFont}
+                  />
+
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    stroke="rgba(0,0,0,0.35)"
+                    ticks={yTicks}
+                    domain={[0, yTicks[yTicks.length - 1] || 10]}
+                    style={axisFont}
+                  />
+
+                  <Tooltip
+                    cursor={false}
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabel}
+                    itemStyle={tooltipItem}
+                  />
 
                   {chartFilter === "All" ? (
                     <>
-                      <Bar dataKey="calls" name="Calls" fill="url(#b1)" radius={[10, 10, 0, 0]} barSize={12} />
-                      <Bar dataKey="emails" name="Emails" fill="url(#b2)" radius={[10, 10, 0, 0]} barSize={12} />
-                      <Bar dataKey="meetings" name="Meetings" fill="url(#b3)" radius={[10, 10, 0, 0]} barSize={12} />
+                      <Bar
+                        dataKey="calls"
+                        name="Calls"
+                        fill="url(#pfCalls)"
+                        radius={[8, 8, 0, 0]}
+                        barSize={8}
+                        maxBarSize={10}
+                        activeBar={activeBarStyle}
+                      />
+                      <Bar
+                        dataKey="emails"
+                        name="Emails"
+                        fill="url(#pfEmails)"
+                        radius={[8, 8, 0, 0]}
+                        barSize={8}
+                        maxBarSize={10}
+                        activeBar={activeBarStyle}
+                      />
+                      <Bar
+                        dataKey="meetings"
+                        name="Meetings"
+                        fill="url(#pfMeetings)"
+                        radius={[8, 8, 0, 0]}
+                        barSize={8}
+                        maxBarSize={10}
+                        activeBar={activeBarStyle}
+                      />
                     </>
                   ) : (
-                    <Bar dataKey="value" name={chartFilter} fill="url(#b4)" radius={[10, 10, 0, 0]} barSize={14} />
+                    <Bar
+                      dataKey="value"
+                      name={chartFilter}
+                      fill="url(#pfSingle)"
+                      radius={[8, 8, 0, 0]}
+                      barSize={10}
+                      maxBarSize={12}
+                      activeBar={activeBarStyle}
+                    />
                   )}
 
                   <defs>
-                    <linearGradient id="b1" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#60A5FA" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.95} />
+                    <linearGradient id="pfCalls" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#2aa06e" stopOpacity={0.92} />
+                      <stop offset="100%" stopColor="#1f7a57" stopOpacity={0.92} />
                     </linearGradient>
-                    <linearGradient id="b2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#93C5FD" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#60A5FA" stopOpacity={0.95} />
+
+                    <linearGradient id="pfEmails" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#7bcf8f" stopOpacity={0.92} />
+                      <stop offset="100%" stopColor="#3aa86e" stopOpacity={0.92} />
                     </linearGradient>
-                    <linearGradient id="b3" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#A3E635" stopOpacity={0.90} />
-                      <stop offset="100%" stopColor="#84CC16" stopOpacity={0.90} />
+
+                    <linearGradient id="pfMeetings" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#155c44" stopOpacity={0.92} />
+                      <stop offset="100%" stopColor="#0f3d2e" stopOpacity={0.92} />
                     </linearGradient>
-                    <linearGradient id="b4" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#60A5FA" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#2563EB" stopOpacity={0.95} />
+
+                    <linearGradient id="pfSingle" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#1f7a57" stopOpacity={0.92} />
+                      <stop offset="100%" stopColor="#145c43" stopOpacity={0.92} />
                     </linearGradient>
                   </defs>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-        </section>
+        </div>
 
-        <aside style={panelRight}>
+        {/* ✅ Derecha: recent activity */}
+        <div style={panel}>
           <div style={panelHead}>
             <div>
-              <div style={panelTitle}>Notifications</div>
-              <div style={panelSub}>Recent activity</div>
+              <div style={panelTitle}>Recent activity</div>
+              <div style={panelSub}>Latest logged interactions</div>
             </div>
           </div>
 
-          <div style={listScroll}>
+          <div style={activityPanelBody}>
             {!recentActivities.length ? (
               <div style={emptyText}>No activity yet</div>
             ) : (
-              <div style={list}>
+              <div style={tasksList}>
                 {recentActivities.map((a) => {
                   const f = a?.fields || {}
                   const outcome = normalizeOutcome(a) || "Activity"
@@ -347,30 +478,33 @@ export default function Dashboard() {
                   const dateOnly = formatDateOnly(f["Activity Date"])
 
                   return (
-                    <div key={a.id} style={row}>
-                      <div style={rowTop}>
-                        <div style={pillType}>{outcome}</div>
-                        <div style={rowDate}>{dateOnly}</div>
+                    <div key={a.id} style={taskRow}>
+                      <div style={taskLeft}>
+                        <div style={taskTopLine}>
+                          <div style={taskType}>{outcome}</div>
+                          <div style={taskContact}>{contact}</div>
+                        </div>
+                        <div style={taskNote}>{note || "—"}</div>
                       </div>
-                      <div style={rowTitle}>{contact}</div>
-                      <div style={rowNote}>{note || "—"}</div>
+                      <div style={taskDate}>{dateOnly}</div>
                     </div>
                   )
                 })}
               </div>
             )}
           </div>
-        </aside>
+        </div>
       </div>
     </div>
   )
 }
 
-function Kpi({ title, value }) {
+function StatCard({ title, value }) {
   return (
-    <div style={kpi}>
-      <div style={kpiTitle}>{title}</div>
-      <div style={kpiValue}>{value}</div>
+    <div style={card}>
+      <div style={cardLabel}>{title}</div>
+      <div style={cardValue}>{value}</div>
+      <div style={cardSub}> </div>
     </div>
   )
 }
@@ -379,263 +513,292 @@ function Kpi({ title, value }) {
 
 const FONT = "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 
-const page = {
-  height: "100%",
-  width: "100%",
-  padding: 18,
-  boxSizing: "border-box",
-  overflow: "auto",
+const page = { width: "100%", fontFamily: FONT }
+
+const loadingText = {
+  padding: 20,
+  fontWeight: 900,
+  color: "#0f3d2e",
   fontFamily: FONT
 }
 
-const loadingText = { padding: 20, fontWeight: 950, color: "rgba(15,23,42,0.85)" }
-
-const header = {
+const topRow = {
   display: "flex",
-  alignItems: "flex-end",
   justifyContent: "space-between",
-  gap: 14,
+  alignItems: "flex-end",
+  gap: 16,
   flexWrap: "wrap",
-  padding: "10px 12px 0"
+  marginBottom: 18
 }
 
-const welcome = {
-  fontWeight: 800,
-  color: "rgba(15,23,42,0.55)",
-  fontSize: 13
-}
-
-const h1 = {
-  margin: "6px 0 0",
+const title = {
+  margin: 0,
   fontSize: 34,
-  fontWeight: 980,
-  letterSpacing: 0.2,
-  color: "#0f172a"
+  fontWeight: 950,
+  color: "#0f3d2e",
+  fontFamily: FONT,
+  letterSpacing: -0.2
 }
 
-const kpiRow = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-  gap: 12,
-  marginTop: 14,
-  padding: "0 12px"
-}
-
-/* KPI cards */
-const kpi = {
-  borderRadius: 18,
-  background: "rgba(255,255,255,0.84)",
-  border: "1px solid rgba(15,23,42,0.08)",
-  boxShadow: "0 18px 50px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.70)",
-  padding: 16
-}
-
-const kpiTitle = {
-  fontWeight: 900,
-  fontSize: 12,
-  color: "rgba(15,23,42,0.55)",
-  textTransform: "uppercase",
-  letterSpacing: 0.35
-}
-
-const kpiValue = {
-  marginTop: 10,
-  fontWeight: 980,
-  fontSize: 36,
-  color: "#0f172a",
-  lineHeight: 1.05
+const subtitle = {
+  marginTop: 6,
+  color: "rgba(0,0,0,0.52)",
+  fontWeight: 750,
+  fontFamily: FONT
 }
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "2fr 1fr",
-  gap: 12,
-  marginTop: 12,
-  padding: "0 12px 12px"
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: 14,
+  marginTop: 14
 }
 
-/* Panels */
-const panelBase = {
-  borderRadius: 22,
-  background: "rgba(255,255,255,0.78)",
-  border: "1px solid rgba(15,23,42,0.08)",
-  boxShadow: "0 22px 70px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.70)",
-  padding: 16,
+/* ✅ responsive más premium (iPad: 1 columna) */
+const bottomGrid = {
+  display: "grid",
+  gridTemplateColumns: "2fr 1fr",
+  gap: 14,
+  marginTop: 14,
+  alignItems: "stretch"
+}
+
+/* Tip: si querés 1 columna en iPad, lo hago por JS en Layout o con CSS global.
+   Como acá es inline styles, te lo dejo listo para que lo hagamos en Layout luego. */
+
+const card = {
+  background: "rgba(255,255,255,0.70)",
+  border: "1px solid rgba(15,61,46,0.10)",
+  borderRadius: 18,
+  padding: 18,
+  boxShadow: "0 14px 40px rgba(15,61,46,0.10)",
+  fontFamily: FONT
+}
+
+const cardLabel = {
+  fontSize: 11,
+  fontWeight: 950,
+  color: "rgba(20,92,67,0.88)",
+  textTransform: "uppercase",
+  letterSpacing: "0.35px",
+  fontFamily: FONT
+}
+
+const cardValue = {
+  marginTop: 10,
+  fontSize: 36,
+  fontWeight: 950,
+  color: "#0f3d2e",
+  lineHeight: 1.08,
+  fontFamily: FONT
+}
+
+const cardSub = {
+  marginTop: 10,
+  fontSize: 12,
+  color: "rgba(0,0,0,0.55)",
+  fontWeight: 750,
+  minHeight: 16,
+  fontFamily: FONT
+}
+
+const panel = {
+  background: "rgba(255,255,255,0.70)",
+  border: "1px solid rgba(15,61,46,0.10)",
+  borderRadius: 18,
+  padding: 18,
+  boxShadow: "0 14px 40px rgba(15,61,46,0.10)",
+  fontFamily: FONT,
   display: "flex",
   flexDirection: "column",
   minHeight: 420
 }
 
-const panelWide = { ...panelBase }
-const panelRight = { ...panelBase }
-
 const panelHead = {
   display: "flex",
-  alignItems: "center",
   justifyContent: "space-between",
+  alignItems: "center",
   gap: 12,
   flexWrap: "wrap"
 }
 
 const panelTitle = {
-  fontWeight: 980,
-  color: "#0f172a",
-  fontSize: 14
+  fontSize: 13,
+  fontWeight: 950,
+  color: "#0f3d2e",
+  fontFamily: FONT
 }
 
 const panelSub = {
   marginTop: 4,
+  fontSize: 12,
   fontWeight: 750,
-  color: "rgba(15,23,42,0.55)",
-  fontSize: 12
+  color: "rgba(0,0,0,0.50)",
+  fontFamily: FONT
 }
 
-/* segmented */
 const segmented = {
   display: "flex",
   gap: 6,
   padding: 4,
-  borderRadius: 999,
-  background: "rgba(15,23,42,0.04)",
-  border: "1px solid rgba(15,23,42,0.08)"
-}
-
-const segBtn = {
-  border: "1px solid transparent",
-  background: "transparent",
-  padding: "8px 10px",
-  borderRadius: 999,
-  cursor: "pointer",
-  fontWeight: 950,
-  fontSize: 12,
-  color: "rgba(15,23,42,0.60)",
-  transition: "all 150ms ease",
+  borderRadius: 14,
+  border: "1px solid rgba(15,61,46,0.10)",
+  background: "rgba(255,255,255,0.75)",
   fontFamily: FONT
 }
 
-const segBtnActive = {
-  background: "rgba(59,130,246,0.14)",
-  border: "1px solid rgba(59,130,246,0.18)",
-  color: "#0f172a"
+const segBtn = {
+  border: "none",
+  background: "transparent",
+  padding: "8px 10px",
+  borderRadius: 12,
+  cursor: "pointer",
+  fontWeight: 950,
+  fontSize: 12,
+  color: "rgba(0,0,0,0.58)",
+  fontFamily: FONT,
+  transition: "background 0.12s ease, color 0.12s ease"
 }
 
-const chartBox = {
+const segBtnActive = {
+  background: "rgba(20,92,67,0.12)",
+  color: "#145c43"
+}
+
+const chartWrap = {
   marginTop: 14,
-  borderRadius: 18,
-  border: "1px solid rgba(15,23,42,0.08)",
-  background: "rgba(241,245,249,0.60)",
+  borderRadius: 16,
+  border: "1px solid rgba(15,61,46,0.12)",
+  background: `
+    linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.54) 100%)
+  `,
   padding: 14
 }
 
-const axisFont = { fontFamily: FONT, fontWeight: 900, fontSize: 12 }
+const axisFont = {
+  fontFamily: FONT,
+  fontWeight: 850,
+  fontSize: 12
+}
 
 const tooltipStyle = {
   borderRadius: 14,
-  border: "1px solid rgba(15,23,42,0.10)",
-  background: "rgba(255,255,255,0.95)",
-  boxShadow: "0 18px 50px rgba(15,23,42,0.14)"
+  border: "1px solid rgba(15,61,46,0.12)",
+  background: "rgba(255,255,255,0.92)",
+  backdropFilter: "blur(14px)",
+  fontFamily: FONT
 }
-const tooltipLabel = { fontWeight: 950 }
-const tooltipItem = { fontWeight: 850 }
 
-const listScroll = {
+const tooltipLabel = { fontWeight: 950, fontFamily: FONT }
+const tooltipItem = { fontWeight: 850, fontFamily: FONT }
+
+const activeBarStyle = {
+  stroke: "rgba(255,255,255,0.96)",
+  strokeWidth: 2,
+  fillOpacity: 1
+}
+
+const activityPanelBody = {
   marginTop: 14,
   flex: 1,
+  minHeight: 320,
+  maxHeight: 320,
   overflowY: "auto",
   paddingRight: 6
 }
 
-const list = { display: "flex", flexDirection: "column", gap: 10 }
-
-const row = {
-  borderRadius: 18,
-  border: "1px solid rgba(15,23,42,0.08)",
-  background: "rgba(255,255,255,0.86)",
-  boxShadow: "0 14px 36px rgba(15,23,42,0.10)",
-  padding: 12
+const tasksList = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10
 }
 
-const rowTop = {
+const taskRow = {
   display: "flex",
-  alignItems: "center",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid rgba(15,61,46,0.10)",
+  background: "rgba(255,255,255,0.78)",
+  fontFamily: FONT
+}
+
+const taskLeft = { minWidth: 0, flex: 1 }
+
+const taskTopLine = {
+  display: "flex",
+  alignItems: "baseline",
   justifyContent: "space-between",
   gap: 10
 }
 
-const pillType = {
+const taskType = {
   fontWeight: 950,
+  color: "#0f3d2e",
   fontSize: 11,
   textTransform: "uppercase",
-  letterSpacing: 0.35,
-  color: "#0f172a",
-  background: "rgba(59,130,246,0.12)",
-  border: "1px solid rgba(59,130,246,0.16)",
-  padding: "6px 10px",
-  borderRadius: 999
+  letterSpacing: "0.35px",
+  fontFamily: FONT
 }
 
-const rowDate = {
-  fontWeight: 850,
+const taskContact = {
+  fontWeight: 900,
+  color: "rgba(0,0,0,0.58)",
   fontSize: 12,
-  color: "rgba(15,23,42,0.55)",
-  whiteSpace: "nowrap"
-}
-
-const rowTitle = {
-  marginTop: 10,
-  fontWeight: 950,
-  color: "#0f172a",
-  fontSize: 13,
   whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis"
+  fontFamily: FONT
 }
 
-const rowNote = {
+const taskNote = {
   marginTop: 6,
   fontWeight: 750,
-  color: "rgba(15,23,42,0.62)",
+  color: "rgba(0,0,0,0.72)",
   fontSize: 13,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis"
+  textOverflow: "ellipsis",
+  fontFamily: FONT
+}
+
+const taskDate = {
+  fontWeight: 900,
+  color: "rgba(0,0,0,0.55)",
+  fontSize: 12,
+  whiteSpace: "nowrap",
+  fontFamily: FONT
 }
 
 const emptyText = {
+  marginTop: 12,
   fontWeight: 850,
-  color: "rgba(15,23,42,0.55)",
-  fontSize: 13
-}
-
-const btnPrimary = {
-  padding: "10px 12px",
-  borderRadius: 14,
-  border: "1px solid rgba(59,130,246,0.22)",
-  background: "rgba(59,130,246,0.16)",
-  color: "#0f172a",
-  fontWeight: 950,
-  cursor: "pointer",
-  boxShadow: "0 18px 44px rgba(59,130,246,0.16)",
+  color: "rgba(0,0,0,0.55)",
+  fontSize: 13,
   fontFamily: FONT
 }
 
 const btnGhost = {
   padding: "10px 12px",
   borderRadius: 14,
-  border: "1px solid rgba(15,23,42,0.10)",
-  background: "rgba(255,255,255,0.78)",
+  border: "1px solid rgba(15,61,46,0.12)",
+  background: "rgba(255,255,255,0.74)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
   fontWeight: 950,
   cursor: "pointer",
-  boxShadow: "0 18px 44px rgba(15,23,42,0.12)",
-  fontFamily: FONT
+  fontSize: 12,
+  fontFamily: FONT,
+  boxShadow: "0 10px 24px rgba(15,61,46,0.08)"
 }
 
 const errBox = {
   marginTop: 10,
   padding: 12,
   borderRadius: 14,
-  background: "rgba(255,60,60,0.10)",
+  background: "rgba(255,0,0,0.08)",
   color: "#7a1d1d",
-  border: "1px solid rgba(255,60,60,0.18)",
-  fontWeight: 850
+  border: "1px solid rgba(255,0,0,0.12)",
+  fontWeight: 850,
+  fontFamily: FONT
 }
