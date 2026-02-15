@@ -1,113 +1,104 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import Sidebar from "../components/Sidebar"
 
 export default function Layout({ children }) {
-  const [isMobile, setIsMobile] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
+  // En pantallas chicas arrancamos cerrado para dar espacio (iPad incluido)
   useEffect(() => {
-    const onResize = () => {
-      const mobile = window.innerWidth <= 1024 // iPad y abajo
-      setIsMobile(mobile)
-      // si cambia el modo, definimos default cómodo
-      setSidebarOpen(!mobile) // mobile cerrado, desktop abierto
-    }
-
-    onResize()
-    window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
+    const mq = window.matchMedia("(max-width: 1024px)")
+    const apply = () => setSidebarOpen(!mq.matches)
+    apply()
+    mq.addEventListener?.("change", apply)
+    return () => mq.removeEventListener?.("change", apply)
   }, [])
-
-  const contentStyle = useMemo(() => {
-    return {
-      ...content,
-      // topbar en mobile ocupa 64px
-      padding: isMobile ? "88px 18px 24px" : "60px 80px"
-    }
-  }, [isMobile])
 
   return (
     <div style={app}>
-      <Sidebar
-        isMobile={isMobile}
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen((v) => !v)}
-        onClose={() => setSidebarOpen(false)}
-        onOpen={() => setSidebarOpen(true)}
-      />
+      <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((s) => !s)} />
 
-      {/* Topbar solo en mobile */}
-      {isMobile ? (
-        <div style={mobileTopbar}>
+      <div
+        style={{
+          ...content,
+          paddingLeft: sidebarOpen ? 28 : 18
+        }}
+      >
+        {/* Top bar minimal para toggle también en desktop */}
+        <div style={topBar}>
           <button
             type="button"
-            style={burgerBtn}
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open menu"
+            onClick={() => setSidebarOpen((s) => !s)}
+            style={iconBtn}
+            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
           >
-            ☰
+            {sidebarOpen ? "⟨" : "⟩"}
           </button>
-          <div style={topbarTitle}>PsicoFunnel CRM</div>
-          <div style={{ width: 44 }} />
-        </div>
-      ) : null}
 
-      <div style={contentStyle}>{children}</div>
+          <div style={topHint}>CRM</div>
+        </div>
+
+        <div style={pageWrap}>{children}</div>
+      </div>
     </div>
   )
 }
 
 const app = {
-  position: "relative",
   display: "flex",
   height: "100vh",
   width: "100vw",
   overflow: "hidden",
   fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
   background: `
-    radial-gradient(circle at 10% 10%, rgba(30,122,87,0.18), transparent 40%),
-    radial-gradient(circle at 90% 90%, rgba(15,61,46,0.18), transparent 40%),
-    linear-gradient(135deg, #f4fbf8 0%, #e9f6f0 50%, #f4fbf8 100%)
+    radial-gradient(circle at 10% 10%, rgba(30,122,87,0.12), transparent 40%),
+    radial-gradient(circle at 90% 90%, rgba(15,61,46,0.12), transparent 40%),
+    linear-gradient(135deg, #f7fbf9 0%, #eef7f2 50%, #f7fbf9 100%)
   `
 }
 
 const content = {
   flex: 1,
-  overflowY: "auto"
+  overflowY: "auto",
+  padding: "22px 28px",
+  transition: "padding 220ms ease"
 }
 
-const mobileTopbar = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  height: 64,
+const topBar = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
-  padding: "0 14px",
-  zIndex: 50,
-  background: "rgba(244,251,248,0.75)",
-  backdropFilter: "blur(22px)",
-  WebkitBackdropFilter: "blur(22px)",
-  borderBottom: "1px solid rgba(0,0,0,0.06)"
+  gap: 10,
+  position: "sticky",
+  top: 0,
+  zIndex: 20,
+  padding: "10px 0 14px 0",
+  background: "transparent"
 }
 
-const burgerBtn = {
-  width: 44,
-  height: 44,
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.85)",
-  boxShadow: "0 10px 22px rgba(0,0,0,0.06)",
-  fontWeight: 900,
+const iconBtn = {
+  width: 36,
+  height: 32,
+  borderRadius: 12, // ✅ sutil
+  border: "1px solid rgba(0,0,0,0.10)",
+  background: "rgba(255,255,255,0.65)",
+  backdropFilter: "blur(18px)",
+  WebkitBackdropFilter: "blur(18px)",
+  fontWeight: 800,
   cursor: "pointer",
-  fontSize: 18
+  color: "rgba(0,0,0,0.70)",
+  lineHeight: "32px"
 }
 
-const topbarTitle = {
-  fontSize: 14,
-  fontWeight: 900,
-  color: "#0f3d2e",
-  letterSpacing: 0.2
+const topHint = {
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: "rgba(0,0,0,0.45)"
+}
+
+const pageWrap = {
+  maxWidth: 1200,
+  margin: "0 auto",
+  paddingBottom: 22
 }
