@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid
+} from "recharts"
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
@@ -9,8 +17,8 @@ export default function Dashboard() {
   const [err, setErr] = useState("")
   const [loading, setLoading] = useState(true)
 
-  // Filtro del gráfico
-  const [chartFilter, setChartFilter] = useState("All") // All | Call | Email | Meeting
+  // All | Call | Email | Meeting
+  const [chartFilter, setChartFilter] = useState("Call")
 
   /* ---------------- Helpers ---------------- */
 
@@ -36,29 +44,26 @@ export default function Dashboard() {
     return `${yyyy}-${mm}-${dd}`
   }
 
-  const normalizeOutcome = (a) => {
-    const f = a?.fields || {}
-    const raw = (f.Outcome ?? f["Activity Type"] ?? "").toString().trim().toLowerCase()
-
-    // soporta variantes
-    if (raw.includes("call")) return "Call"
-    if (raw.includes("email")) return "Email"
-    if (raw.includes("meeting")) return "Meeting"
-    if (raw.includes("linkedin")) return "LinkedIn"
-    if (raw.includes("positive")) return "Positive response"
-
-    // fallback: capitaliza algo
-    if (!raw) return ""
-    return raw.charAt(0).toUpperCase() + raw.slice(1)
-  }
-
   const getName = (email) => {
     if (email === "benjamin.alegre@psicofunnel.com") return "Benjamin"
     if (email === "sarahduatorrss@gmail.com") return "Sarah"
     return "User"
   }
 
-  /* ---------------- Load data ---------------- */
+  // Outcome normalizado (soporta data vieja con Activity Type)
+  const normalizeOutcome = (a) => {
+    const f = a?.fields || {}
+    const raw = (f.Outcome ?? f["Activity Type"] ?? "").toString().trim().toLowerCase()
+
+    if (raw.includes("call")) return "Call"
+    if (raw.includes("email")) return "Email"
+    if (raw.includes("meeting")) return "Meeting"
+    if (raw.includes("linkedin")) return "LinkedIn"
+    if (raw.includes("positive")) return "Positive response"
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : ""
+  }
+
+  /* ---------------- Load ---------------- */
 
   useEffect(() => {
     let alive = true
@@ -129,17 +134,9 @@ export default function Dashboard() {
     })
   }, [calendarSafe, todayISO])
 
-  const callsToday = useMemo(() => {
-    return todayActivities.filter((a) => normalizeOutcome(a) === "Call").length
-  }, [todayActivities])
-
-  const emailsToday = useMemo(() => {
-    return todayActivities.filter((a) => normalizeOutcome(a) === "Email").length
-  }, [todayActivities])
-
-  const meetingsToday = useMemo(() => {
-    return todayActivities.filter((a) => normalizeOutcome(a) === "Meeting").length
-  }, [todayActivities])
+  const callsToday = useMemo(() => todayActivities.filter((a) => normalizeOutcome(a) === "Call").length, [todayActivities])
+  const emailsToday = useMemo(() => todayActivities.filter((a) => normalizeOutcome(a) === "Email").length, [todayActivities])
+  const meetingsToday = useMemo(() => todayActivities.filter((a) => normalizeOutcome(a) === "Meeting").length, [todayActivities])
 
   const upcoming = useMemo(() => {
     return calendarSafe
@@ -155,13 +152,14 @@ export default function Dashboard() {
       })
   }, [calendarSafe, todayISO])
 
+  // filtro del chart
   const filteredForChart = useMemo(() => {
     if (chartFilter === "All") return calendarSafe
     return calendarSafe.filter((a) => normalizeOutcome(a) === chartFilter)
   }, [calendarSafe, chartFilter])
 
+  // data semanal (últimos 7 días)
   const weeklyChartData = useMemo(() => {
-    // últimos 7 días incluyendo hoy
     const days = []
     for (let i = 6; i >= 0; i--) {
       const d = new Date()
@@ -182,6 +180,15 @@ export default function Dashboard() {
 
     return days
   }, [filteredForChart])
+
+  // ticks cada 5 (5,10,15,...)
+  const yTicks = useMemo(() => {
+    const maxVal = Math.max(0, ...weeklyChartData.map((d) => Number(d.value || 0)))
+    const top = Math.max(5, Math.ceil(maxVal / 5) * 5) // mínimo 5
+    const ticks = []
+    for (let t = 0; t <= top; t += 5) ticks.push(t)
+    return ticks
+  }, [weeklyChartData])
 
   /* ---------------- UI states ---------------- */
 
@@ -217,13 +224,13 @@ export default function Dashboard() {
 
       <div style={grid}>
         <StatCard title="Total leads" value={stats.totalLeads ?? 0} />
-
-        <StatCard title="Upcoming follow-ups" value={upcoming.length} sub={upcoming.length ? `Next: ${String(upcoming[0]?.fields?.["Next Follow-up Date"] || "").slice(0, 10)}` : "—"} />
-
+        <StatCard
+          title="Upcoming follow-ups"
+          value={upcoming.length}
+          sub={upcoming.length ? `Next: ${String(upcoming[0]?.fields?.["Next Follow-up Date"] || "").slice(0, 10)}` : "—"}
+        />
         <StatCard title="Calls today" value={callsToday} />
-
         <StatCard title="Emails today" value={emailsToday} />
-
         <StatCard title="Meetings today" value={meetingsToday} />
       </div>
 
@@ -242,10 +249,7 @@ export default function Dashboard() {
                   <button
                     key={k}
                     type="button"
-                    style={{
-                      ...segBtn,
-                      ...(active ? segBtnActive : null)
-                    }}
+                    style={{ ...segBtn, ...(active ? segBtnActive : null) }}
                     onClick={() => setChartFilter(k)}
                   >
                     {k}
@@ -255,18 +259,58 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div style={{ width: "100%", height: 320 }}>
-            <ResponsiveContainer>
-              <BarChart data={weeklyChartData}>
-                <XAxis dataKey="name" stroke="rgba(0,0,0,0.35)" tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  labelStyle={{ fontWeight: 900 }}
-                  formatter={(v) => [v, chartFilter === "All" ? "Activities" : chartFilter]}
-                />
-                <Bar dataKey="value" fill="#145c43" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          {/* 👇 Fondo cuadriculado + chart delgado */}
+          <div style={chartWrap}>
+            <div style={{ width: "100%", height: 320 }}>
+              <ResponsiveContainer>
+                <BarChart data={weeklyChartData} margin={{ top: 10, right: 14, left: 0, bottom: 0 }}>
+                  <CartesianGrid
+                    stroke="rgba(15,61,46,0.10)"
+                    strokeDasharray="0"
+                    vertical
+                    horizontal
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    stroke="rgba(0,0,0,0.35)"
+                    style={axisFont}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    stroke="rgba(0,0,0,0.35)"
+                    ticks={yTicks}
+                    domain={[0, yTicks[yTicks.length - 1] || 5]}
+                    style={axisFont}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelStyle={{ fontWeight: 900, fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif" }}
+                    itemStyle={{ fontWeight: 800, fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif" }}
+                    formatter={(v) => [v, chartFilter === "All" ? "Activities" : chartFilter]}
+                  />
+
+                  {/* Barra delgada + look pro */}
+                  <Bar
+                    dataKey="value"
+                    fill="url(#pfGreen)"
+                    radius={[6, 6, 0, 0]}
+                    barSize={10}     // 👈 delgado
+                    maxBarSize={12}
+                  />
+
+                  <defs>
+                    {/* gradiente verde pro (paleta similar a tu referencia) */}
+                    <linearGradient id="pfGreen" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#1f7a57" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#145c43" stopOpacity={0.95} />
+                    </linearGradient>
+                  </defs>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
@@ -281,7 +325,7 @@ export default function Dashboard() {
           {!upcoming.length ? (
             <div style={emptyText}>No upcoming tasks</div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+            <div style={tasksList}>
               {upcoming.slice(0, 6).map((a) => {
                 const f = a.fields || {}
                 const when = String(f["Next Follow-up Date"] || "").slice(0, 10)
@@ -318,14 +362,15 @@ function StatCard({ title, value, sub }) {
   )
 }
 
-/* ================= STYLES (más profesional) ================= */
+/* ================= STYLES ================= */
 
 const page = { width: "100%" }
 
 const loadingText = {
   padding: 20,
   fontWeight: 800,
-  color: "#0f3d2e"
+  color: "#0f3d2e",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const topRow = {
@@ -341,13 +386,15 @@ const title = {
   margin: 0,
   fontSize: 34,
   fontWeight: 900,
-  color: "#0f3d2e"
+  color: "#0f3d2e",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const subtitle = {
   marginTop: 6,
   color: "rgba(0,0,0,0.55)",
-  fontWeight: 700
+  fontWeight: 700,
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const grid = {
@@ -377,7 +424,8 @@ const cardLabel = {
   fontWeight: 900,
   color: "rgba(20,92,67,0.85)",
   textTransform: "uppercase",
-  letterSpacing: "0.3px"
+  letterSpacing: "0.3px",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const cardValue = {
@@ -385,7 +433,8 @@ const cardValue = {
   fontSize: 36,
   fontWeight: 950,
   color: "#0f3d2e",
-  lineHeight: 1.1
+  lineHeight: 1.1,
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif" // ✅ números manrope
 }
 
 const cardSub = {
@@ -393,7 +442,8 @@ const cardSub = {
   fontSize: 12,
   color: "rgba(0,0,0,0.55)",
   fontWeight: 700,
-  minHeight: 16
+  minHeight: 16,
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const panel = {
@@ -415,14 +465,16 @@ const panelHead = {
 const panelTitle = {
   fontSize: 13,
   fontWeight: 950,
-  color: "#0f3d2e"
+  color: "#0f3d2e",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const panelSub = {
   marginTop: 4,
   fontSize: 12,
   fontWeight: 700,
-  color: "rgba(0,0,0,0.50)"
+  color: "rgba(0,0,0,0.50)",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const segmented = {
@@ -442,7 +494,8 @@ const segBtn = {
   cursor: "pointer",
   fontWeight: 900,
   fontSize: 12,
-  color: "rgba(0,0,0,0.60)"
+  color: "rgba(0,0,0,0.60)",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const segBtnActive = {
@@ -450,13 +503,44 @@ const segBtnActive = {
   color: "#145c43"
 }
 
+const chartWrap = {
+  marginTop: 14,
+  borderRadius: 14,
+  border: "1px solid rgba(15,61,46,0.10)",
+  background: `
+    repeating-linear-gradient(
+      0deg,
+      rgba(15,61,46,0.045) 0px,
+      rgba(15,61,46,0.045) 1px,
+      transparent 1px,
+      transparent 18px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(15,61,46,0.035) 0px,
+      rgba(15,61,46,0.035) 1px,
+      transparent 1px,
+      transparent 18px
+    ),
+    rgba(255,255,255,0.55)
+  `,
+  padding: 14
+}
+
+const axisFont = {
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
+  fontWeight: 800,
+  fontSize: 12
+}
+
 const tooltipStyle = {
   borderRadius: 12,
   border: "1px solid rgba(0,0,0,0.08)",
   background: "rgba(255,255,255,0.92)",
-  backdropFilter: "blur(12px)",
-  fontWeight: 800
+  backdropFilter: "blur(12px)"
 }
+
+const tasksList = { display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }
 
 const taskRow = {
   display: "flex",
@@ -476,7 +560,8 @@ const taskType = {
   color: "#0f3d2e",
   fontSize: 12,
   textTransform: "uppercase",
-  letterSpacing: "0.3px"
+  letterSpacing: "0.3px",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const taskNote = {
@@ -486,21 +571,24 @@ const taskNote = {
   fontSize: 13,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis"
+  textOverflow: "ellipsis",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const taskDate = {
   fontWeight: 900,
   color: "rgba(0,0,0,0.55)",
   fontSize: 12,
-  whiteSpace: "nowrap"
+  whiteSpace: "nowrap",
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const emptyText = {
   marginTop: 12,
   fontWeight: 800,
   color: "rgba(0,0,0,0.55)",
-  fontSize: 13
+  fontSize: 13,
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const btnGhost = {
@@ -511,7 +599,8 @@ const btnGhost = {
   backdropFilter: "blur(14px)",
   fontWeight: 900,
   cursor: "pointer",
-  fontSize: 12
+  fontSize: 12,
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
 const errBox = {
@@ -521,5 +610,6 @@ const errBox = {
   background: "rgba(255,0,0,0.08)",
   color: "#7a1d1d",
   border: "1px solid rgba(255,0,0,0.12)",
-  fontWeight: 800
+  fontWeight: 800,
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
