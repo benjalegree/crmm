@@ -307,7 +307,6 @@ export default function LeadProfile() {
       setSaveErr("")
       setSaveMsg("Guardado ✅")
 
-      // limpiamos el mensaje después de un ratito
       setTimeout(() => {
         if (!mountedRef.current) return
         setSaveMsg("")
@@ -317,7 +316,6 @@ export default function LeadProfile() {
       setSaving(false)
     } finally {
       inFlightRef.current = false
-      // si hubo cambios mientras guardábamos, mandamos otra vez
       if (pendingRef.current) {
         pendingRef.current = false
         flushAutosave()
@@ -458,8 +456,6 @@ export default function LeadProfile() {
         <h1 style={title}>{f["Full Name"] || "Lead"}</h1>
         <div style={topRight}>
           {statusPill}
-
-          {/* ✅ Estado autosave */}
           <span style={mutedSmall}>
             {saving ? "Guardando..." : saveErr ? "Error" : saveMsg ? saveMsg : ""}
           </span>
@@ -514,7 +510,23 @@ export default function LeadProfile() {
           </select>
 
           <label style={label}>Next Follow-up (from Activities)</label>
-          <input style={input} value={toDateInputValue(computedNextFollowUp)} readOnly />
+
+          <div style={followUpWrap}>
+            <div style={followUpIcon} aria-hidden="true">
+              📅
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+              <div style={followUpTitle}>Próximo seguimiento</div>
+              <div style={followUpValue}>
+                {toDateInputValue(computedNextFollowUp) || "No follow-up yet"}
+              </div>
+            </div>
+
+            <div style={followUpPill}>
+              {toDateInputValue(computedNextFollowUp) ? "Scheduled" : "Empty"}
+            </div>
+          </div>
 
           <label style={label}>Notes (general)</label>
           <textarea
@@ -524,7 +536,6 @@ export default function LeadProfile() {
             onChange={(e) => updateField("Notes", e.target.value)}
           />
 
-          {/* ✅ errores autosave */}
           {saveErr ? <div style={errBox}>{saveErr}</div> : null}
         </div>
 
@@ -652,3 +663,50 @@ const dot = { width: 10, height: 10, borderRadius: 999, marginTop: 6, background
 const note = { marginTop: 6, fontSize: 13, color: "rgba(0,0,0,0.75)" }
 const date = { display: "block", marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.55)" }
 const loadingBox = { padding: 30 }
+
+// ✅ NEW: Follow-up UI styles
+const followUpWrap = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  padding: 14,
+  borderRadius: 18,
+  border: "1px solid rgba(0,0,0,0.08)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.55))",
+  boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
+  backdropFilter: "blur(24px)"
+}
+
+const followUpIcon = {
+  width: 38,
+  height: 38,
+  borderRadius: 14,
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(20,92,67,0.10)",
+  border: "1px solid rgba(20,92,67,0.14)",
+  fontSize: 18
+}
+
+const followUpTitle = {
+  fontSize: 12,
+  fontWeight: 800,
+  color: "rgba(0,0,0,0.55)",
+  letterSpacing: 0.2
+}
+
+const followUpValue = {
+  fontSize: 16,
+  fontWeight: 900,
+  color: "#0f3d2e",
+  lineHeight: 1.1
+}
+
+const followUpPill = {
+  padding: "8px 10px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 900,
+  background: "rgba(0,0,0,0.06)",
+  border: "1px solid rgba(0,0,0,0.08)"
+}
