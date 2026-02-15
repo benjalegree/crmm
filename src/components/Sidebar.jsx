@@ -2,21 +2,25 @@ import { Link, useLocation } from "react-router-dom"
 import { useMemo } from "react"
 
 const T = {
-  bg: "#F6FBF8",
-  bg2: "#EEF6F1",
-  ink: "#0F2E24",
-  ink2: "rgba(15,46,36,0.72)",
-  ink3: "rgba(15,46,36,0.52)",
-  line: "rgba(15,46,36,0.10)",
-  line2: "rgba(15,46,36,0.14)",
-  surface: "rgba(255,255,255,0.72)",
-  surface2: "rgba(255,255,255,0.56)",
-  accent: "#145C43", // verde inglés
-  accent2: "#0F3D2E",
-  accentSoft: "rgba(20,92,67,0.12)",
-  accentSoft2: "rgba(20,92,67,0.18)",
-  shadow: "0 18px 40px rgba(15,46,36,0.10)",
-  shadow2: "0 10px 24px rgba(15,46,36,0.08)"
+  // Glass base
+  glassA: "rgba(255,255,255,0.12)",
+  glassB: "rgba(255,255,255,0.07)",
+  borderA: "rgba(255,255,255,0.18)",
+  borderB: "rgba(0,0,0,0.25)",
+  ink: "rgba(255,255,255,0.92)",
+  ink2: "rgba(255,255,255,0.78)",
+  ink3: "rgba(255,255,255,0.60)",
+
+  // Verde inglés (premium)
+  accent: "#1FAE7A",
+  accentDeep: "#145C43",
+  accentInk: "#0B241C",
+  accentSoft: "rgba(31,174,122,0.18)",
+  accentSoft2: "rgba(31,174,122,0.26)",
+
+  // Sombras (controladas)
+  shadow: "0 26px 70px rgba(0,0,0,0.35)",
+  shadow2: "0 14px 34px rgba(0,0,0,0.26)"
 }
 
 export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
@@ -30,7 +34,6 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
     { path: "/calendar", label: "Calendar", icon: "🗓️" }
   ]
 
-  // Desktop: open=true expandida, open=false colapsada
   const isCollapsedDesktop = !isMobile && !open
 
   const wrapperStyle = useMemo(() => {
@@ -40,30 +43,29 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
         transform: open ? "translateX(0)" : "translateX(-110%)"
       }
     }
-
-    return {
-      ...sidebarWrapper,
-      width: isCollapsedDesktop ? "112px" : "272px"
-    }
+    return { ...sidebarWrapper, width: isCollapsedDesktop ? "110px" : "282px" }
   }, [isMobile, open, isCollapsedDesktop])
 
   const panelStyle = useMemo(() => {
     if (isMobile) return sidebarMobile
-
     return {
       ...sidebar,
-      width: isCollapsedDesktop ? "88px" : "248px",
+      width: isCollapsedDesktop ? "86px" : "258px",
       padding: isCollapsedDesktop ? "18px 10px" : "20px 14px"
     }
   }, [isMobile, isCollapsedDesktop])
 
   return (
     <>
-      {/* Overlay solo en mobile */}
       {isMobile && open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
 
       <div style={wrapperStyle}>
         <div style={panelStyle}>
+          {/* Sheen line top */}
+          <div aria-hidden="true" style={sheenTop} />
+          {/* Inner grain */}
+          <div aria-hidden="true" style={innerGrain} />
+
           <div style={topRow}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
               <div style={brandMark}>
@@ -73,7 +75,7 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
               {!isCollapsedDesktop ? (
                 <div style={logoWrap}>
                   <div style={logo}>PsicoFunnel</div>
-                  <div style={logoSub}>CRM</div>
+                  <div style={logoSub}>Sales Workspace</div>
                 </div>
               ) : null}
             </div>
@@ -113,11 +115,12 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
                     color: active ? T.ink : T.ink2
                   }}
                 >
-                  <span style={{ ...itemIcon, ...(active ? itemIconActive : {}) }}>{link.icon}</span>
+                  <span style={{ ...itemIconWrap, ...(active ? itemIconWrapActive : {}) }}>
+                    <span style={itemIcon}>{link.icon}</span>
+                  </span>
+
                   {!isCollapsedDesktop ? (
-                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {link.label}
-                    </span>
+                    <span style={itemLabel}>{link.label}</span>
                   ) : null}
                 </Link>
               )
@@ -127,7 +130,7 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
           {!isCollapsedDesktop ? (
             <div style={footerHint}>
               <div style={hintTitle}>Tip</div>
-              <div style={hintText}>Colapsá el menú para ganar espacio y mover más leads cómodo.</div>
+              <div style={hintText}>Arrastrá leads en Pipeline y usá el menú colapsado para foco.</div>
             </div>
           ) : null}
         </div>
@@ -136,7 +139,7 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
   )
 }
 
-/* ============ STYLES ============ */
+/* ========== STYLES ========== */
 
 const sidebarWrapper = {
   padding: "18px 14px",
@@ -161,23 +164,27 @@ const sidebarWrapperMobile = {
 const overlay = {
   position: "fixed",
   inset: 0,
-  background: "rgba(9, 22, 17, 0.32)",
-  backdropFilter: "blur(3px)",
-  WebkitBackdropFilter: "blur(3px)",
+  background: "rgba(0,0,0,0.42)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
   zIndex: 55
 }
 
 const sidebar = {
+  position: "relative",
   height: "100%",
-  borderRadius: "22px",
-  background: T.surface,
-  border: `1px solid ${T.line}`,
-  boxShadow: T.shadow,
-  backdropFilter: "blur(10px)", // MUCHO menos blur = menos “plástico”
-  WebkitBackdropFilter: "blur(10px)",
+  borderRadius: "24px",
+  background: `
+    linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06))
+  `,
+  border: "1px solid rgba(255,255,255,0.16)",
+  boxShadow: "0 28px 80px rgba(0,0,0,0.38)",
+  backdropFilter: "blur(22px)",
+  WebkitBackdropFilter: "blur(22px)",
   transition: "width 220ms ease, padding 220ms ease",
   display: "flex",
-  flexDirection: "column"
+  flexDirection: "column",
+  overflow: "hidden"
 }
 
 const sidebarMobile = {
@@ -186,7 +193,33 @@ const sidebarMobile = {
   padding: "18px 14px"
 }
 
+const sheenTop = {
+  position: "absolute",
+  left: -60,
+  right: -60,
+  top: -60,
+  height: 140,
+  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)",
+  transform: "rotate(-10deg)",
+  opacity: 0.55,
+  pointerEvents: "none"
+}
+
+const innerGrain = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  opacity: 0.12,
+  backgroundImage: `
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.018) 0, rgba(0,0,0,0.018) 1px, transparent 1px, transparent 3px)
+  `,
+  mixBlendMode: "overlay"
+}
+
 const topRow = {
+  position: "relative",
+  zIndex: 2,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -194,36 +227,36 @@ const topRow = {
 }
 
 const brandMark = {
-  width: 28,
-  height: 28,
-  borderRadius: 10,
-  background: "rgba(20,92,67,0.10)",
-  border: "1px solid rgba(20,92,67,0.16)",
+  width: 30,
+  height: 30,
+  borderRadius: 12,
+  background: "rgba(31,174,122,0.14)",
+  border: "1px solid rgba(31,174,122,0.26)",
   display: "grid",
   placeItems: "center",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7)"
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.22)"
 }
 
 const brandDot = {
   width: 10,
   height: 10,
   borderRadius: 999,
-  background: T.accent,
-  boxShadow: "0 10px 18px rgba(20,92,67,0.18)"
+  background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0.0) 55%), #1FAE7A",
+  boxShadow: "0 10px 18px rgba(31,174,122,0.26)"
 }
 
 const logoWrap = { minWidth: 0 }
 const logo = {
   fontSize: 15,
-  fontWeight: 800,
-  color: T.ink,
-  letterSpacing: 0.2,
+  fontWeight: 900,
+  letterSpacing: 0.25,
+  color: "rgba(255,255,255,0.92)",
   lineHeight: 1.1
 }
 const logoSub = {
   fontSize: 11,
   fontWeight: 700,
-  color: T.ink3,
+  color: "rgba(255,255,255,0.62)",
   marginTop: 2,
   letterSpacing: 0.2
 }
@@ -232,16 +265,19 @@ const iconBtn = {
   width: 36,
   height: 36,
   borderRadius: 12,
-  border: `1px solid ${T.line}`,
-  background: "rgba(255,255,255,0.8)",
-  boxShadow: T.shadow2,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.10)",
+  boxShadow: "0 14px 30px rgba(0,0,0,0.26)",
   cursor: "pointer",
   fontWeight: 900,
-  color: T.ink,
-  transition: "transform 120ms ease, box-shadow 120ms ease"
+  color: "rgba(255,255,255,0.90)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)"
 }
 
 const item = {
+  position: "relative",
+  zIndex: 2,
   display: "flex",
   alignItems: "center",
   gap: 10,
@@ -250,9 +286,10 @@ const item = {
   borderRadius: "14px",
   textDecoration: "none",
   fontSize: "13px",
-  fontWeight: 700,
-  border: "1px solid transparent",
-  transition: "background 140ms ease, border-color 140ms ease, transform 140ms ease"
+  fontWeight: 800,
+  border: "1px solid rgba(255,255,255,0.0)",
+  background: "transparent",
+  transition: "transform 140ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease"
 }
 
 const itemCollapsed = {
@@ -261,38 +298,59 @@ const itemCollapsed = {
 }
 
 const itemActive = {
-  background: T.accentSoft,
-  borderColor: "rgba(20,92,67,0.22)"
+  background: `
+    linear-gradient(180deg, rgba(31,174,122,0.18), rgba(31,174,122,0.10))
+  `,
+  borderColor: "rgba(31,174,122,0.26)",
+  boxShadow: "0 16px 36px rgba(0,0,0,0.18)"
+}
+
+const itemIconWrap = {
+  width: 34,
+  height: 34,
+  borderRadius: 12,
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)"
+}
+
+const itemIconWrapActive = {
+  background: "rgba(31,174,122,0.16)",
+  border: "1px solid rgba(31,174,122,0.26)"
 }
 
 const itemIcon = {
-  width: 24,
-  display: "grid",
-  placeItems: "center",
   fontSize: 15,
-  filter: "saturate(0.95)"
+  filter: "saturate(1.05)",
+  transform: "translateY(-0.5px)"
 }
 
-const itemIconActive = {
-  filter: "saturate(1.05)"
+const itemLabel = {
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis"
 }
 
 const footerHint = {
+  position: "relative",
+  zIndex: 2,
   marginTop: "auto",
   paddingTop: 14,
-  borderTop: `1px solid ${T.line}`
+  borderTop: "1px solid rgba(255,255,255,0.10)"
 }
 
 const hintTitle = {
   fontSize: 11,
   fontWeight: 900,
-  color: T.accent,
+  color: "rgba(31,174,122,0.92)",
   marginBottom: 6,
-  letterSpacing: 0.2
+  letterSpacing: 0.25
 }
 
 const hintText = {
   fontSize: 12,
-  color: T.ink3,
+  color: "rgba(255,255,255,0.62)",
   lineHeight: 1.35
 }
