@@ -18,7 +18,7 @@ export default function LeadProfile() {
   const [saveMsg, setSaveMsg] = useState("")
   const [saveErr, setSaveErr] = useState("")
 
-  // Activities (NO CAMBIAR)
+  // Activities
   const [activityType, setActivityType] = useState("Call")
   const [activityNotes, setActivityNotes] = useState("")
   const [nextFollowUp, setNextFollowUp] = useState("") // yyyy-mm-dd
@@ -28,7 +28,7 @@ export default function LeadProfile() {
 
   const mountedRef = useRef(true)
 
-  // ---- Autosave internals (NO UI)
+  // ---- Autosave internals
   const autosaveTimerRef = useRef(null)
   const inFlightRef = useRef(false)
   const pendingRef = useRef(false)
@@ -125,7 +125,7 @@ export default function LeadProfile() {
     return Array.from(map.values())
   }
 
-  // ---- snapshot helpers (para saber si cambió algo)
+  // ---- snapshot helpers
   const buildSnapshotFromLead = (ld) => {
     const f = ld?.fields || {}
     return {
@@ -206,7 +206,6 @@ export default function LeadProfile() {
       const normalized = normalizeContact(data)
       setLead(normalized)
 
-      // ✅ definimos snapshot “guardado” inicial
       lastSavedSnapshotRef.current = buildSnapshotFromLead(normalized)
 
       setLoadingLead(false)
@@ -250,7 +249,6 @@ export default function LeadProfile() {
     }
   }
 
-  // ✅ Autosave: envía al backend el snapshot actual (sin recargar lead)
   const flushAutosave = async () => {
     if (!mountedRef.current) return
     if (!lead?.fields) return
@@ -258,17 +256,14 @@ export default function LeadProfile() {
 
     const snapshot = buildSnapshotFromLead(lead)
 
-    // si no cambió nada vs último guardado real, no hacemos request
     if (isEqualSnapshot(snapshot, lastSavedSnapshotRef.current)) {
       setSaving(false)
       if (!saveErr) setSaveMsg("")
       return
     }
 
-    // si ya mandamos exactamente lo mismo, evitamos duplicar
     if (isEqualSnapshot(snapshot, lastSentRef.current)) return
 
-    // si hay request en vuelo, marcamos pending
     if (inFlightRef.current) {
       pendingRef.current = true
       return
@@ -300,7 +295,6 @@ export default function LeadProfile() {
         return
       }
 
-      // ✅ marcamos snapshot guardado
       lastSavedSnapshotRef.current = snapshot
 
       setSaving(false)
@@ -323,7 +317,6 @@ export default function LeadProfile() {
     }
   }
 
-  // ✅ Debounce: cada vez que cambia lead.fields, programa autosave
   useEffect(() => {
     if (!lead?.fields) return
     if (loadingLead) return
@@ -510,22 +503,11 @@ export default function LeadProfile() {
           </select>
 
           <label style={label}>Next Follow-up (from Activities)</label>
-
-          <div style={followUpWrap}>
-            <div style={followUpIcon} aria-hidden="true">
+          <div style={dateWrap}>
+            <span style={dateIcon} aria-hidden="true">
               📅
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-              <div style={followUpTitle}>Próximo seguimiento</div>
-              <div style={followUpValue}>
-                {toDateInputValue(computedNextFollowUp) || "No follow-up yet"}
-              </div>
-            </div>
-
-            <div style={followUpPill}>
-              {toDateInputValue(computedNextFollowUp) ? "Scheduled" : "Empty"}
-            </div>
+            </span>
+            <input style={dateInputReadOnly} value={toDateInputValue(computedNextFollowUp)} readOnly />
           </div>
 
           <label style={label}>Notes (general)</label>
@@ -565,12 +547,20 @@ export default function LeadProfile() {
           />
 
           <label style={label}>Next follow-up (optional)</label>
-          <input
-            style={input}
-            type="date"
-            value={nextFollowUp}
-            onChange={(e) => setNextFollowUp(e.target.value)}
-          />
+
+          {/* ✅ Datepicker más bonito */}
+          <div style={dateWrap}>
+            <span style={dateIcon} aria-hidden="true">
+              📆
+            </span>
+            <input
+              style={dateInput}
+              type="date"
+              value={nextFollowUp}
+              onChange={(e) => setNextFollowUp(e.target.value)}
+            />
+            <span style={dateHint}>{nextFollowUp ? "Listo" : "Elegí una fecha"}</span>
+          </div>
 
           <button type="button" style={btn} onClick={createActivity} disabled={creating}>
             {creating ? "Saving..." : "Add Activity"}
@@ -664,49 +654,60 @@ const note = { marginTop: 6, fontSize: 13, color: "rgba(0,0,0,0.75)" }
 const date = { display: "block", marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.55)" }
 const loadingBox = { padding: 30 }
 
-// ✅ NEW: Follow-up UI styles
-const followUpWrap = {
+// ✅ Datepicker styles (más lindo)
+const dateWrap = {
   display: "flex",
   alignItems: "center",
-  gap: 12,
-  padding: 14,
-  borderRadius: 18,
+  gap: 10,
+  padding: "10px 12px",
+  borderRadius: 16,
   border: "1px solid rgba(0,0,0,0.08)",
-  background: "linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.55))",
-  boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
-  backdropFilter: "blur(24px)"
+  background: "rgba(255,255,255,0.9)",
+  boxShadow: "0 8px 22px rgba(0,0,0,0.04)",
+  transition: "transform 0.12s ease, box-shadow 0.12s ease"
 }
 
-const followUpIcon = {
-  width: 38,
-  height: 38,
-  borderRadius: 14,
+const dateIcon = {
+  width: 34,
+  height: 34,
+  borderRadius: 12,
   display: "grid",
   placeItems: "center",
   background: "rgba(20,92,67,0.10)",
   border: "1px solid rgba(20,92,67,0.14)",
-  fontSize: 18
+  fontSize: 16
 }
 
-const followUpTitle = {
+const dateInput = {
+  flex: 1,
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  fontWeight: 800,
+  fontSize: 13,
+  color: "rgba(0,0,0,0.85)",
+  padding: "6px 0",
+  appearance: "none",
+  WebkitAppearance: "none"
+}
+
+const dateInputReadOnly = {
+  flex: 1,
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  fontWeight: 800,
+  fontSize: 13,
+  color: "rgba(0,0,0,0.75)",
+  padding: "6px 0"
+}
+
+const dateHint = {
   fontSize: 12,
   fontWeight: 800,
-  color: "rgba(0,0,0,0.55)",
-  letterSpacing: 0.2
-}
-
-const followUpValue = {
-  fontSize: 16,
-  fontWeight: 900,
-  color: "#0f3d2e",
-  lineHeight: 1.1
-}
-
-const followUpPill = {
-  padding: "8px 10px",
+  color: "rgba(0,0,0,0.45)",
+  padding: "6px 10px",
   borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 900,
-  background: "rgba(0,0,0,0.06)",
-  border: "1px solid rgba(0,0,0,0.08)"
+  border: "1px solid rgba(0,0,0,0.06)",
+  background: "rgba(0,0,0,0.03)"
 }
