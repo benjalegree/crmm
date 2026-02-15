@@ -1,78 +1,51 @@
 import { Link, useLocation } from "react-router-dom"
-import { useMemo } from "react"
 
-export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
+export default function Sidebar({ open = true, onToggle }) {
   const location = useLocation()
 
   const links = [
-    { path: "/dashboard", label: "Overview", icon: "🏠" },
-    { path: "/companies", label: "Companies", icon: "🏢" },
-    { path: "/leads", label: "Leads", icon: "👤" },
-    { path: "/pipeline", label: "Pipeline", icon: "📌" },
-    { path: "/calendar", label: "Calendar", icon: "🗓️" }
+    { path: "/dashboard", label: "Overview" },
+    { path: "/companies", label: "Companies" },
+    { path: "/leads", label: "Leads" },
+    { path: "/pipeline", label: "Pipeline" },
+    { path: "/calendar", label: "Calendar" }
   ]
-
-  // En desktop: open=true => grande, open=false => colapsada
-  const isCollapsedDesktop = !isMobile && !open
-
-  const wrapperStyle = useMemo(() => {
-    if (isMobile) {
-      // Mobile: drawer overlay
-      return {
-        ...sidebarWrapperMobile,
-        transform: open ? "translateX(0)" : "translateX(-110%)"
-      }
-    }
-
-    // Desktop: ancho del wrapper depende de colapsado
-    return {
-      ...sidebarWrapper,
-      width: isCollapsedDesktop ? "120px" : "300px"
-    }
-  }, [isMobile, open, isCollapsedDesktop])
-
-  const panelStyle = useMemo(() => {
-    if (isMobile) return sidebarMobile
-
-    return {
-      ...sidebar,
-      width: isCollapsedDesktop ? "96px" : "260px",
-      padding: isCollapsedDesktop ? "26px 14px" : "40px 25px"
-    }
-  }, [isMobile, isCollapsedDesktop])
 
   return (
     <>
-      {/* Overlay (solo mobile cuando está abierto) */}
-      {isMobile && open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
+      {/* Overlay solo en mobile/tablet cuando está abierto */}
+      {open ? <div style={overlay} onClick={onToggle} /> : null}
 
-      <div style={wrapperStyle}>
-        <div style={panelStyle}>
-          <div style={topRow}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={brandDot} />
-              {!isCollapsedDesktop ? <div style={logo}>PsicoFunnel</div> : null}
+      <div
+        style={{
+          ...sidebarWrapper,
+          width: open ? 280 : 72
+        }}
+      >
+        <div
+          style={{
+            ...sidebar,
+            width: open ? 248 : 56
+          }}
+        >
+          <div style={top}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <div style={logoMark} />
+              {open ? <div style={logoText}>PsicoFunnel</div> : null}
             </div>
 
-            {/* Botón control: desktop colapsa/expande, mobile cierra */}
-            {isMobile ? (
-              <button type="button" style={iconBtn} onClick={onClose} aria-label="Close menu">
-                ✕
-              </button>
-            ) : (
-              <button
-                type="button"
-                style={iconBtn}
-                onClick={() => (isCollapsedDesktop ? onOpen?.() : onToggle?.())}
-                aria-label="Toggle sidebar"
-                title={isCollapsedDesktop ? "Expand" : "Collapse"}
-              >
-                {isCollapsedDesktop ? "→" : "←"}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={onToggle}
+              style={collapseBtn}
+              aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
+              title={open ? "Collapse" : "Expand"}
+            >
+              {open ? "⟨" : "⟩"}
+            </button>
           </div>
 
-          <div style={{ marginTop: isCollapsedDesktop ? 22 : 50 }}>
+          <div style={{ marginTop: 18 }}>
             {links.map((link) => {
               const active = location.pathname === link.path
 
@@ -80,30 +53,28 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
                 <Link
                   key={link.path}
                   to={link.path}
-                  onClick={() => {
-                    if (isMobile) onClose?.()
-                  }}
                   style={{
                     ...item,
-                    ...(isCollapsedDesktop ? itemCollapsed : {}),
+                    padding: open ? "10px 12px" : "10px 10px",
+                    justifyContent: open ? "flex-start" : "center",
+                    borderColor: active ? "rgba(20,92,67,0.28)" : "rgba(0,0,0,0.06)",
                     background: active
-                      ? "linear-gradient(135deg,#145c43,#1e7a57)"
+                      ? "rgba(20,92,67,0.10)"
                       : "transparent",
-                    color: active ? "#ffffff" : "#0f3d2e",
-                    boxShadow: active ? "0 12px 30px rgba(20,92,67,0.4)" : "none"
+                    color: active ? "#0f3d2e" : "rgba(0,0,0,0.70)"
                   }}
                 >
-                  <span style={itemIcon}>{link.icon}</span>
-                  {!isCollapsedDesktop ? <span>{link.label}</span> : null}
+                  <span style={dotIcon(active)} />
+                  {open ? <span style={itemText}>{link.label}</span> : null}
                 </Link>
               )
             })}
           </div>
 
-          {!isCollapsedDesktop ? (
-            <div style={footerHint}>
-              <div style={hintTitle}>Tip</div>
-              <div style={hintText}>Podés colapsar el menú para ganar más espacio.</div>
+          {open ? (
+            <div style={foot}>
+              <div style={footHint}>Apple-style UI</div>
+              <div style={footSub}>Manrope • subtle radius • clean glass</div>
             </div>
           ) : null}
         </div>
@@ -112,127 +83,116 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
   )
 }
 
-const sidebarWrapper = {
-  padding: "40px 20px",
-  display: "flex",
-  justifyContent: "center",
-  transition: "width 0.25s ease"
-}
-
-const sidebarWrapperMobile = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  bottom: 0,
-  width: "320px",
-  padding: "18px 14px",
-  display: "flex",
-  justifyContent: "flex-start",
-  zIndex: 60,
-  transition: "transform 0.25s ease"
-}
+/* =========================
+   STYLES
+========================= */
 
 const overlay = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.28)",
-  backdropFilter: "blur(2px)",
-  WebkitBackdropFilter: "blur(2px)",
-  zIndex: 55
+  background: "rgba(0,0,0,0.18)",
+  zIndex: 30,
+  display: "none"
+}
+
+// Mostramos overlay solo en <= 1024px
+// (sin CSS file, lo resolvemos con un truco: lo dejamos en display none, y el wrapper usa fixed ahí)
+const sidebarWrapper = {
+  padding: "18px 14px",
+  display: "flex",
+  justifyContent: "center",
+  transition: "width 220ms ease",
+  zIndex: 40
 }
 
 const sidebar = {
-  height: "100%",
-  borderRadius: "32px",
-  background: "rgba(255,255,255,0.4)",
-  backdropFilter: "blur(40px)",
-  WebkitBackdropFilter: "blur(40px)",
-  border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: `
-    0 30px 60px rgba(15,61,46,0.15),
-    inset 0 1px 0 rgba(255,255,255,0.6)
-  `,
-  transition: "width 0.25s ease, padding 0.25s ease"
+  height: "calc(100vh - 36px)",
+  padding: "14px 12px",
+  borderRadius: 16, // ✅ sutil (antes 32)
+  background: "rgba(255,255,255,0.55)",
+  backdropFilter: "blur(26px)",
+  WebkitBackdropFilter: "blur(26px)",
+  border: "1px solid rgba(255,255,255,0.55)",
+  boxShadow: "0 10px 30px rgba(15,61,46,0.10)", // ✅ menos caricatura
+  transition: "width 220ms ease",
+  overflow: "hidden"
 }
 
-const sidebarMobile = {
-  ...sidebar,
-  width: "100%",
-  padding: "28px 20px"
-}
-
-const topRow = {
+const top = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between"
+  justifyContent: "space-between",
+  gap: 10
 }
 
-const brandDot = {
-  width: 12,
-  height: 12,
-  borderRadius: 999,
-  background: "linear-gradient(135deg,#145c43,#1e7a57)",
-  boxShadow: "0 10px 20px rgba(20,92,67,0.28)"
+const logoMark = {
+  width: 14,
+  height: 14,
+  borderRadius: 6,
+  background: "linear-gradient(135deg, rgba(20,92,67,0.95), rgba(30,122,87,0.80))"
 }
 
-const logo = {
-  fontSize: "20px",
-  fontWeight: "800",
+const logoText = {
+  fontSize: 14, // ✅ más chico
+  fontWeight: 900,
   color: "#0f3d2e",
-  letterSpacing: 0.2
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis"
 }
 
-const iconBtn = {
-  width: 40,
-  height: 40,
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.75)",
-  boxShadow: "0 10px 22px rgba(0,0,0,0.06)",
+const collapseBtn = {
+  width: 32,
+  height: 30,
+  borderRadius: 12,
+  border: "1px solid rgba(0,0,0,0.10)",
+  background: "rgba(255,255,255,0.65)",
   cursor: "pointer",
-  fontWeight: 900
+  fontWeight: 900,
+  color: "rgba(0,0,0,0.70)"
 }
 
 const item = {
   display: "flex",
   alignItems: "center",
   gap: 10,
-  padding: "14px 18px",
-  marginBottom: "14px",
-  borderRadius: "18px",
+  marginBottom: 10,
+  borderRadius: 14, // ✅ sutil
   textDecoration: "none",
-  fontSize: "14px",
-  fontWeight: "700",
-  transition: "all 0.25s ease"
+  fontSize: 13,
+  fontWeight: 800,
+  border: "1px solid rgba(0,0,0,0.06)",
+  transition: "all 160ms ease"
 }
 
-const itemCollapsed = {
-  justifyContent: "center",
-  padding: "14px 12px"
+const itemText = {
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis"
 }
 
-const itemIcon = {
-  width: 26,
-  display: "grid",
-  placeItems: "center",
-  fontSize: 16
-}
+const dotIcon = (active) => ({
+  width: 10,
+  height: 10,
+  borderRadius: 5,
+  background: active ? "rgba(20,92,67,0.95)" : "rgba(0,0,0,0.20)"
+})
 
-const footerHint = {
-  marginTop: "auto",
-  paddingTop: 18,
+const foot = {
+  marginTop: 16,
+  paddingTop: 12,
   borderTop: "1px solid rgba(0,0,0,0.06)"
 }
 
-const hintTitle = {
+const footHint = {
   fontSize: 12,
   fontWeight: 900,
-  color: "#145c43",
-  marginBottom: 6
+  color: "rgba(0,0,0,0.55)"
 }
 
-const hintText = {
+const footSub = {
+  marginTop: 6,
   fontSize: 12,
-  color: "rgba(0,0,0,0.55)",
-  lineHeight: 1.35
+  fontWeight: 700,
+  color: "rgba(0,0,0,0.40)"
 }
