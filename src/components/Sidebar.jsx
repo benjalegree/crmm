@@ -1,227 +1,238 @@
 import { Link, useLocation } from "react-router-dom"
+import { useMemo } from "react"
 
-export default function Sidebar({ collapsed, onToggle }) {
+export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
   const location = useLocation()
 
   const links = [
-    { path: "/dashboard", label: "Dashboard", icon: "▦" },
-    { path: "/companies", label: "Companies", icon: "⌂" },
-    { path: "/leads", label: "Leads", icon: "◷" },
-    { path: "/pipeline", label: "Pipeline", icon: "⇄" },
-    { path: "/calendar", label: "Calendar", icon: "◴" }
+    { path: "/dashboard", label: "Overview", icon: "🏠" },
+    { path: "/companies", label: "Companies", icon: "🏢" },
+    { path: "/leads", label: "Leads", icon: "👤" },
+    { path: "/pipeline", label: "Pipeline", icon: "📌" },
+    { path: "/calendar", label: "Calendar", icon: "🗓️" }
   ]
 
+  // En desktop: open=true => grande, open=false => colapsada
+  const isCollapsedDesktop = !isMobile && !open
+
+  const wrapperStyle = useMemo(() => {
+    if (isMobile) {
+      // Mobile: drawer overlay
+      return {
+        ...sidebarWrapperMobile,
+        transform: open ? "translateX(0)" : "translateX(-110%)"
+      }
+    }
+
+    // Desktop: ancho del wrapper depende de colapsado
+    return {
+      ...sidebarWrapper,
+      width: isCollapsedDesktop ? "120px" : "300px"
+    }
+  }, [isMobile, open, isCollapsedDesktop])
+
+  const panelStyle = useMemo(() => {
+    if (isMobile) return sidebarMobile
+
+    return {
+      ...sidebar,
+      width: isCollapsedDesktop ? "96px" : "260px",
+      padding: isCollapsedDesktop ? "26px 14px" : "40px 25px"
+    }
+  }, [isMobile, isCollapsedDesktop])
+
   return (
-    <aside style={{ ...wrap, width: collapsed ? 88 : 270 }}>
-      <div style={{ ...side, width: collapsed ? 70 : 240 }}>
-        {/* TOP */}
-        <div style={top}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <div style={mark} />
-            <div style={{ minWidth: 0, display: collapsed ? "none" : "block" }}>
-              <div style={brand}>PsicoFunnel</div>
-              <div style={brandSub}>CRM</div>
+    <>
+      {/* Overlay (solo mobile cuando está abierto) */}
+      {isMobile && open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
+
+      <div style={wrapperStyle}>
+        <div style={panelStyle}>
+          <div style={topRow}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={brandDot} />
+              {!isCollapsedDesktop ? <div style={logo}>PsicoFunnel</div> : null}
             </div>
+
+            {/* Botón control: desktop colapsa/expande, mobile cierra */}
+            {isMobile ? (
+              <button type="button" style={iconBtn} onClick={onClose} aria-label="Close menu">
+                ✕
+              </button>
+            ) : (
+              <button
+                type="button"
+                style={iconBtn}
+                onClick={() => (isCollapsedDesktop ? onOpen?.() : onToggle?.())}
+                aria-label="Toggle sidebar"
+                title={isCollapsedDesktop ? "Expand" : "Collapse"}
+              >
+                {isCollapsedDesktop ? "→" : "←"}
+              </button>
+            )}
           </div>
 
-          <button type="button" style={toggleBtn} onClick={onToggle} title="Toggle sidebar">
-            {collapsed ? "⟩" : "⟨"}
-          </button>
-        </div>
+          <div style={{ marginTop: isCollapsedDesktop ? 22 : 50 }}>
+            {links.map((link) => {
+              const active = location.pathname === link.path
 
-        {/* NAV */}
-        <nav style={nav}>
-          {links.map((link) => {
-            const active = location.pathname === link.path
-            return (
-              <Link
-                key={link.path}
-                to={link.path}
-                style={{
-                  ...item,
-                  justifyContent: collapsed ? "center" : "flex-start",
-                  padding: collapsed ? "10px 8px" : "10px 12px",
-                  gap: collapsed ? 0 : 10,
-                  background: active ? "rgba(20,92,67,0.10)" : "transparent",
-                  borderColor: active ? "rgba(20,92,67,0.18)" : "rgba(0,0,0,0.06)"
-                }}
-              >
-                <span
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  onClick={() => {
+                    if (isMobile) onClose?.()
+                  }}
                   style={{
-                    ...icon,
-                    background: active ? "rgba(20,92,67,0.10)" : "rgba(0,0,0,0.03)",
-                    borderColor: active ? "rgba(20,92,67,0.16)" : "rgba(0,0,0,0.06)",
-                    color: active ? "#145c43" : "rgba(0,0,0,0.55)"
+                    ...item,
+                    ...(isCollapsedDesktop ? itemCollapsed : {}),
+                    background: active
+                      ? "linear-gradient(135deg,#145c43,#1e7a57)"
+                      : "transparent",
+                    color: active ? "#ffffff" : "#0f3d2e",
+                    boxShadow: active ? "0 12px 30px rgba(20,92,67,0.4)" : "none"
                   }}
                 >
-                  {link.icon}
-                </span>
-
-                <span style={{ ...label, display: collapsed ? "none" : "block" }}>
-                  {link.label}
-                </span>
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* BOTTOM */}
-        <div style={bottom}>
-          <div style={{ ...hint, display: collapsed ? "none" : "block" }}>
-            Tip: “Customize” para columnas
+                  <span style={itemIcon}>{link.icon}</span>
+                  {!isCollapsedDesktop ? <span>{link.label}</span> : null}
+                </Link>
+              )
+            })}
           </div>
 
-          <div style={{ ...userPill, justifyContent: collapsed ? "center" : "space-between" }}>
-            <span style={onlineDot} />
-            <span style={{ ...userText, display: collapsed ? "none" : "block" }}>Online</span>
-          </div>
+          {!isCollapsedDesktop ? (
+            <div style={footerHint}>
+              <div style={hintTitle}>Tip</div>
+              <div style={hintText}>Podés colapsar el menú para ganar más espacio.</div>
+            </div>
+          ) : null}
         </div>
       </div>
-    </aside>
+    </>
   )
 }
 
-/* =====================
-   STYLES (CLARO / PRO)
-===================== */
+const sidebarWrapper = {
+  padding: "40px 20px",
+  display: "flex",
+  justifyContent: "center",
+  transition: "width 0.25s ease"
+}
 
-const wrap = {
-  height: "100vh",
+const sidebarWrapperMobile = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  bottom: 0,
+  width: "320px",
   padding: "18px 14px",
-  boxSizing: "border-box",
   display: "flex",
-  alignItems: "stretch",
-  justifyContent: "flex-start"
+  justifyContent: "flex-start",
+  zIndex: 60,
+  transition: "transform 0.25s ease"
 }
 
-const side = {
+const overlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.28)",
+  backdropFilter: "blur(2px)",
+  WebkitBackdropFilter: "blur(2px)",
+  zIndex: 55
+}
+
+const sidebar = {
   height: "100%",
-  borderRadius: 18,
-  background: "rgba(255,255,255,0.70)",
-  border: "1px solid rgba(0,0,0,0.06)",
-  boxShadow: "0 14px 40px rgba(15,61,46,0.10)",
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)",
-  padding: "14px 10px",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column"
+  borderRadius: "32px",
+  background: "rgba(255,255,255,0.4)",
+  backdropFilter: "blur(40px)",
+  WebkitBackdropFilter: "blur(40px)",
+  border: "1px solid rgba(255,255,255,0.4)",
+  boxShadow: `
+    0 30px 60px rgba(15,61,46,0.15),
+    inset 0 1px 0 rgba(255,255,255,0.6)
+  `,
+  transition: "width 0.25s ease, padding 0.25s ease"
 }
 
-const top = {
+const sidebarMobile = {
+  ...sidebar,
+  width: "100%",
+  padding: "28px 20px"
+}
+
+const topRow = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
-  gap: 10,
-  padding: "6px 6px 10px"
+  justifyContent: "space-between"
 }
 
-const mark = {
+const brandDot = {
   width: 12,
   height: 12,
-  borderRadius: 4,
-  background: "linear-gradient(135deg, #145c43, #1e7a57)",
-  boxShadow: "0 8px 18px rgba(20,92,67,0.18)"
+  borderRadius: 999,
+  background: "linear-gradient(135deg,#145c43,#1e7a57)",
+  boxShadow: "0 10px 20px rgba(20,92,67,0.28)"
 }
 
-const brand = {
-  fontSize: 13,
-  fontWeight: 900,
-  letterSpacing: "-0.2px",
+const logo = {
+  fontSize: "20px",
+  fontWeight: "800",
   color: "#0f3d2e",
-  lineHeight: "16px"
+  letterSpacing: 0.2
 }
 
-const brandSub = {
-  marginTop: 2,
-  fontSize: 11,
-  fontWeight: 800,
-  color: "rgba(0,0,0,0.45)"
-}
-
-const toggleBtn = {
-  width: 32,
-  height: 32,
-  borderRadius: 12,
+const iconBtn = {
+  width: 40,
+  height: 40,
+  borderRadius: 14,
   border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.70)",
+  background: "rgba(255,255,255,0.75)",
+  boxShadow: "0 10px 22px rgba(0,0,0,0.06)",
   cursor: "pointer",
-  fontWeight: 900,
-  color: "rgba(0,0,0,0.65)"
-}
-
-const nav = {
-  marginTop: 6,
-  padding: "0 6px",
-  display: "flex",
-  flexDirection: "column"
+  fontWeight: 900
 }
 
 const item = {
   display: "flex",
   alignItems: "center",
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.06)",
+  gap: 10,
+  padding: "14px 18px",
+  marginBottom: "14px",
+  borderRadius: "18px",
   textDecoration: "none",
-  marginBottom: 10,
-  transition: "background 0.15s ease, border-color 0.15s ease",
-  color: "#0f3d2e"
+  fontSize: "14px",
+  fontWeight: "700",
+  transition: "all 0.25s ease"
 }
 
-const icon = {
-  width: 34,
-  height: 34,
-  borderRadius: 12,
-  border: "1px solid rgba(0,0,0,0.06)",
+const itemCollapsed = {
+  justifyContent: "center",
+  padding: "14px 12px"
+}
+
+const itemIcon = {
+  width: 26,
   display: "grid",
   placeItems: "center",
-  fontWeight: 900,
-  fontSize: 14
+  fontSize: 16
 }
 
-const label = {
-  fontSize: 13,
-  fontWeight: 800,
-  color: "rgba(0,0,0,0.75)"
-}
-
-const bottom = {
+const footerHint = {
   marginTop: "auto",
-  padding: "12px 6px 6px",
-  borderTop: "1px solid rgba(0,0,0,0.06)",
-  display: "flex",
-  flexDirection: "column",
-  gap: 10
+  paddingTop: 18,
+  borderTop: "1px solid rgba(0,0,0,0.06)"
 }
 
-const hint = {
-  fontSize: 11,
-  fontWeight: 800,
-  color: "rgba(0,0,0,0.45)"
-}
-
-const userPill = {
-  width: "100%",
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.70)",
-  padding: "10px 12px",
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  boxSizing: "border-box"
-}
-
-const onlineDot = {
-  width: 10,
-  height: 10,
-  borderRadius: 999,
-  background: "#1e7a57",
-  boxShadow: "0 0 0 3px rgba(30,122,87,0.12)"
-}
-
-const userText = {
+const hintTitle = {
   fontSize: 12,
-  fontWeight: 800,
-  color: "rgba(0,0,0,0.60)"
+  fontWeight: 900,
+  color: "#145c43",
+  marginBottom: 6
+}
+
+const hintText = {
+  fontSize: 12,
+  color: "rgba(0,0,0,0.55)",
+  lineHeight: 1.35
 }
