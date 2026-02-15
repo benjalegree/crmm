@@ -13,14 +13,15 @@ export default function Layout({ children }) {
     return () => mq.removeEventListener?.("change", apply)
   }, [])
 
-  const sidebarWidth = collapsed ? 92 : 300
-
   return (
     <div style={app}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((s) => !s)} />
+      {/* Sidebar ocupa espacio REAL */}
+      <div style={{ ...sidebarCol, width: collapsed ? 92 : 300 }}>
+        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((s) => !s)} />
+      </div>
 
-      <div style={{ ...content, paddingLeft: 0 }}>
-        {/* Top bar sutil (solo para toggle y aire visual) */}
+      {/* Content centrado */}
+      <div style={contentCol}>
         <div style={topbar}>
           <button
             type="button"
@@ -37,24 +38,12 @@ export default function Layout({ children }) {
           </div>
         </div>
 
-        <div style={{ ...inner, paddingLeft: 0, marginLeft: 0 }}>
-          <div style={{ ...stage, marginLeft: 0, width: "100%" }}>
-            {/* Contenedor principal con margen calculado */}
-            <div style={{ ...pageWrap, marginLeft: 0, paddingLeft: 0 }}>
-              <div style={{ ...pageInner, paddingLeft: 0 }}>
-                {children}
-              </div>
-            </div>
+        <div style={scrollArea}>
+          <div style={pageWrap}>
+            {children}
           </div>
         </div>
       </div>
-
-      {/* Layer “layout”: sidebar + contenido con ancho real */}
-      <style>{`
-        /* Este style inline es solo para ajustar el ancho sin reflow raro */
-      `}</style>
-
-      <div style={{ ...sidebarSpacer, width: sidebarWidth }} />
     </div>
   )
 }
@@ -65,7 +54,7 @@ export default function Layout({ children }) {
 
 const app = {
   position: "relative",
-  zIndex: 1, // encima del fondo
+  zIndex: 1,
   display: "flex",
   height: "100vh",
   width: "100vw",
@@ -73,20 +62,18 @@ const app = {
   fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 }
 
-// “spacer” invisible para reservar el espacio real del sidebar
-const sidebarSpacer = {
-  position: "fixed",
-  left: 0,
-  top: 0,
+/* Columna sidebar */
+const sidebarCol = {
   height: "100vh",
-  pointerEvents: "none",
-  opacity: 0
+  flex: "0 0 auto"
 }
 
-const content = {
+/* Columna contenido */
+const contentCol = {
   flex: 1,
-  width: "100%",
-  height: "100%",
+  height: "100vh",
+  display: "flex",
+  flexDirection: "column",
   overflow: "hidden"
 }
 
@@ -128,21 +115,15 @@ const iconBtn = {
   boxShadow: "0 10px 26px rgba(0,0,0,0.25)"
 }
 
-const inner = {
-  height: "calc(100vh - 58px)",
-  overflow: "auto"
-}
-
-const stage = {
+const scrollArea = {
+  flex: 1,
+  overflow: "auto",
   padding: "26px 26px 34px"
 }
 
-// Mantiene el “feel” Apple (aire) sin agrandar nada
+/* Centro real (esto es lo que te faltaba) */
 const pageWrap = {
   maxWidth: 1280,
+  width: "100%",
   margin: "0 auto"
-}
-
-const pageInner = {
-  width: "100%"
 }
