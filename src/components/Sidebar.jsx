@@ -12,327 +12,241 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
     { path: "/calendar", label: "Calendar" }
   ]
 
-  const activePath = location.pathname
+  const collapsed = !isMobile && !open
 
-  const topStyle = useMemo(() => (isMobile ? topbarMobile : topbar), [isMobile])
+  const wrapperStyle = useMemo(() => {
+    if (isMobile) return sidebarWrapperMobile
+    return { ...sidebarWrapper, width: collapsed ? 96 : 280 }
+  }, [isMobile, collapsed])
+
+  const panelStyle = useMemo(() => {
+    if (isMobile) return sidebarPanelMobile
+    return { ...sidebarPanel, width: collapsed ? 80 : 260, padding: collapsed ? "18px 10px" : "18px 14px" }
+  }, [isMobile, collapsed])
 
   return (
     <>
-      {/* Topbar (píldora) */}
-      <header style={topStyle}>
-        <div style={pill}>
-          <div style={left}>
-            {isMobile ? (
-              <button
-                type="button"
-                style={iconBtn}
-                onClick={() => (open ? onClose?.() : onOpen?.())}
-                aria-label="Menu"
-                title="Menu"
-              >
-                ☰
-              </button>
-            ) : null}
+      {isMobile && open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
 
-            <div style={brand}>
+      <aside style={wrapperStyle}>
+        <div
+          style={{
+            ...panelStyle,
+            transform: isMobile ? (open ? "translateX(0)" : "translateX(-110%)") : "none"
+          }}
+        >
+          <div style={topRow}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
               <div style={brandMark} aria-hidden="true" />
-              <div style={brandText}>
-                <div style={brandName}>PsicoFunnel</div>
-                <div style={brandSub}>CRM</div>
-              </div>
+              {!collapsed ? (
+                <div style={{ minWidth: 0 }}>
+                  <div style={brandName}>PsicoFunnel</div>
+                  <div style={brandSub}>CRM Workspace</div>
+                </div>
+              ) : null}
             </div>
+
+            <button
+              type="button"
+              style={iconBtn}
+              onClick={() => {
+                if (isMobile) onClose?.()
+                else onToggle?.()
+              }}
+              aria-label={isMobile ? "Close menu" : "Toggle sidebar"}
+              title={isMobile ? "Close" : collapsed ? "Expand" : "Collapse"}
+            >
+              {isMobile ? "✕" : collapsed ? "→" : "←"}
+            </button>
           </div>
 
-          {!isMobile ? (
-            <nav style={nav}>
-              {links.map((l) => {
-                const active = activePath === l.path
-                return (
-                  <Link
-                    key={l.path}
-                    to={l.path}
-                    style={{
-                      ...tab,
-                      ...(active ? tabActive : null)
-                    }}
-                  >
-                    {l.label}
-                  </Link>
-                )
-              })}
-            </nav>
-          ) : (
-            <div style={{ flex: 1 }} />
-          )}
-
-          <div style={right}>
-            <button type="button" style={iconBtn} aria-label="Search" title="Search">
-              ⌕
-            </button>
-            <button type="button" style={iconBtn} aria-label="Settings" title="Settings">
-              ⚙
-            </button>
-            <div style={avatar} title="Profile" />
+          <div style={{ marginTop: 14 }}>
+            {links.map((l) => {
+              const active = location.pathname === l.path
+              return (
+                <Link
+                  key={l.path}
+                  to={l.path}
+                  onClick={() => {
+                    if (isMobile) onClose?.()
+                  }}
+                  style={{
+                    ...navItem,
+                    ...(collapsed ? navItemCollapsed : null),
+                    ...(active ? navItemActive : null)
+                  }}
+                >
+                  <span style={dot} aria-hidden="true" />
+                  {!collapsed ? <span style={{ minWidth: 0 }}>{l.label}</span> : null}
+                </Link>
+              )
+            })}
           </div>
+
+          {!collapsed ? (
+            <div style={helpBox}>
+              <div style={helpTitle}>Help Center</div>
+              <div style={helpText}>Colapsá el menú para ganar más espacio.</div>
+            </div>
+          ) : null}
         </div>
-      </header>
-
-      {/* Drawer mobile */}
-      {isMobile ? (
-        <>
-          {open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
-
-          <aside
-            style={{
-              ...drawer,
-              transform: open ? "translateX(0)" : "translateX(-110%)"
-            }}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div style={drawerHead}>
-              <div style={drawerTitle}>Navigation</div>
-              <button type="button" style={iconBtn} onClick={onClose} aria-label="Close">
-                ✕
-              </button>
-            </div>
-
-            <div style={drawerList}>
-              {links.map((l) => {
-                const active = activePath === l.path
-                return (
-                  <Link
-                    key={l.path}
-                    to={l.path}
-                    onClick={() => onClose?.()}
-                    style={{
-                      ...drawerLink,
-                      ...(active ? drawerLinkActive : null)
-                    }}
-                  >
-                    {l.label}
-                  </Link>
-                )
-              })}
-            </div>
-          </aside>
-        </>
-      ) : null}
+      </aside>
     </>
   )
 }
 
-/* ================= TOKENS ================= */
+/* ================= STYLES ================= */
 
-const C = {
-  stroke: "rgba(255,255,255,0.14)",
-  strokeSoft: "rgba(255,255,255,0.22)",
-  glassA: "rgba(255,255,255,0.14)",
-  glassB: "rgba(255,255,255,0.08)",
-  shadow: "0 22px 70px rgba(0,0,0,0.35)",
-  highlightInset: "inset 0 1px 0 rgba(255,255,255,0.18)",
-  ink: "rgba(255,255,255,0.92)",
-  ink2: "rgba(255,255,255,0.68)"
-}
-
-/* ================= TOPBAR ================= */
-
-/* full width, pero pill centrada */
-const topbar = {
-  position: "fixed",
-  left: 0,
-  right: 0,
+const sidebarWrapper = {
+  position: "absolute",
   top: 18,
-  zIndex: 50,
-  padding: "0 22px",
-  boxSizing: "border-box"
+  left: 18,
+  bottom: 18,
+  zIndex: 20,
+  transition: "width 180ms ease"
 }
 
-const topbarMobile = {
-  ...topbar,
-  top: 14,
-  padding: "0 14px"
+const sidebarWrapperMobile = {
+  position: "fixed",
+  top: 18,
+  left: 18,
+  bottom: 18,
+  width: 280,
+  zIndex: 70
 }
-
-/* pill “soft glass” sobre fondo verde */
-const pill = {
-  width: "min(1280px, 100%)",
-  margin: "0 auto",
-  height: 60,
-  borderRadius: 999,
-  background: `linear-gradient(180deg, ${C.glassA}, ${C.glassB})`,
-  border: `1px solid ${C.stroke}`,
-  boxShadow: `${C.shadow}, ${C.highlightInset}`,
-  backdropFilter: "blur(16px)",
-  WebkitBackdropFilter: "blur(16px)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "10px 12px",
-  gap: 12,
-  boxSizing: "border-box"
-}
-
-const left = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  minWidth: 240
-}
-
-const right = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8
-}
-
-const brand = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10
-}
-
-/* marca minimal premium (sin emoji) */
-const brandMark = {
-  width: 26,
-  height: 26,
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background:
-    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.32), rgba(255,255,255,0) 55%), rgba(43,218,154,0.18)"
-}
-
-const brandText = { display: "flex", flexDirection: "column", lineHeight: 1.05 }
-
-const brandName = {
-  fontWeight: 980,
-  letterSpacing: 0.2,
-  color: C.ink,
-  fontSize: 13
-}
-
-const brandSub = {
-  fontWeight: 850,
-  color: "rgba(255,255,255,0.62)",
-  fontSize: 11,
-  marginTop: 2
-}
-
-/* tabs: compactas, sin ruido */
-const nav = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  padding: 5,
-  borderRadius: 999,
-  border: `1px solid ${C.strokeSoft}`,
-  background: "rgba(255,255,255,0.06)"
-}
-
-const tab = {
-  textDecoration: "none",
-  color: "rgba(255,255,255,0.72)",
-  fontWeight: 950,
-  fontSize: 12,
-  padding: "9px 12px",
-  borderRadius: 999,
-  transition: "background 160ms ease, color 160ms ease, border 160ms ease",
-  border: "1px solid transparent"
-}
-
-const tabActive = {
-  background: "rgba(43,218,154,0.14)",
-  border: "1px solid rgba(43,218,154,0.22)",
-  color: "rgba(255,255,255,0.92)"
-}
-
-/* icon buttons: soft, no “plástico” */
-const iconBtn = {
-  width: 38,
-  height: 38,
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(255,255,255,0.08)",
-  cursor: "pointer",
-  fontWeight: 950,
-  color: "rgba(255,255,255,0.88)",
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
-  boxShadow: "0 16px 40px rgba(0,0,0,0.26)",
-  transition: "transform 120ms ease"
-}
-
-const avatar = {
-  width: 34,
-  height: 34,
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background:
-    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), rgba(255,255,255,0) 55%), rgba(43,218,154,0.16)"
-}
-
-/* ================= DRAWER MOBILE ================= */
 
 const overlay = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.34)",
-  backdropFilter: "blur(4px)",
-  WebkitBackdropFilter: "blur(4px)",
-  zIndex: 55
+  background: "rgba(2,6,23,0.35)",
+  backdropFilter: "blur(3px)",
+  WebkitBackdropFilter: "blur(3px)",
+  zIndex: 65
 }
 
-const drawer = {
-  position: "fixed",
-  top: 90,
-  left: 14,
-  width: 300,
-  maxWidth: "calc(100% - 28px)",
-  borderRadius: 18,
-  padding: 12,
-  background: "linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.08))",
-  border: "1px solid rgba(255,255,255,0.16)",
-  boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
-  backdropFilter: "blur(16px)",
-  WebkitBackdropFilter: "blur(16px)",
-  transition: "transform 200ms ease",
-  zIndex: 60
+/* panel estilo ref: blanco, bordes suaves, shadow premium */
+const sidebarPanel = {
+  height: "100%",
+  borderRadius: 28,
+  background: "rgba(255,255,255,0.78)",
+  border: "1px solid rgba(15,23,42,0.08)",
+  boxShadow: "0 24px 80px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.70)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+  boxSizing: "border-box",
+  display: "flex",
+  flexDirection: "column"
 }
 
-const drawerHead = {
+const sidebarPanelMobile = {
+  ...sidebarPanel,
+  transform: "translateX(-110%)",
+  transition: "transform 200ms ease"
+}
+
+const topRow = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: 10,
-  paddingBottom: 10,
-  borderBottom: "1px solid rgba(255,255,255,0.14)"
+  gap: 10
 }
 
-const drawerTitle = {
-  fontWeight: 950,
-  color: "rgba(255,255,255,0.90)"
-}
-
-const drawerList = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-  paddingTop: 10
-}
-
-const drawerLink = {
-  textDecoration: "none",
-  color: "rgba(255,255,255,0.80)",
-  fontWeight: 950,
-  fontSize: 13,
-  padding: "10px 12px",
+/* marca simple */
+const brandMark = {
+  width: 36,
+  height: 36,
   borderRadius: 14,
-  border: "1px solid transparent",
-  background: "transparent"
+  background: "linear-gradient(135deg, rgba(59,130,246,0.22), rgba(96,165,250,0.10))",
+  border: "1px solid rgba(59,130,246,0.18)",
+  boxShadow: "0 14px 28px rgba(59,130,246,0.14)"
 }
 
-const drawerLinkActive = {
-  background: "rgba(43,218,154,0.14)",
-  border: "1px solid rgba(43,218,154,0.22)",
-  color: "rgba(255,255,255,0.92)"
+const brandName = {
+  fontWeight: 950,
+  color: "#0f172a",
+  fontSize: 14,
+  letterSpacing: 0.1,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis"
+}
+
+const brandSub = {
+  marginTop: 2,
+  fontWeight: 750,
+  fontSize: 12,
+  color: "rgba(15,23,42,0.55)",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis"
+}
+
+const iconBtn = {
+  width: 38,
+  height: 38,
+  borderRadius: 14,
+  border: "1px solid rgba(15,23,42,0.10)",
+  background: "rgba(255,255,255,0.80)",
+  boxShadow: "0 14px 28px rgba(15,23,42,0.10)",
+  cursor: "pointer",
+  fontWeight: 950,
+  color: "rgba(15,23,42,0.80)"
+}
+
+const navItem = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "12px 12px",
+  borderRadius: 16,
+  textDecoration: "none",
+  fontWeight: 900,
+  fontSize: 13,
+  color: "rgba(15,23,42,0.72)",
+  border: "1px solid transparent",
+  transition: "background 160ms ease, border 160ms ease, color 160ms ease",
+  marginTop: 8
+}
+
+const navItemCollapsed = {
+  justifyContent: "center",
+  padding: "12px 10px"
+}
+
+const navItemActive = {
+  background: "rgba(59,130,246,0.16)",
+  border: "1px solid rgba(59,130,246,0.18)",
+  color: "#0f172a",
+  boxShadow: "0 16px 34px rgba(59,130,246,0.14)"
+}
+
+/* puntito funcional (no decorativo “ruido”) */
+const dot = {
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  background: "rgba(59,130,246,0.65)",
+  boxShadow: "0 10px 20px rgba(59,130,246,0.18)"
+}
+
+const helpBox = {
+  marginTop: "auto",
+  padding: 14,
+  borderRadius: 18,
+  border: "1px solid rgba(15,23,42,0.08)",
+  background: "rgba(59,130,246,0.06)"
+}
+
+const helpTitle = {
+  fontWeight: 950,
+  color: "#0f172a",
+  fontSize: 12
+}
+
+const helpText = {
+  marginTop: 6,
+  fontWeight: 750,
+  color: "rgba(15,23,42,0.60)",
+  fontSize: 12,
+  lineHeight: 1.35
 }
