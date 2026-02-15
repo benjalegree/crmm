@@ -2,51 +2,147 @@ import { useEffect, useState } from "react"
 import Sidebar from "../components/Sidebar"
 
 export default function Layout({ children }) {
-  const [sidebarHidden, setSidebarHidden] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
-  // iPad / pantallas chicas: arranca oculto para dar espacio (pero en PC también podés toggle)
+  // En pantallas chicas arrancamos colapsado (iPad / laptops chicas)
   useEffect(() => {
-    const onResize = () => {
-      if (window.innerWidth <= 980) setSidebarHidden(true)
-    }
-    onResize()
-    window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
+    const mq = window.matchMedia("(max-width: 1100px)")
+    const apply = () => setCollapsed(mq.matches)
+    apply()
+    mq.addEventListener?.("change", apply)
+    return () => mq.removeEventListener?.("change", apply)
   }, [])
+
+  const sidebarWidth = collapsed ? 92 : 300
 
   return (
     <div style={app}>
-      <Sidebar hidden={sidebarHidden} onToggle={() => setSidebarHidden(v => !v)} />
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((s) => !s)} />
 
-      <div
-        style={{
-          ...content,
-          // 🔥 NO cambio tamaños: solo compenso el ancho del sidebar cuando está visible
-          marginLeft: sidebarHidden ? 0 : 300
-        }}
-      >
-        {children}
+      <div style={{ ...content, paddingLeft: 0 }}>
+        {/* Top bar sutil (solo para toggle y aire visual) */}
+        <div style={topbar}>
+          <button
+            type="button"
+            onClick={() => setCollapsed((s) => !s)}
+            style={iconBtn}
+            aria-label="Toggle sidebar"
+            title="Toggle sidebar"
+          >
+            {collapsed ? "☰" : "⟨"}
+          </button>
+
+          <div style={topbarRight}>
+            <span style={topHint}>PsicoFunnel CRM</span>
+          </div>
+        </div>
+
+        <div style={{ ...inner, paddingLeft: 0, marginLeft: 0 }}>
+          <div style={{ ...stage, marginLeft: 0, width: "100%" }}>
+            {/* Contenedor principal con margen calculado */}
+            <div style={{ ...pageWrap, marginLeft: 0, paddingLeft: 0 }}>
+              <div style={{ ...pageInner, paddingLeft: 0 }}>
+                {children}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Layer “layout”: sidebar + contenido con ancho real */}
+      <style>{`
+        /* Este style inline es solo para ajustar el ancho sin reflow raro */
+      `}</style>
+
+      <div style={{ ...sidebarSpacer, width: sidebarWidth }} />
     </div>
   )
 }
 
+/* =====================
+   STYLES
+===================== */
+
 const app = {
+  position: "relative",
+  zIndex: 1, // encima del fondo
   display: "flex",
   height: "100vh",
   width: "100vw",
   overflow: "hidden",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
-  background: `
-    radial-gradient(circle at 10% 10%, rgba(30,122,87,0.18), transparent 40%),
-    radial-gradient(circle at 90% 90%, rgba(15,61,46,0.18), transparent 40%),
-    linear-gradient(135deg, #f4fbf8 0%, #e9f6f0 50%, #f4fbf8 100%)
-  `
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+}
+
+// “spacer” invisible para reservar el espacio real del sidebar
+const sidebarSpacer = {
+  position: "fixed",
+  left: 0,
+  top: 0,
+  height: "100vh",
+  pointerEvents: "none",
+  opacity: 0
 }
 
 const content = {
   flex: 1,
-  padding: "60px 80px",          // ✅ EXACTO como estaba
-  overflowY: "auto",
-  transition: "margin-left 240ms ease"
+  width: "100%",
+  height: "100%",
+  overflow: "hidden"
+}
+
+const topbar = {
+  height: 58,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "0 18px",
+  borderBottom: "1px solid var(--line)",
+  background: "rgba(10,14,13,0.55)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)"
+}
+
+const topbarRight = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12
+}
+
+const topHint = {
+  fontSize: 12,
+  fontWeight: 800,
+  color: "var(--muted)"
+}
+
+const iconBtn = {
+  width: 38,
+  height: 38,
+  borderRadius: 12,
+  border: "1px solid var(--line)",
+  background: "rgba(255,255,255,0.04)",
+  color: "var(--text)",
+  cursor: "pointer",
+  fontWeight: 900,
+  lineHeight: "38px",
+  textAlign: "center",
+  boxShadow: "0 10px 26px rgba(0,0,0,0.25)"
+}
+
+const inner = {
+  height: "calc(100vh - 58px)",
+  overflow: "auto"
+}
+
+const stage = {
+  padding: "26px 26px 34px"
+}
+
+// Mantiene el “feel” Apple (aire) sin agrandar nada
+const pageWrap = {
+  maxWidth: 1280,
+  margin: "0 auto"
+}
+
+const pageInner = {
+  width: "100%"
 }
