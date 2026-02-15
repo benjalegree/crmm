@@ -11,7 +11,6 @@ export default function Layout({ children }) {
       setIsMobile(mobile)
       setSidebarOpen(!mobile) // mobile cerrado, desktop abierto
     }
-
     onResize()
     window.addEventListener("resize", onResize)
     return () => window.removeEventListener("resize", onResize)
@@ -20,27 +19,19 @@ export default function Layout({ children }) {
   const contentStyle = useMemo(() => {
     return {
       ...styles.content,
-      padding: isMobile ? "90px 16px 22px" : "36px 44px 28px"
+      padding: isMobile ? "96px 16px 24px" : "96px 40px 28px"
     }
   }, [isMobile])
 
   return (
     <div style={styles.app}>
-      <Sidebar
-        isMobile={isMobile}
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen((v) => !v)}
-        onClose={() => setSidebarOpen(false)}
-        onOpen={() => setSidebarOpen(true)}
-      />
-
-      {/* Topbar (siempre visible, en desktop actúa como header premium) */}
-      <div style={{ ...styles.topbar, ...(isMobile ? styles.topbarMobile : styles.topbarDesktop) }}>
-        <div style={styles.topbarLeft}>
+      {/* Topbar global */}
+      <header style={styles.topbar}>
+        <div style={styles.topLeft}>
           {isMobile ? (
             <button
               type="button"
-              style={styles.iconBtn}
+              style={styles.topIconBtn}
               onClick={() => setSidebarOpen(true)}
               aria-label="Open menu"
               title="Menu"
@@ -49,8 +40,8 @@ export default function Layout({ children }) {
             </button>
           ) : (
             <div style={styles.brand}>
-              <div style={styles.brandMark} />
-              <div style={styles.brandTextWrap}>
+              <span style={styles.brandDot} />
+              <div style={styles.brandText}>
                 <div style={styles.brandTitle}>PsicoFunnel</div>
                 <div style={styles.brandSub}>CRM</div>
               </div>
@@ -58,25 +49,32 @@ export default function Layout({ children }) {
           )}
         </div>
 
-        <div style={styles.topbarCenter}>
-          <div style={styles.topbarPill}>
-            <span style={styles.pillDot} />
-            <span style={styles.pillText}>Premium workspace</span>
+        <div style={styles.topCenter}>
+          <div style={styles.centerPill}>
+            <span style={styles.centerPillDot} />
+            <span style={styles.centerPillText}>Workspace</span>
           </div>
         </div>
 
-        <div style={styles.topbarRight}>
-          {/* Placeholder acciones futuras */}
-          <button type="button" style={styles.ghostBtn} aria-label="Quick actions" title="Quick actions">
+        <div style={styles.topRight}>
+          <button type="button" style={styles.topIconBtn} aria-label="Quick actions" title="Quick actions">
             <IconSpark />
           </button>
           <div style={styles.avatar} title="Account">
             PF
           </div>
         </div>
-      </div>
+      </header>
 
-      <div style={contentStyle}>{children}</div>
+      <Sidebar
+        isMobile={isMobile}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((v) => !v)}
+        onClose={() => setSidebarOpen(false)}
+        onOpen={() => setSidebarOpen(true)}
+      />
+
+      <main style={contentStyle}>{children}</main>
     </div>
   )
 }
@@ -90,7 +88,6 @@ function IconMenu() {
     </svg>
   )
 }
-
 function IconSpark() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -104,160 +101,85 @@ function IconSpark() {
   )
 }
 
-/* ===================== STYLES (PsicoFunnel premium) ===================== */
+/* ===================== THEME ===================== */
 
 const FONT = "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 
-// Verde inglés notorio (base)
-const GREEN = "#0f4d3a"       // inglés profundo
-const GREEN_2 = "#12694c"     // acento
-const GREEN_SOFT = "rgba(18,105,76,0.10)"
-const BORDER = "rgba(15,77,58,0.14)"
-const TEXT = "#0b1a14"
+// Verde inglés (notorio, premium)
+const GREEN = "#0E4B39"
+const GREEN2 = "#0A3A2C"
+const WHITE = "#FFFFFF"
+const INK = "#0B1511"
+const MUTED = "rgba(11,21,17,0.58)"
+const BORDER = "rgba(14,75,57,0.14)"
+const SHADOW = "0 18px 50px rgba(14,75,57,0.14)"
 
 const styles = {
   app: {
-    position: "relative",
-    display: "flex",
     width: "100vw",
     height: "100vh",
+    display: "flex",
     overflow: "hidden",
+    background: WHITE,
     fontFamily: FONT,
-    color: TEXT,
-    background: "#ffffff"
+    color: INK
   },
 
-  // Header premium tipo  pero con verde PsicoFunnel
   topbar: {
     position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 72,
-    zIndex: 80,
+    inset: "0 0 auto 0",
+    height: 76,
+    zIndex: 100,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "0 18px",
-    background: `
-      linear-gradient(180deg, rgba(18,105,76,0.92) 0%, rgba(18,105,76,0.88) 55%, rgba(18,105,76,0.82) 100%)
-    `,
-    borderBottom: "1px solid rgba(255,255,255,0.18)",
-    boxShadow: "0 18px 40px rgba(15,77,58,0.22)"
+    background: `linear-gradient(135deg, ${GREEN} 0%, ${GREEN2} 100%)`,
+    borderBottom: "1px solid rgba(255,255,255,0.14)",
+    boxShadow: "0 18px 60px rgba(0,0,0,0.22)"
   },
 
-  topbarMobile: {
-    padding: "0 14px"
-  },
+  topLeft: { display: "flex", alignItems: "center", gap: 12, minWidth: 220 },
+  topCenter: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center" },
+  topRight: { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, minWidth: 220 },
 
-  topbarDesktop: {
-    padding: "0 22px"
-  },
-
-  topbarLeft: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    minWidth: 220
-  },
-
-  topbarCenter: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1
-  },
-
-  topbarRight: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 10,
-    minWidth: 220
-  },
-
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12
-  },
-
-  brandMark: {
-    width: 12,
-    height: 12,
+  brand: { display: "flex", alignItems: "center", gap: 12 },
+  brandDot: {
+    width: 10,
+    height: 10,
     borderRadius: 999,
-    background: "rgba(255,255,255,0.95)",
-    boxShadow: "0 10px 18px rgba(0,0,0,0.18)"
+    background: "rgba(255,255,255,0.92)",
+    boxShadow: "0 10px 18px rgba(0,0,0,0.20)"
   },
+  brandText: { display: "flex", flexDirection: "column", lineHeight: 1 },
+  brandTitle: { fontSize: 15, fontWeight: 950, color: "#fff", letterSpacing: 0.2 },
+  brandSub: { marginTop: 3, fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,0.74)" },
 
-  brandTextWrap: {
-    display: "flex",
-    flexDirection: "column",
-    lineHeight: 1
-  },
-
-  brandTitle: {
-    fontSize: 15,
-    fontWeight: 950,
-    letterSpacing: 0.2,
-    color: "#ffffff"
-  },
-
-  brandSub: {
-    marginTop: 3,
-    fontSize: 11,
-    fontWeight: 850,
-    color: "rgba(255,255,255,0.78)"
-  },
-
-  topbarPill: {
+  centerPill: {
     display: "flex",
     alignItems: "center",
     gap: 10,
     padding: "10px 14px",
     borderRadius: 999,
-    border: "1px solid rgba(255,255,255,0.22)",
     background: "rgba(255,255,255,0.12)",
-    backdropFilter: "blur(18px)",
-    WebkitBackdropFilter: "blur(18px)"
+    border: "1px solid rgba(255,255,255,0.18)",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)"
   },
+  centerPillDot: { width: 7, height: 7, borderRadius: 999, background: "rgba(255,255,255,0.92)" },
+  centerPillText: { fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.92)", letterSpacing: 0.2 },
 
-  pillDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.95)"
-  },
-
-  pillText: {
-    fontSize: 12,
-    fontWeight: 900,
-    color: "rgba(255,255,255,0.92)",
-    letterSpacing: 0.2
-  },
-
-  iconBtn: {
+  topIconBtn: {
     width: 44,
     height: 44,
     borderRadius: 14,
     border: "1px solid rgba(255,255,255,0.18)",
     background: "rgba(255,255,255,0.12)",
-    color: "#ffffff",
+    color: "#fff",
     display: "grid",
     placeItems: "center",
-    cursor: "pointer"
-  },
-
-  ghostBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.18)",
-    background: "rgba(255,255,255,0.12)",
-    color: "#ffffff",
-    display: "grid",
-    placeItems: "center",
-    cursor: "pointer"
+    cursor: "pointer",
+    transition: "transform .12s ease"
   },
 
   avatar: {
@@ -270,7 +192,7 @@ const styles = {
     fontSize: 12,
     color: GREEN,
     background: "rgba(255,255,255,0.92)",
-    border: "1px solid rgba(255,255,255,0.35)",
+    border: "1px solid rgba(255,255,255,0.28)",
     boxShadow: "0 12px 26px rgba(0,0,0,0.18)"
   },
 
@@ -278,10 +200,10 @@ const styles = {
     flex: 1,
     overflowY: "auto",
     WebkitOverflowScrolling: "touch",
-    paddingTop: 86,
     background: `
-      linear-gradient(180deg, rgba(18,105,76,0.08) 0%, rgba(255,255,255,1) 200px),
-      #ffffff
+      radial-gradient(circle at 18% 6%, rgba(14,75,57,0.08), transparent 42%),
+      radial-gradient(circle at 84% 14%, rgba(14,75,57,0.06), transparent 42%),
+      ${WHITE}
     `
   }
 }
