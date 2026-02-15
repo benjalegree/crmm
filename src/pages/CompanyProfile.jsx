@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, Link } from "react-router-dom"
 
 export default function CompanyProfile() {
   const { id } = useParams()
   const navigate = useNavigate()
 
   const [company, setCompany] = useState(null)
+  const [contacts, setContacts] = useState([])
+
   const [loading, setLoading] = useState(true)
+  const [loadingContacts, setLoadingContacts] = useState(true)
 
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState("")
-  const [msg, setMsg] = useState("")
+  const [contactsErr, setContactsErr] = useState("")
 
-  // autosave status
+  // autosave
   const [dirty, setDirty] = useState(false)
   const autosaveTimerRef = useRef(null)
   const lastSavedSnapshotRef = useRef("")
@@ -43,20 +46,28 @@ export default function CompanyProfile() {
 
   useEffect(() => {
     const ctrl = new AbortController()
+    const ctrl2 = new AbortController()
+
     setCompany(null)
+    setContacts([])
     setErr("")
-    setMsg("")
+    setContactsErr("")
     setDirty(false)
     lastSavedSnapshotRef.current = ""
+
     loadCompany(ctrl.signal)
-    return () => ctrl.abort()
+    loadContactsForCompany(ctrl2.signal)
+
+    return () => {
+      ctrl.abort()
+      ctrl2.abort()
+    }
     // eslint-disable-next-line
   }, [id])
 
   const loadCompany = async (signal) => {
     setLoading(true)
     setErr("")
-    setMsg("")
     try {
       const res = await fetch(`/api/crm?action=getCompany&id=${id}`, {
         credentials: "include",
@@ -76,15 +87,57 @@ export default function CompanyProfile() {
       setCompany(data)
       setLoading(false)
 
-      // snapshot de "lo guardado"
-      const snap = JSON.stringify(data?.fields || {})
-      lastSavedSnapshotRef.current = snap
+      lastSavedSnapshotRef.current = JSON.stringify(data?.fields || {})
     } catch (e) {
       if (!mountedRef.current) return
       if (e?.name === "AbortError") return
       setCompany(null)
       setErr("Failed to load company")
       setLoading(false)
+    }
+  }
+
+  // ✅ muestra contactos asociados: pedimos tus contactos y filtramos por Company recId
+  const loadContactsForCompany = async (signal) => {
+    setLoadingContacts(true)
+    setContactsErr("")
+    try {
+      const res = await fetch(`/api/crm?action=getContacts`, {
+        credentials: "include",
+        signal
+      })
+      const data = await readJson(res)
+
+      if (!mountedRef.current) return
+
+      if (!res.ok) {
+        setContacts([])
+        setContactsErr(safeErrMsg(data, "Failed to load contacts"))
+        setLoadingContacts(false)
+        return
+      }
+
+      const all = data.records || []
+
+      const filtered = all.filter((c) => {
+        const companyArr = c?.fields?.Company
+        return Array.isArray(companyArr) && companyArr.includes(id)
+      })
+
+      filtered.sort((a, b) => {
+        const na = String(a?.fields?.["Full Name"] || a?.fields?.Name || "")
+        const nb = String(b?.fields?.["Full Name"] || b?.fields?.Name || "")
+        return na.localeCompare(nb)
+      })
+
+      setContacts(filtered)
+      setLoadingContacts(false)
+    } catch (e) {
+      if (!mountedRef.current) return
+      if (e?.name === "AbortError") return
+      setContacts([])
+      setContactsErr("Failed to load contacts")
+      setLoadingContacts(false)
     }
   }
 
@@ -100,9 +153,10 @@ export default function CompanyProfile() {
       return next
     })
     setDirty(true)
-    setMsg("")
     setErr("")
   }
+
+  const computeSnapshot = (fields) => JSON.stringify(fields || {})
 
   const buildPayload = (fields) => {
     const f = fields || {}
@@ -111,36 +165,27 @@ export default function CompanyProfile() {
     return {
       id,
       fields: {
-        // backend es robusto y mapea segun campos existentes
         "Company Name": String(companyName || ""),
         Industry: String(f.Industry || ""),
         Country: String(f.Country || ""),
         Status: String(f.Status || "New"),
-        Website: String(f.Website || f.Website || f["Website"] || f.URL || ""),
+        Website: String(f.Website || f["Website"] || f.URL || ""),
         "Responsible Email": String(f["Responsible Email"] || "")
       }
     }
   }
 
-  const computeSnapshot = (fields) => JSON.stringify(fields || {})
-
   const saveChanges = async ({ silent = false } = {}) => {
     if (!company?.fields) return
-    const currentSnap = computeSnapshot(company.fields)
-    const lastSnap = lastSavedSnapshotRef.current
 
-    // si no cambió nada, no pegamos al backend
-    if (currentSnap === lastSnap) {
+    const currentSnap = computeSnapshot(company.fields)
+    if (currentSnap === lastSavedSnapshotRef.current) {
       setDirty(false)
-      if (!silent) setMsg("No changes")
       return
     }
 
     setSaving(true)
-    if (!silent) {
-      setErr("")
-      setMsg("")
-    }
+    if (!silent) setErr("")
 
     try {
       const payload = buildPayload(company.fields)
@@ -164,9 +209,6 @@ export default function CompanyProfile() {
 
       lastSavedSnapshotRef.current = computeSnapshot(company.fields)
       setDirty(false)
-
-      if (!silent) setMsg("Saved ✅")
-      else setMsg("Saved ✅") // podés cambiar a "" si querés que no muestre nada
     } catch {
       if (!mountedRef.current) return
       setErr("Failed to update company")
@@ -176,7 +218,7 @@ export default function CompanyProfile() {
     setSaving(false)
   }
 
-  // AUTOSAVE: debounce 600ms
+  // ✅ AUTOSAVE debounce
   useEffect(() => {
     if (!dirty) return
     if (!company?.fields) return
@@ -193,35 +235,29 @@ export default function CompanyProfile() {
     // eslint-disable-next-line
   }, [dirty, company?.fields])
 
-  // badge estado autosave
-  const autosaveBadge = useMemo(() => {
-    if (saving) return <span style={{ ...statusPill, ...pillNeutral }}>Saving…</span>
-    if (dirty) return <span style={{ ...statusPill, ...pillNeutral }}>Unsaved</span>
-    if (msg) return <span style={{ ...statusPill, ...pillOk }}>Saved</span>
-    return null
-  }, [saving, dirty, msg])
+  const autosaveText = useMemo(() => {
+    if (saving) return "Saving…"
+    if (dirty) return "Auto-save on"
+    return "Auto-saved"
+  }, [saving, dirty])
 
   if (loading) return <div style={loadingBox}>Loading...</div>
 
   if (err) {
     return (
       <div style={page}>
-        <div style={head}>
-          <div>
-            <h1 style={title}>Company</h1>
-            <p style={subtitle}>Profile</p>
-          </div>
-
-          <button style={ghostBtn} type="button" onClick={() => navigate("/companies")}>
+        <div style={topbar}>
+          <button style={btnGhost} type="button" onClick={() => navigate("/companies")}>
             Back
           </button>
+          <div style={autosaveInline}>{autosaveText}</div>
         </div>
 
         <div style={errBox}>{err}</div>
 
         <button
           type="button"
-          style={miniBtn}
+          style={btnGhost}
           onClick={() => {
             const ctrl = new AbortController()
             loadCompany(ctrl.signal)
@@ -243,113 +279,79 @@ export default function CompanyProfile() {
 
   const f = company.fields
   const name = f["Company Name"] || f["Name"] || "Company"
-  const website = f["Website"] || f["URL"] || f.Website || ""
+  const website = f["Website"] || f.URL || f.Website || ""
 
   return (
     <div style={page}>
-      <div style={head}>
-        <div style={{ minWidth: 0 }}>
-          <div style={crumbs}>
-            <button style={crumbBtn} onClick={() => navigate("/companies")} type="button">
-              Companies
-            </button>
-            <span style={crumbSep}>/</span>
-            <span style={crumbCurrent}>{name}</span>
-          </div>
+      {/* Minimal topbar */}
+      <div style={topbar}>
+        <button style={btnGhost} type="button" onClick={() => navigate("/companies")}>
+          Back
+        </button>
 
-          <div style={heroLine}>
-            <h1 style={title}>{name}</h1>
-            <div style={topRight}>
-              {f.Status ? (
-                <span style={{ ...statusPill, ...statusColorCompany(f.Status) }}>{f.Status}</span>
-              ) : null}
-              {autosaveBadge}
-            </div>
-          </div>
+        <div style={titleWrap}>
+          <h1 style={title}>{name}</h1>
 
-          <div style={subLine}>
-            <span style={subPill}>{f.Industry || "—"}</span>
-            <span style={subDot}>•</span>
-            <span style={subPill}>{f.Country || "—"}</span>
+          <div style={metaRow}>
+            {f.Status ? <span style={{ ...tag, ...statusColorCompany(f.Status) }}>{f.Status}</span> : null}
+            <span style={autosaveInline}>{autosaveText}</span>
 
             {website ? (
-              <>
-                <span style={subDot}>•</span>
-                <a href={safeUrl(website)} target="_blank" rel="noreferrer" style={subLink}>
-                  Website ↗
-                </a>
-              </>
+              <a href={safeUrl(website)} target="_blank" rel="noreferrer" style={link}>
+                Website ↗
+              </a>
             ) : null}
           </div>
         </div>
 
-        <div style={headActions}>
-          <button
-            style={ghostBtn}
-            type="button"
-            onClick={() => saveChanges({ silent: false })}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-
-          <button
-            style={ghostBtn}
-            type="button"
-            onClick={() => {
-              const ctrl = new AbortController()
-              loadCompany(ctrl.signal)
-            }}
-          >
-            Refresh
-          </button>
-
-          <button style={ghostBtn} type="button" onClick={() => navigate("/companies")}>
-            Back
-          </button>
-        </div>
+        <button
+          style={btnGhost}
+          type="button"
+          onClick={() => {
+            const ctrl = new AbortController()
+            const ctrl2 = new AbortController()
+            loadCompany(ctrl.signal)
+            loadContactsForCompany(ctrl2.signal)
+          }}
+        >
+          Refresh
+        </button>
       </div>
 
       {err ? <div style={errBox}>{err}</div> : null}
-      {msg ? <div style={okBox}>{msg}</div> : null}
 
-      <div style={gridOne}>
+      {/* Wide layout */}
+      <div style={grid}>
+        {/* LEFT: company fields */}
         <div style={card}>
-          <div style={cardHeader}>
-            <h3 style={h3}>Company Info</h3>
-            <span style={hint}>Autosave on edit</span>
-          </div>
+          <div style={sectionTitle}>Company</div>
 
-          <div style={formGrid}>
-            <div style={{ ...field, gridColumn: "1 / -1" }}>
-              <label style={label}>Company Name</label>
+          <div style={form}>
+            <Field label="Company Name">
               <input
                 style={input}
                 value={f["Company Name"] || f["Name"] || ""}
                 onChange={(e) => updateField("Company Name", e.target.value)}
               />
-            </div>
+            </Field>
 
-            <div style={field}>
-              <label style={label}>Industry</label>
+            <Field label="Industry">
               <input
                 style={input}
                 value={f.Industry || ""}
                 onChange={(e) => updateField("Industry", e.target.value)}
               />
-            </div>
+            </Field>
 
-            <div style={field}>
-              <label style={label}>Country</label>
+            <Field label="Country">
               <input
                 style={input}
                 value={f.Country || ""}
                 onChange={(e) => updateField("Country", e.target.value)}
               />
-            </div>
+            </Field>
 
-            <div style={field}>
-              <label style={label}>Status</label>
+            <Field label="Status">
               <select
                 style={input}
                 value={f.Status || "New"}
@@ -362,39 +364,84 @@ export default function CompanyProfile() {
                 <option>Closed Won</option>
                 <option>Closed Lost</option>
               </select>
-            </div>
+            </Field>
 
-            <div style={field}>
-              <label style={label}>Responsible Email</label>
+            <Field label="Website">
+              <input
+                style={input}
+                value={f["Website"] || f.URL || f.Website || ""}
+                onChange={(e) => updateField("Website", e.target.value)}
+                placeholder="https://..."
+              />
+            </Field>
+
+            <Field label="Responsible Email">
               <input
                 style={input}
                 value={f["Responsible Email"] || ""}
                 onChange={(e) => updateField("Responsible Email", e.target.value)}
                 placeholder="owner@company.com"
               />
-            </div>
-
-            <div style={{ ...field, gridColumn: "1 / -1" }}>
-              <label style={label}>Website</label>
-              <input
-                style={input}
-                value={f["Website"] || f["URL"] || f.Website || ""}
-                onChange={(e) => updateField("Website", e.target.value)}
-                placeholder="https://..."
-              />
-              {website ? (
-                <a style={siteBtn} href={safeUrl(website)} target="_blank" rel="noreferrer">
-                  Open website ↗
-                </a>
-              ) : null}
-            </div>
+            </Field>
           </div>
 
-          <button type="button" style={btn} onClick={() => saveChanges({ silent: false })} disabled={saving}>
-            {saving ? "Saving..." : "Save Changes"}
+          {/* botón opcional manual (sin sacar autosave) */}
+          <button
+            type="button"
+            style={btnPrimary}
+            onClick={() => saveChanges({ silent: false })}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save now"}
           </button>
         </div>
+
+        {/* RIGHT: associated contacts */}
+        <div style={card}>
+          <div style={sectionTitle}>Contacts</div>
+
+          {contactsErr ? <div style={errBox}>{contactsErr}</div> : null}
+
+          {loadingContacts ? (
+            <div style={muted}>Loading contacts…</div>
+          ) : !contacts.length ? (
+            <div style={muted}>No contacts linked to this company yet.</div>
+          ) : (
+            <div style={list}>
+              {contacts.map((c) => {
+                const cf = c.fields || {}
+                const fullName = cf["Full Name"] || cf.Name || "Contact"
+                const email = cf.Email || ""
+                const status = cf.Status || ""
+                return (
+                  <Link key={c.id} to={`/leads/${c.id}`} style={row}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={rowTitle}>{fullName}</div>
+                      <div style={rowSub}>
+                        {email ? <span>{email}</span> : <span style={{ opacity: 0.7 }}>No email</span>}
+                      </div>
+                    </div>
+                    {status ? <span style={{ ...tag, ...statusColorLead(status) }}>{status}</span> : null}
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
+    </div>
+  )
+}
+
+/* =========================
+   SMALL COMPONENTS
+========================= */
+
+function Field({ label, children }) {
+  return (
+    <div style={field}>
+      <div style={labelStyle}>{label}</div>
+      {children}
     </div>
   )
 }
@@ -412,116 +459,120 @@ function safeUrl(url) {
 
 function statusColorCompany(s) {
   const v = String(s || "")
-  if (v === "Closed Won") return { background: "rgba(0,200,120,0.18)", borderColor: "rgba(0,200,120,0.35)", color: "#0f5132" }
-  if (v === "Closed Lost") return { background: "rgba(255,0,0,0.10)", borderColor: "rgba(255,0,0,0.18)", color: "#7a1d1d" }
-  if (v === "Meeting Booked") return { background: "rgba(30,180,90,0.18)", borderColor: "rgba(30,180,90,0.35)", color: "#0f5132" }
-  if (v === "Replied") return { background: "rgba(80,70,210,0.16)", borderColor: "rgba(80,70,210,0.30)", color: "#2b2a7a" }
-  if (v === "Contacted") return { background: "rgba(20,120,255,0.14)", borderColor: "rgba(20,120,255,0.26)", color: "#0b3a8a" }
-  return { background: "rgba(0,0,0,0.06)", borderColor: "rgba(0,0,0,0.10)", color: "rgba(0,0,0,0.70)" }
+  if (v === "Closed Won") return { background: "rgba(0,200,120,0.12)", borderColor: "rgba(0,200,120,0.20)", color: "#0f5132" }
+  if (v === "Closed Lost") return { background: "rgba(255,0,0,0.08)", borderColor: "rgba(255,0,0,0.14)", color: "#7a1d1d" }
+  if (v === "Meeting Booked") return { background: "rgba(30,180,90,0.12)", borderColor: "rgba(30,180,90,0.20)", color: "#0f5132" }
+  if (v === "Replied") return { background: "rgba(80,70,210,0.10)", borderColor: "rgba(80,70,210,0.18)", color: "#2b2a7a" }
+  if (v === "Contacted") return { background: "rgba(20,120,255,0.10)", borderColor: "rgba(20,120,255,0.18)", color: "#0b3a8a" }
+  return { background: "rgba(0,0,0,0.04)", borderColor: "rgba(0,0,0,0.08)", color: "rgba(0,0,0,0.70)" }
+}
+
+function statusColorLead(s) {
+  const v = String(s || "")
+  if (v === "Closed Won") return { background: "rgba(0,200,120,0.12)", borderColor: "rgba(0,200,120,0.20)", color: "#0f5132" }
+  if (v === "Closed Lost") return { background: "rgba(255,0,0,0.08)", borderColor: "rgba(255,0,0,0.14)", color: "#7a1d1d" }
+  if (v === "Meeting Booked") return { background: "rgba(30,180,90,0.12)", borderColor: "rgba(30,180,90,0.20)", color: "#0f5132" }
+  if (v === "Replied") return { background: "rgba(80,70,210,0.10)", borderColor: "rgba(80,70,210,0.18)", color: "#2b2a7a" }
+  if (v === "Contacted") return { background: "rgba(20,120,255,0.10)", borderColor: "rgba(20,120,255,0.18)", color: "#0b3a8a" }
+  return { background: "rgba(0,0,0,0.04)", borderColor: "rgba(0,0,0,0.08)", color: "rgba(0,0,0,0.70)" }
 }
 
 /* =========================
-   STYLES (UNIFICADOS CON TU UI)
+   STYLES (MINIMAL + WIDE)
 ========================= */
 
-const page = { width: "100%" }
-
-const head = {
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "space-between",
-  gap: 16,
-  marginBottom: 14
+const page = {
+  width: "100%",
+  maxWidth: 1200,
+  margin: "0 auto"
 }
 
-const headActions = { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }
-
-const crumbs = { display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }
-const crumbBtn = {
-  background: "transparent",
-  border: "none",
-  padding: 0,
-  cursor: "pointer",
-  fontWeight: 900,
-  color: "rgba(0,0,0,0.55)"
+const topbar = {
+  display: "grid",
+  gridTemplateColumns: "auto 1fr auto",
+  alignItems: "center",
+  gap: 14,
+  marginBottom: 18
 }
-const crumbSep = { color: "rgba(0,0,0,0.25)", fontWeight: 900 }
-const crumbCurrent = { fontWeight: 950, color: "#0f3d2e" }
 
-const heroLine = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }
+const titleWrap = { minWidth: 0 }
 
 const title = {
-  fontSize: 40,
+  fontSize: 34,
   fontWeight: 900,
   color: "#0f3d2e",
-  margin: 0
+  margin: 0,
+  lineHeight: 1.1,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
 }
 
-const subtitle = {
-  marginTop: 8,
-  marginBottom: 0,
-  color: "rgba(0,0,0,0.55)",
-  fontWeight: 600
-}
-
-const topRight = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }
-
-const subLine = { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }
-const subDot = { color: "rgba(0,0,0,0.20)", fontWeight: 900 }
-const subPill = {
-  fontSize: 12,
-  padding: "6px 10px",
-  borderRadius: 999,
-  background: "rgba(255,255,255,0.65)",
-  border: "1px solid rgba(0,0,0,0.06)",
-  fontWeight: 900,
-  color: "rgba(0,0,0,0.70)"
-}
-const subLink = {
-  fontSize: 12,
-  padding: "6px 10px",
-  borderRadius: 999,
-  background: "rgba(20,92,67,0.10)",
-  border: "1px solid rgba(20,92,67,0.18)",
-  fontWeight: 900,
-  color: "#145c43",
-  textDecoration: "none"
-}
-
-const gridOne = { display: "grid", gridTemplateColumns: "1fr", gap: 26, maxWidth: 820 }
-
-const card = {
-  padding: 22,
-  borderRadius: 26,
-  background: "rgba(255,255,255,0.55)",
-  backdropFilter: "blur(40px)",
-  border: "1px solid rgba(255,255,255,0.45)",
-  boxShadow: "0 12px 36px rgba(0,0,0,0.06)",
+const metaRow = {
+  marginTop: 10,
   display: "flex",
-  flexDirection: "column",
-  gap: 14
-}
-
-const cardHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-  gap: 12,
+  gap: 10,
+  alignItems: "center",
   flexWrap: "wrap"
 }
 
-const h3 = { margin: 0, fontSize: 18, fontWeight: 950, color: "#145c43" }
-const hint = { fontSize: 12, fontWeight: 900, color: "rgba(0,0,0,0.50)" }
+const autosaveInline = {
+  fontSize: 12,
+  fontWeight: 900,
+  color: "rgba(0,0,0,0.45)"
+}
 
-const formGrid = {
+const tag = {
+  fontSize: 12,
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: "1px solid rgba(0,0,0,0.08)",
+  fontWeight: 900,
+  whiteSpace: "nowrap"
+}
+
+const link = {
+  fontSize: 12,
+  fontWeight: 900,
+  color: "#145c43",
+  textDecoration: "none",
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: "1px solid rgba(20,92,67,0.18)",
+  background: "rgba(20,92,67,0.08)"
+}
+
+const grid = {
+  display: "grid",
+  gridTemplateColumns: "1.35fr 1fr",
+  gap: 18
+}
+
+const card = {
+  padding: 18,
+  borderRadius: 22,
+  background: "rgba(255,255,255,0.55)",
+  backdropFilter: "blur(30px)",
+  border: "1px solid rgba(255,255,255,0.45)",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.05)"
+}
+
+const sectionTitle = {
+  fontSize: 13,
+  fontWeight: 950,
+  color: "rgba(0,0,0,0.55)",
+  marginBottom: 14,
+  letterSpacing: 0.2
+}
+
+const form = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: 12
 }
 
 const field = { display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }
-
-const label = { fontSize: 12, color: "rgba(0,0,0,0.6)", fontWeight: 900 }
+const labelStyle = { fontSize: 12, fontWeight: 900, color: "rgba(0,0,0,0.50)" }
 
 const input = {
   padding: 12,
@@ -533,20 +584,9 @@ const input = {
   color: "rgba(0,0,0,0.80)"
 }
 
-const btn = {
-  marginTop: 4,
-  padding: 14,
-  borderRadius: 18,
-  border: "none",
-  background: "#0b0b0b",
-  color: "#fff",
-  fontWeight: 950,
-  cursor: "pointer"
-}
-
-const ghostBtn = {
+const btnGhost = {
   padding: "12px 14px",
-  borderRadius: 18,
+  borderRadius: 16,
   border: "1px solid rgba(0,0,0,0.10)",
   background: "rgba(255,255,255,0.65)",
   backdropFilter: "blur(18px)",
@@ -554,37 +594,35 @@ const ghostBtn = {
   fontWeight: 900
 }
 
-const miniBtn = {
-  padding: "10px 12px",
+const btnPrimary = {
+  marginTop: 14,
+  padding: "12px 14px",
   borderRadius: 16,
-  border: "1px solid rgba(0,0,0,0.10)",
-  background: "rgba(255,255,255,0.70)",
-  backdropFilter: "blur(18px)",
-  fontWeight: 900,
-  cursor: "pointer",
-  fontSize: 12
-}
-
-const statusPill = {
-  padding: "10px 14px",
-  borderRadius: 999,
-  border: "1px solid rgba(0,0,0,0.10)",
+  border: "none",
+  background: "#0b0b0b",
+  color: "#fff",
   fontWeight: 950,
-  fontSize: 12,
-  whiteSpace: "nowrap"
+  cursor: "pointer",
+  width: "fit-content"
 }
 
-const pillNeutral = {
-  background: "rgba(0,0,0,0.06)",
-  borderColor: "rgba(0,0,0,0.10)",
-  color: "rgba(0,0,0,0.70)"
+const list = { display: "flex", flexDirection: "column", gap: 10 }
+const row = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: 12,
+  borderRadius: 16,
+  border: "1px solid rgba(0,0,0,0.06)",
+  background: "rgba(255,255,255,0.65)",
+  textDecoration: "none",
+  color: "inherit"
 }
+const rowTitle = { fontWeight: 950, color: "rgba(0,0,0,0.82)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
+const rowSub = { marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.55)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
 
-const pillOk = {
-  background: "rgba(0,200,120,0.10)",
-  borderColor: "rgba(0,200,120,0.16)",
-  color: "#0f5132"
-}
+const muted = { fontSize: 13, color: "rgba(0,0,0,0.55)" }
 
 const errBox = {
   marginTop: 10,
@@ -595,24 +633,15 @@ const errBox = {
   border: "1px solid rgba(255,0,0,0.12)"
 }
 
-const okBox = {
-  marginTop: 10,
-  padding: 12,
-  borderRadius: 14,
-  background: "rgba(0,200,120,0.10)",
-  color: "#0f5132",
-  border: "1px solid rgba(0,200,120,0.16)"
-}
-
 const loadingBox = { padding: 30 }
 
-const siteBtn = {
-  width: "fit-content",
-  padding: "10px 12px",
-  borderRadius: 16,
-  border: "1px solid rgba(20,92,67,0.20)",
-  background: "rgba(20,92,67,0.10)",
-  color: "#145c43",
-  fontWeight: 950,
-  textDecoration: "none"
+/* Responsive (inline): reduce a 1 columna en pantallas chicas */
+if (typeof window !== "undefined") {
+  const w = window.innerWidth
+  if (w && w < 920) {
+    grid.gridTemplateColumns = "1fr"
+    form.gridTemplateColumns = "1fr"
+    topbar.gridTemplateColumns = "auto 1fr"
+    topbar.rowGap = 10
+  }
 }
