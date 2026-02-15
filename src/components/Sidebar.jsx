@@ -18,8 +18,8 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
 
   return (
     <>
-      {/* Topbar pill (dentro del Stage) */}
-      <div style={topStyle}>
+      {/* Topbar (píldora) */}
+      <header style={topStyle}>
         <div style={pill}>
           <div style={left}>
             {isMobile ? (
@@ -35,7 +35,7 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
             ) : null}
 
             <div style={brand}>
-              <div style={brandDot} aria-hidden="true" />
+              <div style={brandMark} aria-hidden="true" />
               <div style={brandText}>
                 <div style={brandName}>PsicoFunnel</div>
                 <div style={brandSub}>CRM</div>
@@ -75,14 +75,14 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
             <div style={avatar} title="Profile" />
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Drawer mobile */}
       {isMobile ? (
         <>
           {open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
 
-          <div
+          <aside
             style={{
               ...drawer,
               transform: open ? "translateX(0)" : "translateX(-110%)"
@@ -115,7 +115,7 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
                 )
               })}
             </div>
-          </div>
+          </aside>
         </>
       ) : null}
     </>
@@ -125,48 +125,52 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
 /* ================= TOKENS ================= */
 
 const C = {
-  ink: "#0f3d2e",
-  ink2: "rgba(15,61,46,0.70)",
-  stroke: "rgba(15,61,46,0.12)",
-  glassA: "rgba(255,255,255,0.72)",
-  glassB: "rgba(255,255,255,0.52)",
-  shadow: "0 18px 50px rgba(0,0,0,0.10)",
-  highlightInset: "inset 0 1px 0 rgba(255,255,255,0.60)"
+  stroke: "rgba(255,255,255,0.14)",
+  strokeSoft: "rgba(255,255,255,0.22)",
+  glassA: "rgba(255,255,255,0.14)",
+  glassB: "rgba(255,255,255,0.08)",
+  shadow: "0 22px 70px rgba(0,0,0,0.35)",
+  highlightInset: "inset 0 1px 0 rgba(255,255,255,0.18)",
+  ink: "rgba(255,255,255,0.92)",
+  ink2: "rgba(255,255,255,0.68)"
 }
 
 /* ================= TOPBAR ================= */
 
+/* full width, pero pill centrada */
 const topbar = {
-  position: "absolute",
+  position: "fixed",
   left: 0,
   right: 0,
-  top: 14,
-  padding: "0 18px",
-  zIndex: 20
+  top: 18,
+  zIndex: 50,
+  padding: "0 22px",
+  boxSizing: "border-box"
 }
 
 const topbarMobile = {
   ...topbar,
-  top: 12,
+  top: 14,
   padding: "0 14px"
 }
 
-/* pill interna como refs */
+/* pill “soft glass” sobre fondo verde */
 const pill = {
+  width: "min(1280px, 100%)",
+  margin: "0 auto",
   height: 60,
   borderRadius: 999,
   background: `linear-gradient(180deg, ${C.glassA}, ${C.glassB})`,
   border: `1px solid ${C.stroke}`,
-  boxShadow: C.shadow,
-  backdropFilter: "blur(14px)",
-  WebkitBackdropFilter: "blur(14px)",
+  boxShadow: `${C.shadow}, ${C.highlightInset}`,
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   padding: "10px 12px",
   gap: 12,
-  boxSizing: "border-box",
-  boxShadow: `${C.shadow}, ${C.highlightInset}`
+  boxSizing: "border-box"
 }
 
 const left = {
@@ -188,19 +192,20 @@ const brand = {
   gap: 10
 }
 
-const brandDot = {
+/* marca minimal premium (sin emoji) */
+const brandMark = {
   width: 26,
   height: 26,
   borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.18)",
   background:
-    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0) 55%), rgba(20,92,67,0.20)",
-  border: "1px solid rgba(20,92,67,0.16)"
+    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.32), rgba(255,255,255,0) 55%), rgba(43,218,154,0.18)"
 }
 
 const brandText = { display: "flex", flexDirection: "column", lineHeight: 1.05 }
 
 const brandName = {
-  fontWeight: 950,
+  fontWeight: 980,
   letterSpacing: 0.2,
   color: C.ink,
   fontSize: 13
@@ -208,50 +213,52 @@ const brandName = {
 
 const brandSub = {
   fontWeight: 850,
-  color: "rgba(15,61,46,0.55)",
+  color: "rgba(255,255,255,0.62)",
   fontSize: 11,
   marginTop: 2
 }
 
-/* tabs */
+/* tabs: compactas, sin ruido */
 const nav = {
   display: "flex",
   alignItems: "center",
   gap: 6,
   padding: 5,
   borderRadius: 999,
-  background: "rgba(15,61,46,0.05)",
-  border: "1px solid rgba(15,61,46,0.08)"
+  border: `1px solid ${C.strokeSoft}`,
+  background: "rgba(255,255,255,0.06)"
 }
 
 const tab = {
   textDecoration: "none",
-  color: "rgba(15,61,46,0.70)",
+  color: "rgba(255,255,255,0.72)",
   fontWeight: 950,
   fontSize: 12,
   padding: "9px 12px",
   borderRadius: 999,
-  transition: "background 160ms ease, color 160ms ease"
+  transition: "background 160ms ease, color 160ms ease, border 160ms ease",
+  border: "1px solid transparent"
 }
 
 const tabActive = {
-  background: "rgba(20,92,67,0.12)",
-  color: C.ink
+  background: "rgba(43,218,154,0.14)",
+  border: "1px solid rgba(43,218,154,0.22)",
+  color: "rgba(255,255,255,0.92)"
 }
 
-/* botones soft (sin “plástico”) */
+/* icon buttons: soft, no “plástico” */
 const iconBtn = {
   width: 38,
   height: 38,
   borderRadius: 12,
-  border: "1px solid rgba(15,61,46,0.12)",
-  background: "rgba(255,255,255,0.58)",
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.08)",
   cursor: "pointer",
   fontWeight: 950,
-  color: "rgba(15,61,46,0.85)",
+  color: "rgba(255,255,255,0.88)",
   backdropFilter: "blur(10px)",
   WebkitBackdropFilter: "blur(10px)",
-  boxShadow: "0 12px 30px rgba(15,61,46,0.10)",
+  boxShadow: "0 16px 40px rgba(0,0,0,0.26)",
   transition: "transform 120ms ease"
 }
 
@@ -259,37 +266,37 @@ const avatar = {
   width: 34,
   height: 34,
   borderRadius: 999,
-  border: "1px solid rgba(15,61,46,0.14)",
+  border: "1px solid rgba(255,255,255,0.18)",
   background:
-    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0) 55%), rgba(20,92,67,0.18)"
+    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), rgba(255,255,255,0) 55%), rgba(43,218,154,0.16)"
 }
 
 /* ================= DRAWER MOBILE ================= */
 
 const overlay = {
-  position: "absolute",
+  position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.28)",
-  backdropFilter: "blur(3px)",
-  WebkitBackdropFilter: "blur(3px)",
-  zIndex: 25
+  background: "rgba(0,0,0,0.34)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
+  zIndex: 55
 }
 
 const drawer = {
-  position: "absolute",
-  top: 86,
-  left: 16,
+  position: "fixed",
+  top: 90,
+  left: 14,
   width: 300,
-  maxWidth: "calc(100% - 32px)",
+  maxWidth: "calc(100% - 28px)",
   borderRadius: 18,
   padding: 12,
-  background: "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.56))",
-  border: "1px solid rgba(15,61,46,0.12)",
-  boxShadow: "0 22px 60px rgba(0,0,0,0.20)",
-  backdropFilter: "blur(14px)",
-  WebkitBackdropFilter: "blur(14px)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.08))",
+  border: "1px solid rgba(255,255,255,0.16)",
+  boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
   transition: "transform 200ms ease",
-  zIndex: 30
+  zIndex: 60
 }
 
 const drawerHead = {
@@ -298,12 +305,12 @@ const drawerHead = {
   justifyContent: "space-between",
   gap: 10,
   paddingBottom: 10,
-  borderBottom: "1px solid rgba(15,61,46,0.10)"
+  borderBottom: "1px solid rgba(255,255,255,0.14)"
 }
 
 const drawerTitle = {
   fontWeight: 950,
-  color: C.ink
+  color: "rgba(255,255,255,0.90)"
 }
 
 const drawerList = {
@@ -315,7 +322,7 @@ const drawerList = {
 
 const drawerLink = {
   textDecoration: "none",
-  color: "rgba(15,61,46,0.80)",
+  color: "rgba(255,255,255,0.80)",
   fontWeight: 950,
   fontSize: 13,
   padding: "10px 12px",
@@ -325,7 +332,7 @@ const drawerLink = {
 }
 
 const drawerLinkActive = {
-  background: "rgba(20,92,67,0.12)",
-  border: "1px solid rgba(20,92,67,0.16)",
-  color: C.ink
+  background: "rgba(43,218,154,0.14)",
+  border: "1px solid rgba(43,218,154,0.22)",
+  color: "rgba(255,255,255,0.92)"
 }
