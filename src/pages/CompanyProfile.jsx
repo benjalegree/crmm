@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate, useParams, Link } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 
 export default function CompanyProfile() {
   const { id } = useParams()
@@ -8,18 +8,21 @@ export default function CompanyProfile() {
   const [company, setCompany] = useState(null)
   const [contacts, setContacts] = useState([])
 
-  const [loading, setLoading] = useState(true)
+  const [loadingCompany, setLoadingCompany] = useState(true)
   const [loadingContacts, setLoadingContacts] = useState(true)
 
-  const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState("")
-  const [contactsErr, setContactsErr] = useState("")
+  const [errCompany, setErrCompany] = useState("")
+  const [errContacts, setErrContacts] = useState("")
 
   // autosave
   const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
   const autosaveTimerRef = useRef(null)
   const lastSavedSnapshotRef = useRef("")
   const mountedRef = useRef(true)
+
+  // responsive (sin hacks raros)
+  const [isNarrow, setIsNarrow] = useState(false)
 
   const readJson = async (res) => {
     try {
@@ -45,29 +48,37 @@ export default function CompanyProfile() {
   }, [])
 
   useEffect(() => {
-    const ctrl = new AbortController()
-    const ctrl2 = new AbortController()
+    const onResize = () => setIsNarrow(window.innerWidth < 920)
+    onResize()
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+
+  useEffect(() => {
+    const c1 = new AbortController()
+    const c2 = new AbortController()
 
     setCompany(null)
     setContacts([])
-    setErr("")
-    setContactsErr("")
+    setErrCompany("")
+    setErrContacts("")
     setDirty(false)
+    setSaving(false)
     lastSavedSnapshotRef.current = ""
 
-    loadCompany(ctrl.signal)
-    loadContactsForCompany(ctrl2.signal)
+    loadCompany(c1.signal)
+    loadContactsForCompany(c2.signal)
 
     return () => {
-      ctrl.abort()
-      ctrl2.abort()
+      c1.abort()
+      c2.abort()
     }
     // eslint-disable-next-line
   }, [id])
 
   const loadCompany = async (signal) => {
-    setLoading(true)
-    setErr("")
+    setLoadingCompany(true)
+    setErrCompany("")
     try {
       const res = await fetch(`/api/crm?action=getCompany&id=${id}`, {
         credentials: "include",
@@ -79,28 +90,26 @@ export default function CompanyProfile() {
 
       if (!res.ok) {
         setCompany(null)
-        setErr(safeErrMsg(data, "Failed to load company"))
-        setLoading(false)
+        setErrCompany(safeErrMsg(data, "Failed to load company"))
+        setLoadingCompany(false)
         return
       }
 
       setCompany(data)
-      setLoading(false)
-
+      setLoadingCompany(false)
       lastSavedSnapshotRef.current = JSON.stringify(data?.fields || {})
     } catch (e) {
       if (!mountedRef.current) return
       if (e?.name === "AbortError") return
       setCompany(null)
-      setErr("Failed to load company")
-      setLoading(false)
+      setErrCompany("Failed to load company")
+      setLoadingCompany(false)
     }
   }
 
-  // ✅ muestra contactos asociados: pedimos tus contactos y filtramos por Company recId
   const loadContactsForCompany = async (signal) => {
     setLoadingContacts(true)
-    setContactsErr("")
+    setErrContacts("")
     try {
       const res = await fetch(`/api/crm?action=getContacts`, {
         credentials: "include",
@@ -112,16 +121,17 @@ export default function CompanyProfile() {
 
       if (!res.ok) {
         setContacts([])
-        setContactsErr(safeErrMsg(data, "Failed to load contacts"))
+        setErrContacts(safeErrMsg(data, "Failed to load contacts"))
         setLoadingContacts(false)
         return
       }
 
       const all = data.records || []
 
+      // Contacts.Company suele ser un array con recordIds de Companies
       const filtered = all.filter((c) => {
-        const companyArr = c?.fields?.Company
-        return Array.isArray(companyArr) && companyArr.includes(id)
+        const rel = c?.fields?.Company
+        return Array.isArray(rel) && rel.includes(id)
       })
 
       filtered.sort((a, b) => {
@@ -136,46 +146,45 @@ export default function CompanyProfile() {
       if (!mountedRef.current) return
       if (e?.name === "AbortError") return
       setContacts([])
-      setContactsErr("Failed to load contacts")
+      setErrContacts("Failed to load contacts")
       setLoadingContacts(false)
     }
   }
 
   const updateField = (field, value) => {
     setCompany((prev) => {
-      const next = {
+      if (!prev) return prev
+      return {
         ...prev,
         fields: {
-          ...(prev?.fields || {}),
+          ...(prev.fields || {}),
           [field]: value
         }
       }
-      return next
     })
     setDirty(true)
-    setErr("")
+    setErrCompany("")
   }
 
   const computeSnapshot = (fields) => JSON.stringify(fields || {})
 
   const buildPayload = (fields) => {
     const f = fields || {}
-    const companyName = f["Company Name"] ?? f["Name"] ?? ""
-
     return {
       id,
       fields: {
-        "Company Name": String(companyName || ""),
+        // el backend ya mapea nombres reales si tu base usa "Name" vs "Company Name"
+        "Company Name": String(f["Company Name"] || f["Name"] || ""),
         Industry: String(f.Industry || ""),
         Country: String(f.Country || ""),
         Status: String(f.Status || "New"),
-        Website: String(f.Website || f["Website"] || f.URL || ""),
+        Website: String(f["Website"] || f.URL || ""),
         "Responsible Email": String(f["Responsible Email"] || "")
       }
     }
   }
 
-  const saveChanges = async ({ silent = false } = {}) => {
+  const saveNow = async ({ silent = false } = {}) => {
     if (!company?.fields) return
 
     const currentSnap = computeSnapshot(company.fields)
@@ -185,12 +194,12 @@ export default function CompanyProfile() {
     }
 
     setSaving(true)
-    if (!silent) setErr("")
+    if (!silent) setErrCompany("")
 
     try {
       const payload = buildPayload(company.fields)
 
-      const res = await fetch("/api/crm?action=updateCompany", {
+      const res = await fetch(`/api/crm?action=updateCompany`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -202,7 +211,7 @@ export default function CompanyProfile() {
       if (!mountedRef.current) return
 
       if (!res.ok) {
-        setErr(safeErrMsg(data, "Failed to update company"))
+        setErrCompany(safeErrMsg(data, "Failed to update company"))
         setSaving(false)
         return
       }
@@ -211,14 +220,14 @@ export default function CompanyProfile() {
       setDirty(false)
     } catch {
       if (!mountedRef.current) return
-      setErr("Failed to update company")
+      setErrCompany("Failed to update company")
     }
 
     if (!mountedRef.current) return
     setSaving(false)
   }
 
-  // ✅ AUTOSAVE debounce
+  // autosave debounce
   useEffect(() => {
     if (!dirty) return
     if (!company?.fields) return
@@ -226,7 +235,7 @@ export default function CompanyProfile() {
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
 
     autosaveTimerRef.current = setTimeout(() => {
-      saveChanges({ silent: true })
+      saveNow({ silent: true })
     }, 600)
 
     return () => {
@@ -241,30 +250,31 @@ export default function CompanyProfile() {
     return "Auto-saved"
   }, [saving, dirty])
 
-  if (loading) return <div style={loadingBox}>Loading...</div>
+  if (loadingCompany) return <div style={loadingBox}>Loading...</div>
 
-  if (err) {
+  if (errCompany) {
     return (
       <div style={page}>
         <div style={topbar}>
-          <button style={btnGhost} type="button" onClick={() => navigate("/companies")}>
+          <button style={ghostBtn} type="button" onClick={() => navigate("/companies")}>
             Back
           </button>
           <div style={autosaveInline}>{autosaveText}</div>
+          <button
+            style={ghostBtn}
+            type="button"
+            onClick={() => {
+              const c1 = new AbortController()
+              const c2 = new AbortController()
+              loadCompany(c1.signal)
+              loadContactsForCompany(c2.signal)
+            }}
+          >
+            Retry
+          </button>
         </div>
 
-        <div style={errBox}>{err}</div>
-
-        <button
-          type="button"
-          style={btnGhost}
-          onClick={() => {
-            const ctrl = new AbortController()
-            loadCompany(ctrl.signal)
-          }}
-        >
-          Retry
-        </button>
+        <div style={errBox}>{errCompany}</div>
       </div>
     )
   }
@@ -279,23 +289,25 @@ export default function CompanyProfile() {
 
   const f = company.fields
   const name = f["Company Name"] || f["Name"] || "Company"
-  const website = f["Website"] || f.URL || f.Website || ""
+  const website = f["Website"] || f.URL || ""
 
   return (
     <div style={page}>
       {/* Minimal topbar */}
       <div style={topbar}>
-        <button style={btnGhost} type="button" onClick={() => navigate("/companies")}>
+        <button style={ghostBtn} type="button" onClick={() => navigate("/companies")}>
           Back
         </button>
 
         <div style={titleWrap}>
           <h1 style={title}>{name}</h1>
-
           <div style={metaRow}>
-            {f.Status ? <span style={{ ...tag, ...statusColorCompany(f.Status) }}>{f.Status}</span> : null}
+            {f.Status ? (
+              <span style={{ ...tag, ...statusColorCompany(f.Status) }}>{f.Status}</span>
+            ) : (
+              <span style={{ ...tag, ...tagNeutral }}>New</span>
+            )}
             <span style={autosaveInline}>{autosaveText}</span>
-
             {website ? (
               <a href={safeUrl(website)} target="_blank" rel="noreferrer" style={link}>
                 Website ↗
@@ -305,28 +317,37 @@ export default function CompanyProfile() {
         </div>
 
         <button
-          style={btnGhost}
+          style={ghostBtn}
           type="button"
           onClick={() => {
-            const ctrl = new AbortController()
-            const ctrl2 = new AbortController()
-            loadCompany(ctrl.signal)
-            loadContactsForCompany(ctrl2.signal)
+            const c1 = new AbortController()
+            const c2 = new AbortController()
+            loadCompany(c1.signal)
+            loadContactsForCompany(c2.signal)
           }}
         >
           Refresh
         </button>
       </div>
 
-      {err ? <div style={errBox}>{err}</div> : null}
+      {errCompany ? <div style={errBox}>{errCompany}</div> : null}
 
-      {/* Wide layout */}
-      <div style={grid}>
-        {/* LEFT: company fields */}
+      <div
+        style={{
+          ...grid,
+          gridTemplateColumns: isNarrow ? "1fr" : "1.4fr 1fr"
+        }}
+      >
+        {/* LEFT */}
         <div style={card}>
           <div style={sectionTitle}>Company</div>
 
-          <div style={form}>
+          <div
+            style={{
+              ...form,
+              gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr"
+            }}
+          >
             <Field label="Company Name">
               <input
                 style={input}
@@ -369,7 +390,7 @@ export default function CompanyProfile() {
             <Field label="Website">
               <input
                 style={input}
-                value={f["Website"] || f.URL || f.Website || ""}
+                value={f["Website"] || f.URL || ""}
                 onChange={(e) => updateField("Website", e.target.value)}
                 placeholder="https://..."
               />
@@ -385,22 +406,17 @@ export default function CompanyProfile() {
             </Field>
           </div>
 
-          {/* botón opcional manual (sin sacar autosave) */}
-          <button
-            type="button"
-            style={btnPrimary}
-            onClick={() => saveChanges({ silent: false })}
-            disabled={saving}
-          >
+          {/* opcional manual (no rompe autosave) */}
+          <button type="button" style={primaryBtn} onClick={() => saveNow({ silent: false })} disabled={saving}>
             {saving ? "Saving..." : "Save now"}
           </button>
         </div>
 
-        {/* RIGHT: associated contacts */}
+        {/* RIGHT */}
         <div style={card}>
           <div style={sectionTitle}>Contacts</div>
 
-          {contactsErr ? <div style={errBox}>{contactsErr}</div> : null}
+          {errContacts ? <div style={errBox}>{errContacts}</div> : null}
 
           {loadingContacts ? (
             <div style={muted}>Loading contacts…</div>
@@ -413,14 +429,14 @@ export default function CompanyProfile() {
                 const fullName = cf["Full Name"] || cf.Name || "Contact"
                 const email = cf.Email || ""
                 const status = cf.Status || ""
+
                 return (
                   <Link key={c.id} to={`/leads/${c.id}`} style={row}>
                     <div style={{ minWidth: 0 }}>
                       <div style={rowTitle}>{fullName}</div>
-                      <div style={rowSub}>
-                        {email ? <span>{email}</span> : <span style={{ opacity: 0.7 }}>No email</span>}
-                      </div>
+                      <div style={rowSub}>{email || "—"}</div>
                     </div>
+
                     {status ? <span style={{ ...tag, ...statusColorLead(status) }}>{status}</span> : null}
                   </Link>
                 )
@@ -478,12 +494,12 @@ function statusColorLead(s) {
 }
 
 /* =========================
-   STYLES (MINIMAL + WIDE)
+   STYLES
 ========================= */
 
 const page = {
   width: "100%",
-  maxWidth: 1200,
+  maxWidth: 1280,
   margin: "0 auto"
 }
 
@@ -531,6 +547,12 @@ const tag = {
   whiteSpace: "nowrap"
 }
 
+const tagNeutral = {
+  background: "rgba(0,0,0,0.04)",
+  borderColor: "rgba(0,0,0,0.08)",
+  color: "rgba(0,0,0,0.70)"
+}
+
 const link = {
   fontSize: 12,
   fontWeight: 900,
@@ -544,7 +566,6 @@ const link = {
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "1.35fr 1fr",
   gap: 18
 }
 
@@ -567,7 +588,6 @@ const sectionTitle = {
 
 const form = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
   gap: 12
 }
 
@@ -584,7 +604,7 @@ const input = {
   color: "rgba(0,0,0,0.80)"
 }
 
-const btnGhost = {
+const ghostBtn = {
   padding: "12px 14px",
   borderRadius: 16,
   border: "1px solid rgba(0,0,0,0.10)",
@@ -594,7 +614,7 @@ const btnGhost = {
   fontWeight: 900
 }
 
-const btnPrimary = {
+const primaryBtn = {
   marginTop: 14,
   padding: "12px 14px",
   borderRadius: 16,
@@ -607,6 +627,7 @@ const btnPrimary = {
 }
 
 const list = { display: "flex", flexDirection: "column", gap: 10 }
+
 const row = {
   display: "flex",
   justifyContent: "space-between",
@@ -619,8 +640,23 @@ const row = {
   textDecoration: "none",
   color: "inherit"
 }
-const rowTitle = { fontWeight: 950, color: "rgba(0,0,0,0.82)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
-const rowSub = { marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.55)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
+
+const rowTitle = {
+  fontWeight: 950,
+  color: "rgba(0,0,0,0.82)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+}
+
+const rowSub = {
+  marginTop: 6,
+  fontSize: 12,
+  color: "rgba(0,0,0,0.55)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+}
 
 const muted = { fontSize: 13, color: "rgba(0,0,0,0.55)" }
 
@@ -634,14 +670,3 @@ const errBox = {
 }
 
 const loadingBox = { padding: 30 }
-
-/* Responsive (inline): reduce a 1 columna en pantallas chicas */
-if (typeof window !== "undefined") {
-  const w = window.innerWidth
-  if (w && w < 920) {
-    grid.gridTemplateColumns = "1fr"
-    form.gridTemplateColumns = "1fr"
-    topbar.gridTemplateColumns = "auto 1fr"
-    topbar.rowGap = 10
-  }
-}
