@@ -4,80 +4,78 @@ import { useMemo } from "react"
 export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
   const location = useLocation()
 
-  // ✅ sin emojis (más premium)
   const links = [
-    { path: "/dashboard", label: "Overview", icon: "Overview" },
-    { path: "/companies", label: "Companies", icon: "Companies" },
-    { path: "/leads", label: "Leads", icon: "Leads" },
-    { path: "/pipeline", label: "Pipeline", icon: "Pipeline" },
-    { path: "/calendar", label: "Calendar", icon: "Calendar" }
+    { path: "/dashboard", label: "Overview", icon: IconGrid },
+    { path: "/companies", label: "Companies", icon: IconBuilding },
+    { path: "/leads", label: "Leads", icon: IconUser },
+    { path: "/pipeline", label: "Pipeline", icon: IconKanban },
+    { path: "/calendar", label: "Calendar", icon: IconCalendar }
   ]
 
-  // En desktop: open=true => grande, open=false => colapsada
   const isCollapsedDesktop = !isMobile && !open
 
   const wrapperStyle = useMemo(() => {
     if (isMobile) {
       return {
-        ...sidebarWrapperMobile,
+        ...styles.wrapperMobile,
         transform: open ? "translateX(0)" : "translateX(-112%)"
       }
     }
     return {
-      ...sidebarWrapper,
-      width: isCollapsedDesktop ? "110px" : "300px"
+      ...styles.wrapper,
+      width: isCollapsedDesktop ? 104 : 320
     }
   }, [isMobile, open, isCollapsedDesktop])
 
   const panelStyle = useMemo(() => {
-    if (isMobile) return sidebarMobile
-
+    if (isMobile) return styles.panelMobile
     return {
-      ...sidebar,
-      width: isCollapsedDesktop ? "86px" : "260px",
-      padding: isCollapsedDesktop ? "22px 12px" : "34px 22px"
+      ...styles.panel,
+      width: isCollapsedDesktop ? 86 : 280,
+      padding: isCollapsedDesktop ? "18px 10px" : "18px 16px"
     }
   }, [isMobile, isCollapsedDesktop])
 
   return (
     <>
-      {/* Overlay (solo mobile cuando está abierto) */}
-      {isMobile && open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
+      {isMobile && open ? <div style={styles.overlay} onClick={onClose} aria-hidden="true" /> : null}
 
       <div style={wrapperStyle}>
         <div style={panelStyle}>
-          <div style={topRow}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <div style={brandMark} />
+          {/* Header interno sidebar */}
+          <div style={styles.sideHead}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+              <div style={styles.sideMark} />
               {!isCollapsedDesktop ? (
                 <div style={{ minWidth: 0 }}>
-                  <div style={logo}>PsicoFunnel</div>
-                  <div style={logoSub}>CRM</div>
+                  <div style={styles.sideTitle}>PsicoFunnel</div>
+                  <div style={styles.sideSub}>Workspace</div>
                 </div>
               ) : null}
             </div>
 
-            {/* Botón control: desktop colapsa/expande, mobile cierra */}
             {isMobile ? (
-              <button type="button" style={iconBtn} onClick={onClose} aria-label="Close menu">
-                <span style={btnGlyph}>×</span>
+              <button type="button" style={styles.sideBtn} onClick={onClose} aria-label="Close menu">
+                <span style={styles.sideBtnGlyph}>×</span>
               </button>
             ) : (
               <button
                 type="button"
-                style={iconBtn}
+                style={styles.sideBtn}
                 onClick={() => (isCollapsedDesktop ? onOpen?.() : onToggle?.())}
                 aria-label="Toggle sidebar"
                 title={isCollapsedDesktop ? "Expand" : "Collapse"}
               >
-                <span style={btnGlyph}>{isCollapsedDesktop ? "→" : "←"}</span>
+                <span style={styles.sideBtnGlyph}>{isCollapsedDesktop ? "→" : "←"}</span>
               </button>
             )}
           </div>
 
-          <div style={{ marginTop: isCollapsedDesktop ? 18 : 38 }}>
+          {/* Nav */}
+          <div style={{ marginTop: 12 }}>
             {links.map((link) => {
               const active = location.pathname === link.path
+              const Icon = link.icon
 
               return (
                 <Link
@@ -87,30 +85,33 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
                     if (isMobile) onClose?.()
                   }}
                   style={{
-                    ...item,
-                    ...(isCollapsedDesktop ? itemCollapsed : {}),
-                    ...(active ? itemActive : null)
+                    ...styles.item,
+                    ...(isCollapsedDesktop ? styles.itemCollapsed : null),
+                    ...(active ? styles.itemActive : null)
                   }}
                 >
-                  {/* icon minimal: inicial en chip */}
-                  <span style={{ ...itemIcon, ...(active ? itemIconActive : null) }}>
-                    {link.label.slice(0, 1)}
+                  <span style={{ ...styles.iconBox, ...(active ? styles.iconBoxActive : null) }}>
+                    <Icon active={active} />
                   </span>
 
-                  {!isCollapsedDesktop ? <span style={itemLabel}>{link.label}</span> : null}
+                  {!isCollapsedDesktop ? <span style={styles.itemLabel}>{link.label}</span> : null}
 
                   {!isCollapsedDesktop ? (
-                    <span style={{ ...activeDot, opacity: active ? 1 : 0 }} />
+                    <span style={{ ...styles.activePip, opacity: active ? 1 : 0 }} />
                   ) : null}
                 </Link>
               )
             })}
           </div>
 
+          {/* Footer */}
           {!isCollapsedDesktop ? (
-            <div style={footerHint}>
-              <div style={hintTitle}>Workspace</div>
-              <div style={hintText}>Colapsá el menú para trabajar más cómodo en iPad.</div>
+            <div style={styles.footer}>
+              <div style={styles.footerTop}>
+                <span style={styles.footerDot} />
+                <div style={styles.footerTitle}>English Green System</div>
+              </div>
+              <div style={styles.footerText}>Minimal, fast, and made to feel good to work.</div>
             </div>
           ) : null}
         </div>
@@ -119,186 +120,275 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
   )
 }
 
+/* ===================== ICONS ===================== */
+
+function IconGrid({ active }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"
+        stroke={active ? "#ffffff" : "currentColor"}
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function IconBuilding({ active }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M6 20V4h12v16M9 8h2m-2 4h2m-2 4h2m4-8h2m-2 4h2m-2 4h2M4 20h16"
+        stroke={active ? "#ffffff" : "currentColor"}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function IconUser({ active }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 21a8 8 0 10-16 0M12 13a4.5 4.5 0 100-9 4.5 4.5 0 000 9z"
+        stroke={active ? "#ffffff" : "currentColor"}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function IconKanban({ active }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"
+        stroke={active ? "#ffffff" : "currentColor"}
+        strokeWidth="2"
+      />
+      <path d="M8 8v8M12 8v6M16 8v10" stroke={active ? "#ffffff" : "currentColor"} strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconCalendar({ active }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7 3v3M17 3v3M4 8h16M6 6h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2z"
+        stroke={active ? "#ffffff" : "currentColor"}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path d="M8 12h4M8 16h7" stroke={active ? "#ffffff" : "currentColor"} strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /* ===================== STYLES ===================== */
 
 const FONT = "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+const GREEN = "#0f4d3a"
+const GREEN_2 = "#12694c"
+const GREEN_SOFT = "rgba(18,105,76,0.10)"
+const BORDER = "rgba(15,77,58,0.14)"
+const TEXT = "#0b1a14"
 
-const sidebarWrapper = {
-  padding: "34px 18px",
-  display: "flex",
-  justifyContent: "center",
-  transition: "width 0.22s ease"
-}
+const styles = {
+  wrapper: {
+    padding: "96px 14px 16px", // deja visible el topbar verde
+    display: "flex",
+    justifyContent: "center",
+    transition: "width 0.22s ease"
+  },
 
-const sidebarWrapperMobile = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  bottom: 0,
-  width: "320px",
-  padding: "16px 14px",
-  display: "flex",
-  justifyContent: "flex-start",
-  zIndex: 60,
-  transition: "transform 0.22s ease"
-}
+  wrapperMobile: {
+    position: "fixed",
+    top: 72,
+    left: 0,
+    bottom: 0,
+    width: 340,
+    padding: "14px",
+    zIndex: 90,
+    transition: "transform 0.22s ease"
+  },
 
-const overlay = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.28)",
-  backdropFilter: "blur(3px)",
-  WebkitBackdropFilter: "blur(3px)",
-  zIndex: 55
-}
+  overlay: {
+    position: "fixed",
+    top: 72,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0,0,0,0.28)",
+    backdropFilter: "blur(3px)",
+    WebkitBackdropFilter: "blur(3px)",
+    zIndex: 85
+  },
 
-const sidebar = {
-  height: "100%",
-  borderRadius: "26px",
-  background: "rgba(255,255,255,0.56)",
-  backdropFilter: "blur(40px)",
-  WebkitBackdropFilter: "blur(40px)",
-  border: "1px solid rgba(15,61,46,0.10)",
-  boxShadow: `
-    0 26px 60px rgba(15,61,46,0.14),
-    inset 0 1px 0 rgba(255,255,255,0.65)
-  `,
-  transition: "width 0.22s ease, padding 0.22s ease",
-  display: "flex",
-  flexDirection: "column",
-  fontFamily: FONT
-}
+  panel: {
+    height: "100%",
+    borderRadius: 22,
+    background: "#ffffff",
+    border: `1px solid ${BORDER}`,
+    boxShadow: "0 26px 60px rgba(15,77,58,0.14)",
+    display: "flex",
+    flexDirection: "column",
+    fontFamily: FONT
+  },
 
-const sidebarMobile = {
-  ...sidebar,
-  width: "100%",
-  padding: "26px 18px"
-}
+  panelMobile: {
+    height: "100%",
+    borderRadius: 22,
+    background: "#ffffff",
+    border: `1px solid ${BORDER}`,
+    boxShadow: "0 26px 60px rgba(15,77,58,0.16)",
+    display: "flex",
+    flexDirection: "column",
+    fontFamily: FONT,
+    padding: "18px 16px"
+  },
 
-const topRow = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12
-}
+  sideHead: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "14px 12px 12px"
+  },
 
-const brandMark = {
-  width: 12,
-  height: 12,
-  borderRadius: 999,
-  background: "linear-gradient(135deg,#145c43,#1e7a57)",
-  boxShadow: "0 10px 18px rgba(20,92,67,0.26)"
-}
+  sideMark: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    background: `linear-gradient(135deg, ${GREEN_2}, ${GREEN})`,
+    boxShadow: "0 12px 22px rgba(15,77,58,0.22)"
+  },
 
-const logo = {
-  fontSize: 16,
-  fontWeight: 950,
-  color: "#0f3d2e",
-  letterSpacing: 0.2,
-  lineHeight: 1.1
-}
+  sideTitle: {
+    fontSize: 14,
+    fontWeight: 950,
+    color: TEXT,
+    letterSpacing: 0.2
+  },
 
-const logoSub = {
-  marginTop: 2,
-  fontSize: 11,
-  fontWeight: 850,
-  color: "rgba(0,0,0,0.45)"
-}
+  sideSub: {
+    marginTop: 3,
+    fontSize: 11,
+    fontWeight: 800,
+    color: "rgba(0,0,0,0.55)"
+  },
 
-const iconBtn = {
-  width: 40,
-  height: 40,
-  borderRadius: 14,
-  border: "1px solid rgba(15,61,46,0.12)",
-  background: "rgba(255,255,255,0.70)",
-  boxShadow: "0 10px 22px rgba(15,61,46,0.08)",
-  cursor: "pointer",
-  display: "grid",
-  placeItems: "center"
-}
+  sideBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    border: `1px solid ${BORDER}`,
+    background: "#ffffff",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    boxShadow: "0 10px 24px rgba(15,77,58,0.10)"
+  },
 
-const btnGlyph = {
-  fontWeight: 950,
-  color: "#0f3d2e",
-  lineHeight: 1
-}
+  sideBtnGlyph: {
+    fontWeight: 950,
+    color: TEXT,
+    lineHeight: 1
+  },
 
-const item = {
-  display: "flex",
-  alignItems: "center",
-  gap: 12,
-  padding: "12px 12px",
-  marginBottom: "10px",
-  borderRadius: "16px",
-  textDecoration: "none",
-  transition: "transform 0.12s ease, background 0.12s ease, border-color 0.12s ease",
-  border: "1px solid transparent"
-}
+  item: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "12px 12px",
+    margin: "0 10px 10px",
+    borderRadius: 16,
+    textDecoration: "none",
+    border: "1px solid transparent",
+    transition: "all 0.12s ease"
+  },
 
-const itemCollapsed = {
-  justifyContent: "center",
-  padding: "12px 10px"
-}
+  itemCollapsed: {
+    justifyContent: "center",
+    margin: "0 8px 10px",
+    padding: "12px 10px"
+  },
 
-const itemActive = {
-  background: "rgba(20,92,67,0.10)",
-  borderColor: "rgba(20,92,67,0.16)"
-}
+  itemActive: {
+    background: `linear-gradient(135deg, ${GREEN_2} 0%, ${GREEN} 100%)`,
+    borderColor: "rgba(0,0,0,0.06)",
+    boxShadow: "0 18px 40px rgba(15,77,58,0.26)"
+  },
 
-const itemIcon = {
-  width: 28,
-  height: 28,
-  borderRadius: 10,
-  display: "grid",
-  placeItems: "center",
-  fontSize: 12,
-  fontWeight: 950,
-  color: "rgba(0,0,0,0.60)",
-  background: "rgba(255,255,255,0.65)",
-  border: "1px solid rgba(0,0,0,0.06)"
-}
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    display: "grid",
+    placeItems: "center",
+    background: GREEN_SOFT,
+    border: `1px solid ${BORDER}`,
+    color: GREEN
+  },
 
-const itemIconActive = {
-  color: "#145c43",
-  borderColor: "rgba(20,92,67,0.16)",
-  background: "rgba(255,255,255,0.80)"
-}
+  iconBoxActive: {
+    background: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.22)",
+    color: "#ffffff"
+  },
 
-const itemLabel = {
-  fontSize: 13,
-  fontWeight: 900,
-  color: "#0f3d2e",
-  letterSpacing: 0.1
-}
+  itemLabel: {
+    fontSize: 13,
+    fontWeight: 950,
+    color: TEXT,
+    letterSpacing: 0.1
+  },
 
-const activeDot = {
-  marginLeft: "auto",
-  width: 7,
-  height: 7,
-  borderRadius: 999,
-  background: "linear-gradient(135deg,#145c43,#1e7a57)",
-  boxShadow: "0 10px 16px rgba(20,92,67,0.20)",
-  transition: "opacity 0.15s ease"
-}
+  activePip: {
+    marginLeft: "auto",
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.90)",
+    boxShadow: "0 10px 16px rgba(0,0,0,0.18)",
+    transition: "opacity 0.12s ease"
+  },
 
-const footerHint = {
-  marginTop: "auto",
-  paddingTop: 16,
-  borderTop: "1px solid rgba(15,61,46,0.10)"
-}
+  footer: {
+    marginTop: "auto",
+    padding: "14px 14px 16px",
+    borderTop: `1px solid ${BORDER}`
+  },
 
-const hintTitle = {
-  fontSize: 11,
-  fontWeight: 950,
-  color: "rgba(20,92,67,0.95)",
-  letterSpacing: 0.3,
-  textTransform: "uppercase",
-  marginBottom: 6
-}
+  footerTop: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10
+  },
 
-const hintText = {
-  fontSize: 12,
-  color: "rgba(0,0,0,0.55)",
-  lineHeight: 1.35,
-  fontWeight: 750
+  footerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    background: `linear-gradient(135deg, ${GREEN_2}, ${GREEN})`
+  },
+
+  footerTitle: {
+    fontSize: 12,
+    fontWeight: 950,
+    color: GREEN,
+    letterSpacing: 0.2,
+    textTransform: "uppercase"
+  },
+
+  footerText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: 750,
+    color: "rgba(0,0,0,0.58)",
+    lineHeight: 1.35
+  }
 }
