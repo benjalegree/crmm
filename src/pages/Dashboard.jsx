@@ -1,409 +1,335 @@
 import { useEffect, useMemo, useState } from "react"
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid
-} from "recharts"
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts"
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [calendar, setCalendar] = useState(null)
-  const [me, setMe] = useState(null)
+  const [user, setUser] = useState(null)
+
   const [err, setErr] = useState("")
-  const [isNarrow, setIsNarrow] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // ✅ nunca tocar window fuera del effect
-  useEffect(() => {
-    const onResize = () => setIsNarrow(typeof window !== "undefined" ? window.innerWidth < 980 : false)
-    onResize()
-    if (typeof window !== "undefined") {
-      window.addEventListener("resize", onResize)
-      return () => window.removeEventListener("resize", onResize)
+  // -----------------------------
+  // Helpers
+  // -----------------------------
+  const readJson = async (res) => {
+    try {
+      return await res.json()
+    } catch {
+      return {}
     }
-  }, [])
+  }
 
+  const toISODate = (d) => {
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    const dd = String(d.getDate()).padStart(2, "0")
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  const safeErrMsg = (data, fallback) =>
+    data?.error ||
+    data?.details?.error?.message ||
+    data?.details?.error ||
+    data?.details?.message ||
+    fallback
+
+  const getName = (email) => {
+    if (email === "benjamin.alegre@psicofunnel.com") return "Benjamin"
+    if (email === "sarahduatorrss@gmail.com") return "Sarah"
+    return "User"
+  }
+
+  // -----------------------------
+  // Load data
+  // -----------------------------
   useEffect(() => {
-    let cancelled = false
+    let alive = true
+    const ctrl = new AbortController()
 
-    const run = async () => {
+    const loadAll = async () => {
+      setLoading(true)
+      setErr("")
+
       try {
-        setErr("")
-
         const [meRes, statsRes, calRes] = await Promise.all([
-          fetch("/api/crm?action=me", { credentials: "include" }),
-          fetch("/api/crm?action=getDashboardStats", { credentials: "include" }),
-          fetch("/api/crm?action=getCalendar", { credentials: "include" })
+          fetch("/api/crm?action=me", { credentials: "include", signal: ctrl.signal }),
+          fetch("/api/crm?action=getDashboardStats", { credentials: "include", signal: ctrl.signal }),
+          fetch("/api/crm?action=getCalendar", { credentials: "include", signal: ctrl.signal })
         ])
 
-        const meData = await safeJson(meRes)
-        const statsData = await safeJson(statsRes)
-        const calData = await safeJson(calRes)
+        const meData = await readJson(meRes)
+        const statsData = await readJson(statsRes)
+        const calData = await readJson(calRes)
 
-        if (cancelled) return
+        if (!alive) return
 
-        if (!meRes.ok) throw new Error(meData?.error || "Failed to load session")
-        if (!statsRes.ok) throw new Error(statsData?.error || "Failed to load stats")
-        if (!calRes.ok) throw new Error(calData?.error || "Failed to load calendar")
+        if (!meRes.ok) {
+          setErr(safeErrMsg(meData, "Failed to load session"))
+          setLoading(false)
+          return
+        }
+        if (!statsRes.ok) {
+          setErr(safeErrMsg(statsData, "Failed to load stats"))
+          setLoading(false)
+          return
+        }
+        if (!calRes.ok) {
+          setErr(safeErrMsg(calData, "Failed to load calendar"))
+          setLoading(false)
+          return
+        }
 
-        setMe(meData) // {authenticated, email}
+        setUser(meData)
         setStats(statsData)
         setCalendar(calData.records || [])
+        setLoading(false)
       } catch (e) {
-        if (cancelled) return
-        setErr(String(e?.message || "Failed to load dashboard"))
+        if (!alive) return
+        if (e?.name === "AbortError") return
+        setErr("Failed to load dashboard")
+        setLoading(false)
       }
     }
 
-    run()
+    loadAll()
+
     return () => {
-      cancelled = true
+      alive = false
+      ctrl.abort()
     }
   }, [])
+
+  // -----------------------------
+  // Derived data (hooks SIEMPRE arriba, sin returns antes)
+  // -----------------------------
+  const todayISO = useMemo(() => toISODate(new Date()), [])
+  const calendarSafe = calendar || []
+
+  const todayActivities = useMemo(() => {
+    return calendarSafe.filter((a) => {
+      const raw = a?.fields?.["Activity Date"]
+      if (!raw) return false
+      // tu backend guarda date-only "YYYY-MM-DD"
+      return String(raw).slice(0, 10) === todayISO
+    })
+  }, [calendarSafe, todayISO])
+
+  const upcoming = useMemo(() => {
+    return calendarSafe
+      .filter((a) => {
+        const next = a?.fields?.["Next Follow-up Date"]
+        if (!next) return false
+        return String(next).slice(0, 10) >= todayISO
+      })
+      .sort((a, b) => {
+        const da = new Date(String(a?.fields?.["Next Follow-up Date"] || "")).getTime()
+        const db = new Date(String(b?.fields?.["Next Follow-up Date"] || "")).getTime()
+        return da - db
+      })
+  }, [calendarSafe, todayISO])
+
+  const weeklyChartData = useMemo(() => {
+    // últimos 7 días incluyendo hoy
+    const days = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const iso = toISODate(d)
+      days.push({
+        iso,
+        label: d.toLocaleDateString(undefined, { weekday: "short" }), // Lun/Mar/...
+        count: 0
+      })
+    }
+
+    const map = new Map(days.map((d) => [d.iso, d]))
+    for (const a of calendarSafe) {
+      const iso = String(a?.fields?.["Activity Date"] || "").slice(0, 10)
+      if (!iso) continue
+      const bucket = map.get(iso)
+      if (bucket) bucket.count += 1
+    }
+
+    return days.map(({ label, count }) => ({ name: label, value: count }))
+  }, [calendarSafe])
+
+  const productivity = useMemo(() => {
+    const n = todayActivities.length
+    // 0..5 => 0..100
+    const pct = Math.max(0, Math.min(100, Math.round((n / 5) * 100)))
+    return pct
+  }, [todayActivities.length])
+
+  // -----------------------------
+  // UI states
+  // -----------------------------
+  if (loading) {
+    return <div style={loadingText}>Loading...</div>
+  }
 
   if (err) {
     return (
       <div style={page}>
         <div style={errBox}>{err}</div>
-        <button style={ghostBtn} type="button" onClick={() => window.location.reload()}>
+        <button
+          type="button"
+          style={miniBtn}
+          onClick={() => window.location.reload()}
+        >
           Retry
         </button>
       </div>
     )
   }
 
-  if (!stats || !calendar || !me) {
-    return <div style={{ color: "#0f3d2e", fontWeight: 900 }}>Loading...</div>
+  if (!stats || !user || !calendar) {
+    return <div style={loadingText}>Loading...</div>
   }
 
-  const email = me?.email || ""
-  const username = getName(email)
-
-  const todayISO = toISODate(new Date())
-
-  // ✅ normalizamos records (evita NaN / undefined)
-  const normalized = useMemo(() => {
-    const list = (calendar || []).map((r) => {
-      const f = r?.fields || {}
-      const activityDate = toISODate(parseAnyDate(f["Activity Date"]))
-      const nextFU = f["Next Follow-up Date"] ? toISODate(parseAnyDate(f["Next Follow-up Date"])) : ""
-      const rawOutcome = f.Outcome ?? f["Activity Type"] ?? ""
-      const outcome = normalizeOutcome(rawOutcome)
-      const notes = String(f.Notes || f.Notas || f.Observaciones || "")
-      return { id: r?.id, activityDate, nextFollowUp: nextFU, outcome, notes }
-    })
-    return list.filter((x) => x.id && x.activityDate)
-  }, [calendar])
-
-  const todayActivities = useMemo(() => {
-    return normalized.filter((a) => a.activityDate === todayISO)
-  }, [normalized, todayISO])
-
-  const upcoming = useMemo(() => {
-    return normalized
-      .filter((a) => a.nextFollowUp && a.nextFollowUp >= todayISO)
-      .sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp))
-  }, [normalized, todayISO])
-
-  // last 7 days bars
-  const weeklyData = useMemo(() => {
-    const days = lastNDays(7).map((d) => toISODate(d))
-    const counts = new Map(days.map((d) => [d, 0]))
-    for (const a of normalized) {
-      if (counts.has(a.activityDate)) counts.set(a.activityDate, (counts.get(a.activityDate) || 0) + 1)
-    }
-    return days.map((iso) => ({
-      iso,
-      day: formatDayShort(iso),
-      activities: counts.get(iso) || 0
-    }))
-  }, [normalized])
-
-  const weeklyTotal = weeklyData.reduce((sum, d) => sum + (d.activities || 0), 0)
-
-  // breakdown week by type/outcome
-  const breakdownData = useMemo(() => {
-    const days = lastNDays(7).map((d) => toISODate(d))
-    const weekStartISO = days[0]
-
-    const bucket = new Map()
-    for (const a of normalized) {
-      if (a.activityDate >= weekStartISO) {
-        bucket.set(a.outcome, (bucket.get(a.outcome) || 0) + 1)
-      }
-    }
-
-    const order = ["Call", "Email", "LinkedIn", "Meeting", "Positive response", "Other"]
-    return order.map((name) => ({ name, value: bucket.get(name) || 0 }))
-  }, [normalized])
-
-  const productivity = Math.min(100, todayActivities.length * 20)
-
+  // -----------------------------
+  // Render
+  // -----------------------------
   return (
     <div style={page}>
       <div style={topRow}>
-        <div>
-          <h1 style={greeting}>Good Morning {username}</h1>
-          <div style={subtle}>Last 7 days · Total activities: {weeklyTotal}</div>
-        </div>
-
-        <button style={ghostBtn} type="button" onClick={() => window.location.reload()}>
+        <h1 style={greeting}>Good Morning {getName(user.email)}</h1>
+        <button type="button" style={miniBtn} onClick={() => window.location.reload()}>
           Refresh
         </button>
       </div>
 
       <div style={grid}>
-        <div style={glassCard}>
-          <div style={cardTitle}>Today Activity</div>
-          <div style={bigNumber}>{todayActivities.length}</div>
-          <div style={progressBar}>
-            <div style={{ ...progressFill, width: `${productivity}%` }} />
-          </div>
-          <div style={miniHint}>{todayActivities.length >= 5 ? "Great pace" : "Aim for 5 touchpoints"}</div>
-        </div>
+        <MetricCard
+          title="Today Activity"
+          value={todayActivities.length}
+          sub={`Productivity ${productivity}%`}
+          right={
+            <div style={progressBar}>
+              <div style={{ ...progressFill, width: `${productivity}%` }} />
+            </div>
+          }
+        />
 
-        <div style={glassCard}>
-          <div style={cardTitle}>Upcoming Follow-ups</div>
-          <div style={bigNumber}>{upcoming.length}</div>
-          <div style={miniHint}>Scheduled from today</div>
-        </div>
+        <MetricCard
+          title="Upcoming Follow-ups"
+          value={upcoming.length}
+          sub={upcoming.length ? `Next: ${String(upcoming[0]?.fields?.["Next Follow-up Date"] || "").slice(0, 10)}` : "No tasks"}
+        />
 
-        <div style={glassCard}>
-          <div style={cardTitle}>Total Leads</div>
-          <div style={bigNumber}>{stats.totalLeads ?? 0}</div>
-          <div style={miniHint}>
-            Active: <b>{stats.activeLeads ?? 0}</b> · Won: <b>{stats.closedWon ?? 0}</b>
-          </div>
-        </div>
+        <MetricCard title="Total Leads" value={stats.totalLeads ?? 0} sub={`Active: ${stats.activeLeads ?? 0}`} />
 
-        <div style={glassCard}>
-          <div style={cardTitle}>Conversion</div>
-          <div style={bigNumber}>{String(stats.conversionRate ?? 0)}%</div>
-          <div style={miniHint}>
-            Win rate: <b>{String(stats.winRate ?? 0)}%</b>
-          </div>
-        </div>
+        <MetricCard title="Meetings Booked" value={stats.meetingsBooked ?? 0} sub={`Win rate: ${stats.winRate ?? 0}%`} />
+
+        <MetricCard title="Closed Won" value={stats.closedWon ?? 0} sub={`Conversion: ${stats.conversionRate ?? 0}%`} />
+
+        <MetricCard title="Leads w/o Follow-up" value={stats.leadsWithoutFollowUp ?? 0} sub={`Avg days w/o contact: ${stats.avgDaysWithoutContact ?? 0}`} />
       </div>
 
-      <div
-        style={{
-          ...bottomGrid,
-          gridTemplateColumns: isNarrow ? "1fr" : "2fr 1fr"
-        }}
-      >
+      <div style={bottomGrid}>
         <div style={largeGlass}>
-          <div style={chartHead}>
+          <div style={sectionHead}>
             <div>
               <div style={cardTitle}>Weekly Activity</div>
-              <div style={chartSub}>Bars = activities/day</div>
+              <div style={mutedSmall}>Last 7 days</div>
             </div>
           </div>
 
-          {/* ✅ Recharts needs explicit height */}
-          <div style={{ width: "100%", height: 280 }}>
-            <SafeChart>
-              <ResponsiveContainer>
-                <BarChart data={weeklyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
-                  <XAxis dataKey="day" tickLine={false} axisLine={false} stroke="rgba(15,61,46,0.65)" />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} stroke="rgba(15,61,46,0.45)" />
-                  <Tooltip content={<NiceTooltip />} />
-                  <Bar dataKey="activities" fill="#1e7a57" radius={[12, 12, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </SafeChart>
-          </div>
-
-          <div style={divider} />
-
-          <div style={cardTitle}>This week by type</div>
-          <div style={{ width: "100%", height: 220 }}>
-            <SafeChart>
-              <ResponsiveContainer>
-                <BarChart data={breakdownData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} stroke="rgba(15,61,46,0.65)" />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} stroke="rgba(15,61,46,0.45)" />
-                  <Tooltip content={<NiceTooltip />} />
-                  <Bar dataKey="value" fill="#145c43" radius={[12, 12, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </SafeChart>
+          <div style={{ width: "100%", height: 320 }}>
+            <ResponsiveContainer>
+              <BarChart data={weeklyChartData}>
+                <XAxis dataKey="name" stroke="#145c43" />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={{ fontWeight: 900 }}
+                  formatter={(v) => [v, "Activities"]}
+                />
+                <Bar dataKey="value" fill="#1e7a57" radius={[12, 12, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
         <div style={largeGlass}>
-          <div style={cardTitle}>Next Follow-ups</div>
+          <div style={sectionHead}>
+            <div>
+              <div style={cardTitle}>Next Follow-ups</div>
+              <div style={mutedSmall}>Upcoming tasks</div>
+            </div>
+          </div>
 
-          {upcoming.length === 0 ? (
+          {!upcoming.length ? (
             <div style={subText}>No upcoming tasks</div>
           ) : (
-            <div style={taskList}>
-              {upcoming.slice(0, 8).map((a) => (
-                <div key={a.id} style={taskItem}>
-                  <div style={taskTop}>
-                    <span style={taskType}>{a.outcome}</span>
-                    <span style={taskDate}>{a.nextFollowUp}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+              {upcoming.slice(0, 6).map((a) => {
+                const f = a.fields || {}
+                const when = String(f["Next Follow-up Date"] || "").slice(0, 10)
+                const outcome = f.Outcome ?? f["Activity Type"] ?? "Follow-up"
+                const note = String(f.Notes || "").trim()
+
+                return (
+                  <div key={a.id} style={taskCard}>
+                    <div style={taskTop}>
+                      <span style={taskBadge}>{outcome}</span>
+                      <span style={taskDate}>{when}</span>
+                    </div>
+                    {note ? <div style={taskNote}>{note}</div> : <div style={taskNoteMuted}>No notes</div>}
                   </div>
-                  {a.notes ? <div style={taskNote}>{a.notes}</div> : null}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
-
-          <div style={divider} />
-
-          <div style={cardTitle}>Risk</div>
-          <div style={riskLine}>
-            At risk (7+ days): <b>{stats.atRiskLeads ?? 0}</b>
-          </div>
-          <div style={riskLine}>
-            Cooling (5–6 days): <b>{stats.coolingLeads ?? 0}</b>
-          </div>
-          <div style={riskLine}>
-            No follow-up set: <b>{stats.leadsWithoutFollowUp ?? 0}</b>
-          </div>
-          <div style={riskLine}>
-            Avg days w/o contact: <b>{stats.avgDaysWithoutContact ?? 0}</b>
-          </div>
         </div>
       </div>
     </div>
   )
 }
 
-/* =========================
-   Error-proof wrapper (prevents blank screen if Recharts crashes)
-========================= */
-function SafeChart({ children }) {
-  try {
-    return children
-  } catch {
-    return (
-      <div style={chartFallback}>
-        Chart failed to render (data/size). Refresh or check container height.
-      </div>
-    )
-  }
-}
+/* ================= COMPONENTS ================= */
 
-/* =========================
-   Helpers
-========================= */
-
-async function safeJson(res) {
-  try {
-    return await res.json()
-  } catch {
-    return {}
-  }
-}
-
-function getName(email) {
-  if (email === "benjamin.alegre@psicofunnel.com") return "Benjamin"
-  if (email === "sarahduatorrss@gmail.com") return "Sarah"
-  return "User"
-}
-
-function normalizeOutcome(v) {
-  const s = String(v || "").trim().toLowerCase()
-  if (!s) return "Other"
-  if (s.includes("call")) return "Call"
-  if (s.includes("email")) return "Email"
-  if (s.includes("linkedin")) return "LinkedIn"
-  if (s.includes("meeting")) return "Meeting"
-  if (s.includes("positive")) return "Positive response"
-  return "Other"
-}
-
-function parseAnyDate(v) {
-  if (!v) return null
-  if (v instanceof Date) return v
-  const s = String(v).trim()
-  if (!s) return null
-
-  // date-only YYYY-MM-DD
-  if (s.length >= 10 && s[4] === "-" && s[7] === "-") return new Date(`${s.slice(0, 10)}T00:00:00`)
-
-  const d = new Date(s)
-  if (!Number.isNaN(d.getTime())) return d
-
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-  if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00`)
-
-  return null
-}
-
-function toISODate(d) {
-  if (!d) return ""
-  const x = d instanceof Date ? d : new Date(d)
-  if (Number.isNaN(x.getTime())) return ""
-  const yyyy = x.getFullYear()
-  const mm = String(x.getMonth() + 1).padStart(2, "0")
-  const dd = String(x.getDate()).padStart(2, "0")
-  return `${yyyy}-${mm}-${dd}`
-}
-
-function lastNDays(n) {
-  const out = []
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    out.push(d)
-  }
-  return out
-}
-
-function formatDayShort(iso) {
-  const d = new Date(`${iso}T00:00:00`)
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-  return days[d.getDay()]
-}
-
-function NiceTooltip({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null
-  const v = payload[0]?.value ?? 0
+function MetricCard({ title, value, sub, right }) {
   return (
-    <div style={tooltipBox}>
-      <div style={tooltipLabel}>{label}</div>
-      <div style={tooltipValue}>{v}</div>
+    <div
+      style={glassCard}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = "translateY(-3px)"
+        e.currentTarget.style.boxShadow = "0 32px 80px rgba(15,61,46,0.16)"
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "translateY(0)"
+        e.currentTarget.style.boxShadow = "0 25px 70px rgba(15,61,46,0.12)"
+      }}
+    >
+      <div style={cardTitle}>{title}</div>
+      <div style={bigNumber}>{value}</div>
+      {sub ? <div style={subText}>{sub}</div> : null}
+      {right ? <div style={{ marginTop: 14 }}>{right}</div> : null}
     </div>
   )
 }
 
-/* =========================
-   Styles
-========================= */
+/* ================= STYLES ================= */
 
 const page = { width: "100%" }
 
 const topRow = {
   display: "flex",
+  alignItems: "center",
   justifyContent: "space-between",
-  alignItems: "flex-end",
-  gap: 16,
+  gap: 14,
   flexWrap: "wrap",
-  marginBottom: 34
+  marginBottom: 26
 }
 
 const greeting = {
   fontSize: "38px",
-  fontWeight: "900",
+  fontWeight: "800",
   color: "#0f3d2e",
   margin: 0
 }
 
-const subtle = {
-  marginTop: 10,
-  fontSize: 14,
-  fontWeight: 800,
-  color: "rgba(15,61,46,0.55)"
-}
+const loadingText = { color: "#0f3d2e", padding: 20, fontWeight: 800 }
 
 const grid = {
   display: "grid",
@@ -413,6 +339,7 @@ const grid = {
 
 const bottomGrid = {
   display: "grid",
+  gridTemplateColumns: "2fr 1fr",
   gap: "22px",
   marginTop: "26px"
 }
@@ -420,122 +347,125 @@ const bottomGrid = {
 const glassCard = {
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(30px)",
-  borderRadius: "26px",
-  padding: "26px",
+  borderRadius: "30px",
+  padding: "28px",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 20px 60px rgba(15,61,46,0.12)"
+  boxShadow: "0 25px 70px rgba(15,61,46,0.12)",
+  transition: "transform .18s ease, box-shadow .18s ease"
 }
 
 const largeGlass = {
   background: "rgba(255,255,255,0.55)",
   backdropFilter: "blur(30px)",
-  borderRadius: "26px",
-  padding: "26px",
+  borderRadius: "30px",
+  padding: "28px",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 20px 60px rgba(15,61,46,0.12)"
+  boxShadow: "0 25px 70px rgba(15,61,46,0.12)"
 }
 
-const chartHead = {
+const sectionHead = {
   display: "flex",
-  justifyContent: "space-between",
   alignItems: "baseline",
+  justifyContent: "space-between",
   gap: 12,
-  flexWrap: "wrap",
-  marginBottom: 10
-}
-
-const chartSub = {
-  fontSize: 13,
-  fontWeight: 800,
-  color: "rgba(15,61,46,0.55)"
+  flexWrap: "wrap"
 }
 
 const cardTitle = {
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: "900",
   color: "#1e7a57",
-  marginBottom: "8px"
+  marginBottom: "10px",
+  letterSpacing: "0.2px",
+  textTransform: "uppercase"
 }
 
 const bigNumber = {
   fontSize: "44px",
-  fontWeight: "950",
-  color: "#0f3d2e"
-}
-
-const miniHint = {
-  marginTop: 10,
-  fontSize: 12,
-  fontWeight: 900,
-  color: "rgba(0,0,0,0.50)"
+  fontWeight: "900",
+  color: "#0f3d2e",
+  lineHeight: 1
 }
 
 const subText = {
-  fontSize: "14px",
-  fontWeight: 800,
-  color: "rgba(15,61,46,0.65)"
+  marginTop: 10,
+  fontSize: "13px",
+  color: "rgba(15,61,46,0.75)",
+  fontWeight: 800
+}
+
+const mutedSmall = {
+  fontSize: 12,
+  color: "rgba(0,0,0,0.45)",
+  fontWeight: 800
 }
 
 const progressBar = {
-  marginTop: "14px",
   height: "10px",
-  background: "rgba(0,0,0,0.06)",
+  background: "rgba(0,0,0,0.05)",
   borderRadius: "999px",
-  overflow: "hidden"
+  overflow: "hidden",
+  border: "1px solid rgba(0,0,0,0.05)"
 }
 
 const progressFill = {
   height: "100%",
   background: "linear-gradient(90deg,#145c43,#1e7a57)",
-  borderRadius: "999px",
-  transition: "width .35s ease"
+  borderRadius: "999px"
 }
 
-const taskList = { display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }
-
-const taskItem = {
-  padding: 12,
+const taskCard = {
+  padding: 14,
   borderRadius: 18,
-  border: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.65)"
-}
-
-const taskTop = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }
-const taskType = { fontWeight: 950, color: "rgba(0,0,0,0.80)", fontSize: 13 }
-const taskDate = { fontWeight: 900, color: "rgba(0,0,0,0.55)", fontSize: 12 }
-const taskNote = { marginTop: 8, fontSize: 13, color: "rgba(0,0,0,0.70)", lineHeight: 1.35 }
-
-const riskLine = { marginTop: 10, fontSize: 13, color: "rgba(0,0,0,0.70)", fontWeight: 800 }
-
-const divider = { height: 1, background: "rgba(0,0,0,0.06)", margin: "18px 0" }
-
-const tooltipBox = {
-  padding: 12,
-  borderRadius: 14,
-  background: "rgba(255,255,255,0.92)",
-  border: "1px solid rgba(0,0,0,0.08)",
-  boxShadow: "0 14px 30px rgba(0,0,0,0.10)"
-}
-const tooltipLabel = { fontSize: 12, fontWeight: 900, color: "rgba(0,0,0,0.55)" }
-const tooltipValue = { marginTop: 6, fontSize: 18, fontWeight: 950, color: "#0f3d2e" }
-
-const chartFallback = {
-  padding: 12,
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.7)",
-  color: "rgba(0,0,0,0.65)",
-  fontWeight: 900
-}
-
-const ghostBtn = {
-  padding: "12px 14px",
-  borderRadius: 18,
-  border: "1px solid rgba(0,0,0,0.10)",
   background: "rgba(255,255,255,0.65)",
+  border: "1px solid rgba(0,0,0,0.06)"
+}
+
+const taskTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12
+}
+
+const taskBadge = {
+  fontSize: 12,
+  fontWeight: 950,
+  padding: "6px 10px",
+  borderRadius: 999,
+  background: "rgba(20,92,67,0.10)",
+  border: "1px solid rgba(20,92,67,0.18)",
+  color: "#145c43",
+  whiteSpace: "nowrap"
+}
+
+const taskDate = {
+  fontSize: 12,
+  fontWeight: 950,
+  color: "rgba(0,0,0,0.55)"
+}
+
+const taskNote = {
+  marginTop: 10,
+  fontSize: 13,
+  color: "rgba(0,0,0,0.75)",
+  fontWeight: 700,
+  lineHeight: 1.35
+}
+
+const taskNoteMuted = {
+  marginTop: 10,
+  fontSize: 13,
+  color: "rgba(0,0,0,0.40)",
+  fontWeight: 800
+}
+
+const tooltipStyle = {
+  borderRadius: 14,
+  border: "1px solid rgba(0,0,0,0.08)",
+  background: "rgba(255,255,255,0.92)",
   backdropFilter: "blur(18px)",
-  cursor: "pointer",
-  fontWeight: 900
+  fontWeight: 800
 }
 
 const errBox = {
@@ -544,5 +474,17 @@ const errBox = {
   borderRadius: 14,
   background: "rgba(255,0,0,0.08)",
   color: "#7a1d1d",
-  border: "1px solid rgba(255,0,0,0.12)"
+  border: "1px solid rgba(255,0,0,0.12)",
+  fontWeight: 800
+}
+
+const miniBtn = {
+  padding: "10px 12px",
+  borderRadius: 16,
+  border: "1px solid rgba(0,0,0,0.10)",
+  background: "rgba(255,255,255,0.70)",
+  backdropFilter: "blur(18px)",
+  fontWeight: 900,
+  cursor: "pointer",
+  fontSize: 12
 }
