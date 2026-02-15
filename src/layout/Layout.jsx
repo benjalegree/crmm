@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react"
 import Sidebar from "../components/Sidebar"
 
+const T = {
+  bg: "#F6FBF8",
+  bg2: "#EEF6F1",
+  ink: "#0F2E24",
+  line: "rgba(15,46,36,0.10)",
+  surfaceTopbar: "rgba(246,251,248,0.78)"
+}
+
 export default function Layout({ children }) {
   const [isMobile, setIsMobile] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
     const onResize = () => {
-      const mobile = window.innerWidth <= 1024 // iPad y abajo
+      const mobile = window.innerWidth <= 1024
       setIsMobile(mobile)
-      // si cambia el modo, definimos default cómodo
-      setSidebarOpen(!mobile) // mobile cerrado, desktop abierto
+      setSidebarOpen(!mobile) // desktop abierto, mobile cerrado
     }
 
     onResize()
@@ -21,8 +28,7 @@ export default function Layout({ children }) {
   const contentStyle = useMemo(() => {
     return {
       ...content,
-      // topbar en mobile ocupa 64px
-      padding: isMobile ? "88px 18px 24px" : "60px 80px"
+      padding: isMobile ? "84px 16px 22px" : "28px 36px"
     }
   }, [isMobile])
 
@@ -36,7 +42,6 @@ export default function Layout({ children }) {
         onOpen={() => setSidebarOpen(true)}
       />
 
-      {/* Topbar solo en mobile */}
       {isMobile ? (
         <div style={mobileTopbar}>
           <button
@@ -65,15 +70,16 @@ const app = {
   overflow: "hidden",
   fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
   background: `
-    radial-gradient(circle at 10% 10%, rgba(30,122,87,0.18), transparent 40%),
-    radial-gradient(circle at 90% 90%, rgba(15,61,46,0.18), transparent 40%),
-    linear-gradient(135deg, #f4fbf8 0%, #e9f6f0 50%, #f4fbf8 100%)
+    radial-gradient(900px 700px at 12% 10%, rgba(20,92,67,0.12), transparent 55%),
+    radial-gradient(900px 700px at 88% 90%, rgba(15,61,46,0.10), transparent 55%),
+    linear-gradient(180deg, ${T.bg} 0%, ${T.bg2} 100%)
   `
 }
 
 const content = {
   flex: 1,
-  overflowY: "auto"
+  overflowY: "auto",
+  overflowX: "hidden"
 }
 
 const mobileTopbar = {
@@ -85,29 +91,30 @@ const mobileTopbar = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "0 14px",
+  padding: "0 12px",
   zIndex: 50,
-  background: "rgba(244,251,248,0.75)",
-  backdropFilter: "blur(22px)",
-  WebkitBackdropFilter: "blur(22px)",
-  borderBottom: "1px solid rgba(0,0,0,0.06)"
+  background: T.surfaceTopbar,
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  borderBottom: `1px solid ${T.line}`
 }
 
 const burgerBtn = {
   width: 44,
   height: 44,
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.85)",
-  boxShadow: "0 10px 22px rgba(0,0,0,0.06)",
+  borderRadius: 12,
+  border: `1px solid ${T.line}`,
+  background: "rgba(255,255,255,0.86)",
+  boxShadow: "0 10px 24px rgba(15,46,36,0.08)",
   fontWeight: 900,
   cursor: "pointer",
-  fontSize: 18
+  fontSize: 18,
+  color: T.ink
 }
 
 const topbarTitle = {
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: 900,
-  color: "#0f3d2e",
+  color: T.ink,
   letterSpacing: 0.2
 }
