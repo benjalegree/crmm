@@ -13,10 +13,12 @@ export default function LeadProfile() {
   const [errLead, setErrLead] = useState("")
   const [errActs, setErrActs] = useState("")
 
+  // Autosave UI
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState("")
   const [saveErr, setSaveErr] = useState("")
 
+  // Activities (NO CAMBIAR)
   const [activityType, setActivityType] = useState("Call")
   const [activityNotes, setActivityNotes] = useState("")
   const [nextFollowUp, setNextFollowUp] = useState("") // yyyy-mm-dd
@@ -25,6 +27,14 @@ export default function LeadProfile() {
   const [actErr, setActErr] = useState("")
 
   const mountedRef = useRef(true)
+
+  // ---- Autosave internals (NO UI)
+  const autosaveTimerRef = useRef(null)
+  const inFlightRef = useRef(false)
+  const pendingRef = useRef(false)
+  const lastSentRef = useRef(null)
+  const lastSavedSnapshotRef = useRef(null)
+  const leadIdRef = useRef(id)
 
   const readJson = async (res) => {
     try {
@@ -106,7 +116,6 @@ export default function LeadProfile() {
     return `${yyyy}-${mm}-${dd}`
   }
 
-  // ✅ dedupe por id (evita duplicados si hacemos optimistic + reload)
   const dedupeById = (list = []) => {
     const map = new Map()
     for (const item of list) {
@@ -114,6 +123,27 @@ export default function LeadProfile() {
       map.set(item.id, item)
     }
     return Array.from(map.values())
+  }
+
+  // ---- snapshot helpers (para saber si cambió algo)
+  const buildSnapshotFromLead = (ld) => {
+    const f = ld?.fields || {}
+    return {
+      Email: String(f.Email || ""),
+      Phone: String(f.Phone || ""),
+      Position: String(f.Position || ""),
+      Status: String(f.Status || "Not Contacted"),
+      Notes: String(f.Notes || ""),
+      "LinkedIn URL": String(f["LinkedIn URL"] || "")
+    }
+  }
+
+  const isEqualSnapshot = (a, b) => {
+    try {
+      return JSON.stringify(a || {}) === JSON.stringify(b || {})
+    } catch {
+      return false
+    }
   }
 
   useEffect(() => {
@@ -124,6 +154,14 @@ export default function LeadProfile() {
   }, [])
 
   useEffect(() => {
+    // reset refs al cambiar de lead
+    leadIdRef.current = id
+    lastSavedSnapshotRef.current = null
+    lastSentRef.current = null
+    inFlightRef.current = false
+    pendingRef.current = false
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+
     setLead(null)
     setActivities([])
     setErrLead("")
@@ -165,7 +203,12 @@ export default function LeadProfile() {
         return
       }
 
-      setLead(normalizeContact(data))
+      const normalized = normalizeContact(data)
+      setLead(normalized)
+
+      // ✅ definimos snapshot “guardado” inicial
+      lastSavedSnapshotRef.current = buildSnapshotFromLead(normalized)
+
       setLoadingLead(false)
     } catch (e) {
       if (!mountedRef.current) return
@@ -195,7 +238,6 @@ export default function LeadProfile() {
         return
       }
 
-      // ✅ asegura persistencia: lo que esté en Airtable siempre se refleja acá
       const recs = data.records || []
       setActivities(dedupeById(recs))
       setLoadingActs(false)
@@ -207,6 +249,105 @@ export default function LeadProfile() {
       setLoadingActs(false)
     }
   }
+
+  // ✅ Autosave: envía al backend el snapshot actual (sin recargar lead)
+  const flushAutosave = async () => {
+    if (!mountedRef.current) return
+    if (!lead?.fields) return
+    if (leadIdRef.current !== id) return
+
+    const snapshot = buildSnapshotFromLead(lead)
+
+    // si no cambió nada vs último guardado real, no hacemos request
+    if (isEqualSnapshot(snapshot, lastSavedSnapshotRef.current)) {
+      setSaving(false)
+      if (!saveErr) setSaveMsg("")
+      return
+    }
+
+    // si ya mandamos exactamente lo mismo, evitamos duplicar
+    if (isEqualSnapshot(snapshot, lastSentRef.current)) return
+
+    // si hay request en vuelo, marcamos pending
+    if (inFlightRef.current) {
+      pendingRef.current = true
+      return
+    }
+
+    inFlightRef.current = true
+    lastSentRef.current = snapshot
+
+    setSaving(true)
+    setSaveErr("")
+    setSaveMsg("")
+
+    try {
+      const payload = { id, fields: snapshot }
+
+      const res = await fetch(`/api/crm?action=updateContact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload)
+      })
+
+      const data = await readJson(res)
+
+      if (!res.ok) {
+        setSaveErr(safeErrMsg(data, "Failed to update contact"))
+        setSaving(false)
+        inFlightRef.current = false
+        return
+      }
+
+      // ✅ marcamos snapshot guardado
+      lastSavedSnapshotRef.current = snapshot
+
+      setSaving(false)
+      setSaveErr("")
+      setSaveMsg("Guardado ✅")
+
+      // limpiamos el mensaje después de un ratito
+      setTimeout(() => {
+        if (!mountedRef.current) return
+        setSaveMsg("")
+      }, 1200)
+    } catch {
+      setSaveErr("Failed to update contact")
+      setSaving(false)
+    } finally {
+      inFlightRef.current = false
+      // si hubo cambios mientras guardábamos, mandamos otra vez
+      if (pendingRef.current) {
+        pendingRef.current = false
+        flushAutosave()
+      }
+    }
+  }
+
+  // ✅ Debounce: cada vez que cambia lead.fields, programa autosave
+  useEffect(() => {
+    if (!lead?.fields) return
+    if (loadingLead) return
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = setTimeout(() => {
+      flushAutosave()
+    }, 450)
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    }
+    // eslint-disable-next-line
+  }, [
+    loadingLead,
+    lead?.fields?.Email,
+    lead?.fields?.Phone,
+    lead?.fields?.Position,
+    lead?.fields?.Status,
+    lead?.fields?.Notes,
+    lead?.fields?.["LinkedIn URL"]
+  ])
 
   const updateField = (field, value) => {
     setLead((prev) => {
@@ -221,51 +362,7 @@ export default function LeadProfile() {
     })
   }
 
-  const saveChanges = async (e) => {
-    e?.preventDefault?.()
-    if (!lead?.fields) return
-
-    setSaving(true)
-    setSaveMsg("")
-    setSaveErr("")
-
-    try {
-      const payload = {
-        id,
-        fields: {
-          Email: lead.fields.Email || "",
-          Position: lead.fields.Position || "",
-          Status: lead.fields.Status || "Not Contacted",
-          Notes: lead.fields.Notes || "",
-          Phone: lead.fields.Phone || "",
-          "LinkedIn URL": lead.fields["LinkedIn URL"] || ""
-        }
-      }
-
-      const res = await fetch(`/api/crm?action=updateContact`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload)
-      })
-
-      const data = await readJson(res)
-
-      if (!res.ok) {
-        setSaveErr(safeErrMsg(data, "Failed to update contact"))
-        setSaving(false)
-        return
-      }
-
-      setSaveMsg("Guardado ✅")
-      const ctrl = new AbortController()
-      await loadLead(ctrl.signal)
-    } catch {
-      setSaveErr("Failed to update contact")
-    }
-
-    setSaving(false)
-  }
+  // ------------------ Activities (NO CAMBIAR) ------------------
 
   const createActivity = async (e) => {
     e?.preventDefault?.()
@@ -295,14 +392,12 @@ export default function LeadProfile() {
         return
       }
 
-      // ✅ Optimistic UI: aparece la burbuja YA
       setActivities((prev) => dedupeById([data, ...(prev || [])]))
 
       setActivityNotes("")
       setNextFollowUp("")
       setActMsg("Actividad guardada ✅")
 
-      // ✅ Luego recargamos de Airtable para que quede “real” y persistente
       const ctrl = new AbortController()
       await loadActivities(ctrl.signal)
     } catch {
@@ -312,7 +407,6 @@ export default function LeadProfile() {
     setCreating(false)
   }
 
-  // Próximo follow-up (desde activities)
   const computedNextFollowUp = useMemo(() => {
     const withNFU = (activities || []).find((a) => a?.fields?.["Next Follow-up Date"])
     return withNFU?.fields?.["Next Follow-up Date"] || ""
@@ -323,6 +417,8 @@ export default function LeadProfile() {
     if (!s) return null
     return <span style={pill}>{s}</span>
   }, [lead?.fields?.Status])
+
+  // ------------------ UI ------------------
 
   if (loadingLead) return <div style={loadingBox}>Loading...</div>
 
@@ -362,8 +458,10 @@ export default function LeadProfile() {
         <h1 style={title}>{f["Full Name"] || "Lead"}</h1>
         <div style={topRight}>
           {statusPill}
+
+          {/* ✅ Estado autosave */}
           <span style={mutedSmall}>
-            {loadingActs ? "Loading activity..." : activities.length ? "" : "No activity yet"}
+            {saving ? "Guardando..." : saveErr ? "Error" : saveMsg ? saveMsg : ""}
           </span>
         </div>
       </div>
@@ -426,12 +524,8 @@ export default function LeadProfile() {
             onChange={(e) => updateField("Notes", e.target.value)}
           />
 
-          <button type="button" style={btn} onClick={saveChanges} disabled={saving}>
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-
+          {/* ✅ errores autosave */}
           {saveErr ? <div style={errBox}>{saveErr}</div> : null}
-          {saveMsg ? <div style={okBox}>{saveMsg}</div> : null}
         </div>
 
         {/* RIGHT */}
