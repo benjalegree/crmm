@@ -14,13 +14,11 @@ export default function Dashboard() {
   const [calendar, setCalendar] = useState(null)
   const [user, setUser] = useState(null)
 
-  // ✅ Para resolver Related Contact (recXXXX) -> "Full Name"
   const [contactsMap, setContactsMap] = useState({})
 
   const [err, setErr] = useState("")
   const [loading, setLoading] = useState(true)
 
-  // All | Call | Email | Meeting
   const [chartFilter, setChartFilter] = useState("All")
 
   /* ---------------- Helpers ---------------- */
@@ -53,7 +51,6 @@ export default function Dashboard() {
     return "User"
   }
 
-  // Outcome normalizado (soporta data vieja con Activity Type)
   const normalizeOutcome = (a) => {
     const f = a?.fields || {}
     const raw = (f.Outcome ?? f["Activity Type"] ?? "").toString().trim().toLowerCase()
@@ -66,7 +63,6 @@ export default function Dashboard() {
     return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : ""
   }
 
-  // ✅ Date parse robusta (Activity Date puede ser date-only o datetime)
   const parseDateMs = (val) => {
     const s = String(val || "").trim()
     if (!s) return 0
@@ -75,38 +71,30 @@ export default function Dashboard() {
     return t
   }
 
-  // ✅ Formato amigable para UI
-  const formatDateTime = (val) => {
-    const ms = parseDateMs(val)
+  // ✅ SOLO FECHA (sin hora)
+  const formatDateOnly = (val) => {
+    const s = String(val || "").trim()
+    if (!s) return "—"
+    // si viene "YYYY-MM-DD" o "YYYY-MM-DDTHH:MM..."
+    if (s.length >= 10 && s[4] === "-" && s[7] === "-") return s.slice(0, 10)
+    const ms = parseDateMs(s)
     if (!ms) return "—"
-    const d = new Date(ms)
-    const yyyy = d.getFullYear()
-    const mm = String(d.getMonth() + 1).padStart(2, "0")
-    const dd = String(d.getDate()).padStart(2, "0")
-    const hh = String(d.getHours()).padStart(2, "0")
-    const mi = String(d.getMinutes()).padStart(2, "0")
-    // Si viene date-only, hora quedará 00:00, igual es aceptable.
-    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
+    return toISODate(new Date(ms))
   }
 
-  // ✅ Contacto desde Related Contact (link field -> ids), resuelto con contactsMap
   const getActivityContact = (a) => {
     const f = a?.fields || {}
 
-    // 1) Preferimos Related Contact (array de recordIds)
     const rel = f["Related Contact"]
     if (Array.isArray(rel) && rel.length) {
       const first = rel[0]
-      // si es id recXXXX, lo resolvemos
       if (String(first || "").startsWith("rec")) {
         return contactsMap[first] || "Contact"
       }
-      // si por algún motivo viene como nombre
       const s = String(first || "").trim()
       if (s) return s
     }
 
-    // 2) Fallbacks por lookups si existieran
     const candidates = [
       f["Contact Name"],
       f["Contact Name..."],
@@ -165,18 +153,17 @@ export default function Dashboard() {
           setLoading(false)
           return
         }
-        if (!contactsRes.ok) {
-          // no hacemos crash: dashboard puede funcionar igual sin resolver nombres
-          // pero avisamos suave
-          console.warn("Failed to load contacts for map:", contactsData)
-        }
 
-        const records = contactsData?.records || []
+        // si contacts falla, no rompemos
+        const records = contactsRes.ok ? (contactsData?.records || []) : []
         const map = {}
         for (const r of records) {
           const id = r?.id
           const f = r?.fields || {}
-          const name = f["Full Name"] || `${f["First Name"] || ""} ${f["Last Name"] || ""}`.trim() || f.Name
+          const name =
+            f["Full Name"] ||
+            `${f["First Name"] || ""} ${f["Last Name"] || ""}`.trim() ||
+            f.Name
           if (id && name) map[id] = name
         }
 
@@ -227,7 +214,6 @@ export default function Dashboard() {
     [todayActivities]
   )
 
-  // ✅ Actividad reciente (NO follow-ups): ordenado por Activity Date desc
   const recentActivities = useMemo(() => {
     const list = [...calendarSafe]
     list.sort((a, b) => {
@@ -238,7 +224,6 @@ export default function Dashboard() {
     return list
   }, [calendarSafe])
 
-  // ✅ Chart weekly data (7 días)
   const weeklyChartData = useMemo(() => {
     const days = []
     for (let i = 6; i >= 0; i--) {
@@ -276,7 +261,6 @@ export default function Dashboard() {
     return days
   }, [calendarSafe, chartFilter])
 
-  // ✅ Y ticks 0/5/10...
   const yTicks = useMemo(() => {
     let maxVal = 0
 
@@ -339,6 +323,7 @@ export default function Dashboard() {
       </div>
 
       <div style={bottomGrid}>
+        {/* ✅ Izquierda: chart */}
         <div style={panel}>
           <div style={panelHead}>
             <div>
@@ -472,7 +457,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ✅ CAMBIO: Activity reciente (NO follow-ups) */}
+        {/* ✅ Derecha: MISMA ALTURA VISUAL + SCROLL INTERNO */}
         <div style={panel}>
           <div style={panelHead}>
             <div>
@@ -481,39 +466,39 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {!recentActivities.length ? (
-            <div style={emptyText}>No activity yet</div>
-          ) : (
-            <div style={tasksList}>
-              {recentActivities.slice(0, 8).map((a) => {
-                const f = a?.fields || {}
-                const when = f["Activity Date"]
-                const outcome = normalizeOutcome(a) || "Activity"
-                const note = String(f.Notes || "").trim()
-                const contact = getActivityContact(a)
+          <div style={activityPanelBody}>
+            {!recentActivities.length ? (
+              <div style={emptyText}>No activity yet</div>
+            ) : (
+              <div style={tasksList}>
+                {recentActivities.map((a) => {
+                  const f = a?.fields || {}
+                  const outcome = normalizeOutcome(a) || "Activity"
+                  const note = String(f.Notes || "").trim()
+                  const contact = getActivityContact(a)
+                  const dateOnly = formatDateOnly(f["Activity Date"])
 
-                return (
-                  <div key={a.id} style={taskRow}>
-                    <div style={taskLeft}>
-                      <div style={taskTopLine}>
-                        <div style={taskType}>{outcome}</div>
-                        <div style={taskContact}>{contact}</div>
+                  return (
+                    <div key={a.id} style={taskRow}>
+                      <div style={taskLeft}>
+                        <div style={taskTopLine}>
+                          <div style={taskType}>{outcome}</div>
+                          <div style={taskContact}>{contact}</div>
+                        </div>
+                        <div style={taskNote}>{note || "—"}</div>
                       </div>
-                      <div style={taskNote}>{note || "—"}</div>
+                      <div style={taskDate}>{dateOnly}</div>
                     </div>
-                    <div style={taskDate}>{formatDateTime(when)}</div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   )
 }
-
-/* ---------------- Components ---------------- */
 
 function StatCard({ title, value }) {
   return (
@@ -573,7 +558,8 @@ const bottomGrid = {
   display: "grid",
   gridTemplateColumns: "2fr 1fr",
   gap: 14,
-  marginTop: 14
+  marginTop: 14,
+  alignItems: "stretch" // ✅ que ambos paneles queden parejos
 }
 
 const card = {
@@ -618,7 +604,10 @@ const panel = {
   borderRadius: 14,
   padding: 18,
   boxShadow: "0 10px 30px rgba(15,61,46,0.08)",
-  fontFamily: FONT
+  fontFamily: FONT,
+  display: "flex",
+  flexDirection: "column",
+  minHeight: 420 // ✅ ayuda a que se vea “del mismo tamaño”
 }
 
 const panelHead = {
@@ -712,14 +701,27 @@ const tooltipStyle = {
 const tooltipLabel = { fontWeight: 900, fontFamily: FONT }
 const tooltipItem = { fontWeight: 800, fontFamily: FONT }
 
-// ✅ solo brilla la barra activa (sin sombrear el cuadro)
 const activeBarStyle = {
   stroke: "rgba(255,255,255,0.95)",
   strokeWidth: 2,
   fillOpacity: 1
 }
 
-const tasksList = { display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }
+/* ✅ Activity panel body con scroll interno y sin “hueco” */
+const activityPanelBody = {
+  marginTop: 14,
+  flex: 1,
+  minHeight: 320,        // ✅ igual que el chart (altura del área)
+  maxHeight: 320,
+  overflowY: "auto",
+  paddingRight: 6
+}
+
+const tasksList = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10
+}
 
 const taskRow = {
   display: "flex",
