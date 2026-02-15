@@ -75,7 +75,6 @@ export default function Dashboard() {
   const formatDateOnly = (val) => {
     const s = String(val || "").trim()
     if (!s) return "—"
-    // si viene "YYYY-MM-DD" o "YYYY-MM-DDTHH:MM..."
     if (s.length >= 10 && s[4] === "-" && s[7] === "-") return s.slice(0, 10)
     const ms = parseDateMs(s)
     if (!ms) return "—"
@@ -154,7 +153,6 @@ export default function Dashboard() {
           return
         }
 
-        // si contacts falla, no rompemos
         const records = contactsRes.ok ? (contactsData?.records || []) : []
         const map = {}
         for (const r of records) {
@@ -316,15 +314,18 @@ export default function Dashboard() {
       </div>
 
       <div style={grid}>
-        <StatCard title="Total leads" value={stats.totalLeads ?? 0} />
-        <StatCard title="Calls today" value={callsToday} />
-        <StatCard title="Emails today" value={emailsToday} />
-        <StatCard title="Meetings today" value={meetingsToday} />
+        <StatCard title="Total leads" value={stats.totalLeads ?? 0} meta="All contacts in your workspace" />
+        <StatCard title="Calls today" value={callsToday} meta="Logged calls today" />
+        <StatCard title="Emails today" value={emailsToday} meta="Sent / tracked emails" />
+        <StatCard title="Meetings today" value={meetingsToday} meta="Booked meetings" />
       </div>
 
       <div style={bottomGrid}>
-        {/* ✅ Izquierda: chart */}
+        {/* Left: chart */}
         <div style={panel}>
+          <div aria-hidden="true" style={sheenTop} />
+          <div aria-hidden="true" style={panelGrain} />
+
           <div style={panelHead}>
             <div>
               <div style={panelTitle}>Weekly activity</div>
@@ -358,7 +359,7 @@ export default function Dashboard() {
                   barGap={6}
                 >
                   <CartesianGrid
-                    stroke="rgba(15,61,46,0.10)"
+                    stroke="rgba(255,255,255,0.10)"
                     strokeDasharray="0"
                     vertical
                     horizontal
@@ -368,14 +369,14 @@ export default function Dashboard() {
                     dataKey="name"
                     tickLine={false}
                     axisLine={false}
-                    stroke="rgba(0,0,0,0.35)"
+                    stroke="rgba(255,255,255,0.55)"
                     style={axisFont}
                   />
 
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    stroke="rgba(0,0,0,0.35)"
+                    stroke="rgba(255,255,255,0.55)"
                     ticks={yTicks}
                     domain={[0, yTicks[yTicks.length - 1] || 10]}
                     style={axisFont}
@@ -394,27 +395,27 @@ export default function Dashboard() {
                         dataKey="calls"
                         name="Calls"
                         fill="url(#pfCalls)"
-                        radius={[6, 6, 0, 0]}
-                        barSize={8}
-                        maxBarSize={10}
+                        radius={[8, 8, 0, 0]}
+                        barSize={10}
+                        maxBarSize={12}
                         activeBar={activeBarStyle}
                       />
                       <Bar
                         dataKey="emails"
                         name="Emails"
                         fill="url(#pfEmails)"
-                        radius={[6, 6, 0, 0]}
-                        barSize={8}
-                        maxBarSize={10}
+                        radius={[8, 8, 0, 0]}
+                        barSize={10}
+                        maxBarSize={12}
                         activeBar={activeBarStyle}
                       />
                       <Bar
                         dataKey="meetings"
                         name="Meetings"
                         fill="url(#pfMeetings)"
-                        radius={[6, 6, 0, 0]}
-                        barSize={8}
-                        maxBarSize={10}
+                        radius={[8, 8, 0, 0]}
+                        barSize={10}
+                        maxBarSize={12}
                         activeBar={activeBarStyle}
                       />
                     </>
@@ -423,32 +424,32 @@ export default function Dashboard() {
                       dataKey="value"
                       name={chartFilter}
                       fill="url(#pfSingle)"
-                      radius={[6, 6, 0, 0]}
-                      barSize={10}
-                      maxBarSize={12}
+                      radius={[8, 8, 0, 0]}
+                      barSize={12}
+                      maxBarSize={14}
                       activeBar={activeBarStyle}
                     />
                   )}
 
                   <defs>
                     <linearGradient id="pfCalls" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#2aa06e" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#1f7a57" stopOpacity={0.95} />
+                      <stop offset="0%" stopColor="#2BDA9A" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#1FAE7A" stopOpacity={0.95} />
                     </linearGradient>
 
                     <linearGradient id="pfEmails" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#7bcf8f" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#3aa86e" stopOpacity={0.95} />
+                      <stop offset="0%" stopColor="#7CF0B4" stopOpacity={0.92} />
+                      <stop offset="100%" stopColor="#2BDA9A" stopOpacity={0.92} />
                     </linearGradient>
 
                     <linearGradient id="pfMeetings" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#155c44" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#0f3d2e" stopOpacity={0.95} />
+                      <stop offset="0%" stopColor="#145C43" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#0B241C" stopOpacity={0.95} />
                     </linearGradient>
 
                     <linearGradient id="pfSingle" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#1f7a57" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#145c43" stopOpacity={0.95} />
+                      <stop offset="0%" stopColor="#2BDA9A" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#145C43" stopOpacity={0.95} />
                     </linearGradient>
                   </defs>
                 </BarChart>
@@ -457,8 +458,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ✅ Derecha: MISMA ALTURA VISUAL + SCROLL INTERNO */}
+        {/* Right: recent activity */}
         <div style={panel}>
+          <div aria-hidden="true" style={sheenTop} />
+          <div aria-hidden="true" style={panelGrain} />
+
           <div style={panelHead}>
             <div>
               <div style={panelTitle}>Recent activity</div>
@@ -482,12 +486,17 @@ export default function Dashboard() {
                     <div key={a.id} style={taskRow}>
                       <div style={taskLeft}>
                         <div style={taskTopLine}>
-                          <div style={taskType}>{outcome}</div>
-                          <div style={taskContact}>{contact}</div>
+                          <div style={taskTypeWrap}>
+                            <span style={{ ...taskTypeDot, ...dotByOutcome(outcome) }} />
+                            <div style={taskType}>{outcome}</div>
+                          </div>
+
+                          <div style={taskDatePill}>{dateOnly}</div>
                         </div>
+
+                        <div style={taskContact}>{contact}</div>
                         <div style={taskNote}>{note || "—"}</div>
                       </div>
-                      <div style={taskDate}>{dateOnly}</div>
                     </div>
                   )
                 })}
@@ -500,12 +509,22 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ title, value }) {
+function StatCard({ title, value, meta }) {
   return (
     <div style={card}>
-      <div style={cardLabel}>{title}</div>
+      <div aria-hidden="true" style={cardSheen} />
+      <div aria-hidden="true" style={cardGrain} />
+
+      <div style={cardTop}>
+        <div style={cardLabel}>{title}</div>
+        <div style={kpiPill}>
+          <span style={kpiDot} />
+          live
+        </div>
+      </div>
+
       <div style={cardValue}>{value}</div>
-      <div style={cardSub}> </div>
+      <div style={cardSub}>{meta || ""}</div>
     </div>
   )
 }
@@ -514,12 +533,26 @@ function StatCard({ title, value }) {
 
 const FONT = "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 
+const T = {
+  ink: "rgba(255,255,255,0.92)",
+  ink2: "rgba(255,255,255,0.74)",
+  ink3: "rgba(255,255,255,0.56)",
+  line: "rgba(255,255,255,0.14)",
+  line2: "rgba(255,255,255,0.22)",
+  glassA: "rgba(255,255,255,0.12)",
+  glassB: "rgba(255,255,255,0.07)",
+  accent: "#1FAE7A",
+  accent2: "#2BDA9A",
+  accentDeep: "#145C43",
+  shadow: "0 26px 70px rgba(0,0,0,0.30)"
+}
+
 const page = { width: "100%", fontFamily: FONT }
 
 const loadingText = {
   padding: 20,
-  fontWeight: 800,
-  color: "#0f3d2e",
+  fontWeight: 900,
+  color: T.ink,
   fontFamily: FONT
 }
 
@@ -529,21 +562,22 @@ const topRow = {
   alignItems: "flex-end",
   gap: 16,
   flexWrap: "wrap",
-  marginBottom: 18
+  marginBottom: 16
 }
 
 const title = {
   margin: 0,
   fontSize: 34,
-  fontWeight: 900,
-  color: "#0f3d2e",
-  fontFamily: FONT
+  fontWeight: 950,
+  color: T.ink,
+  fontFamily: FONT,
+  letterSpacing: 0.2
 }
 
 const subtitle = {
   marginTop: 6,
-  color: "rgba(0,0,0,0.55)",
-  fontWeight: 700,
+  color: T.ink3,
+  fontWeight: 750,
   fontFamily: FONT
 }
 
@@ -551,7 +585,7 @@ const grid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
   gap: 14,
-  marginTop: 14
+  marginTop: 12
 }
 
 const bottomGrid = {
@@ -559,58 +593,158 @@ const bottomGrid = {
   gridTemplateColumns: "2fr 1fr",
   gap: 14,
   marginTop: 14,
-  alignItems: "stretch" // ✅ que ambos paneles queden parejos
+  alignItems: "stretch"
 }
 
+/* ---- Premium glass card ---- */
+
 const card = {
-  background: "rgba(255,255,255,0.60)",
-  border: "1px solid rgba(0,0,0,0.06)",
-  borderRadius: 14,
+  position: "relative",
+  overflow: "hidden",
+  background: `linear-gradient(180deg, ${T.glassA}, ${T.glassB})`,
+  border: `1px solid ${T.line}`,
+  borderRadius: 18,
   padding: 18,
-  boxShadow: "0 10px 30px rgba(15,61,46,0.08)",
-  fontFamily: FONT
+  boxShadow: T.shadow,
+  backdropFilter: "blur(22px)",
+  WebkitBackdropFilter: "blur(22px)",
+  fontFamily: FONT,
+  minHeight: 118
+}
+
+const cardSheen = {
+  position: "absolute",
+  left: -60,
+  right: -60,
+  top: -70,
+  height: 150,
+  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)",
+  transform: "rotate(-10deg)",
+  opacity: 0.55,
+  pointerEvents: "none"
+}
+
+const cardGrain = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  opacity: 0.10,
+  backgroundImage: `
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.018) 0, rgba(0,0,0,0.018) 1px, transparent 1px, transparent 3px)
+  `,
+  mixBlendMode: "overlay"
+}
+
+const cardTop = {
+  position: "relative",
+  zIndex: 2,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10
 }
 
 const cardLabel = {
   fontSize: 12,
-  fontWeight: 900,
-  color: "rgba(20,92,67,0.85)",
+  fontWeight: 950,
+  color: "rgba(255,255,255,0.78)",
   textTransform: "uppercase",
-  letterSpacing: "0.3px",
+  letterSpacing: "0.35px",
   fontFamily: FONT
 }
 
+const kpiPill = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(31,174,122,0.28)",
+  background: "rgba(31,174,122,0.10)",
+  color: "rgba(255,255,255,0.80)",
+  fontWeight: 900,
+  fontSize: 11,
+  letterSpacing: 0.2,
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)"
+}
+
+const kpiDot = {
+  width: 7,
+  height: 7,
+  borderRadius: 999,
+  background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0) 55%), ${T.accent}`,
+  boxShadow: "0 10px 18px rgba(31,174,122,0.22)"
+}
+
 const cardValue = {
+  position: "relative",
+  zIndex: 2,
   marginTop: 10,
-  fontSize: 36,
-  fontWeight: 950,
-  color: "#0f3d2e",
-  lineHeight: 1.1,
+  fontSize: 38,
+  fontWeight: 980,
+  color: T.ink,
+  lineHeight: 1.05,
   fontFamily: FONT
 }
 
 const cardSub = {
+  position: "relative",
+  zIndex: 2,
   marginTop: 10,
   fontSize: 12,
-  color: "rgba(0,0,0,0.55)",
-  fontWeight: 700,
+  color: T.ink3,
+  fontWeight: 750,
   minHeight: 16,
   fontFamily: FONT
 }
 
+/* ---- Panels ---- */
+
 const panel = {
-  background: "rgba(255,255,255,0.60)",
-  border: "1px solid rgba(0,0,0,0.06)",
-  borderRadius: 14,
+  position: "relative",
+  overflow: "hidden",
+  background: `linear-gradient(180deg, ${T.glassA}, ${T.glassB})`,
+  border: `1px solid ${T.line}`,
+  borderRadius: 18,
   padding: 18,
-  boxShadow: "0 10px 30px rgba(15,61,46,0.08)",
+  boxShadow: T.shadow,
+  backdropFilter: "blur(22px)",
+  WebkitBackdropFilter: "blur(22px)",
   fontFamily: FONT,
   display: "flex",
   flexDirection: "column",
-  minHeight: 420 // ✅ ayuda a que se vea “del mismo tamaño”
+  minHeight: 420
+}
+
+const sheenTop = {
+  position: "absolute",
+  left: -60,
+  right: -60,
+  top: -70,
+  height: 160,
+  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)",
+  transform: "rotate(-10deg)",
+  opacity: 0.50,
+  pointerEvents: "none"
+}
+
+const panelGrain = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  opacity: 0.10,
+  backgroundImage: `
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.018) 0, rgba(0,0,0,0.018) 1px, transparent 1px, transparent 3px)
+  `,
+  mixBlendMode: "overlay"
 }
 
 const panelHead = {
+  position: "relative",
+  zIndex: 2,
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
@@ -620,98 +754,102 @@ const panelHead = {
 
 const panelTitle = {
   fontSize: 13,
-  fontWeight: 950,
-  color: "#0f3d2e",
+  fontWeight: 980,
+  color: T.ink,
   fontFamily: FONT
 }
 
 const panelSub = {
   marginTop: 4,
   fontSize: 12,
-  fontWeight: 700,
-  color: "rgba(0,0,0,0.50)",
+  fontWeight: 750,
+  color: T.ink3,
   fontFamily: FONT
 }
 
+/* ---- Segmented ---- */
+
 const segmented = {
+  position: "relative",
+  zIndex: 2,
   display: "flex",
   gap: 6,
   padding: 4,
-  borderRadius: 12,
-  border: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.70)",
-  fontFamily: FONT
+  borderRadius: 14,
+  border: `1px solid ${T.line}`,
+  background: "rgba(0,0,0,0.18)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)"
 }
 
 const segBtn = {
-  border: "none",
+  border: "1px solid transparent",
   background: "transparent",
   padding: "8px 10px",
-  borderRadius: 10,
+  borderRadius: 12,
   cursor: "pointer",
-  fontWeight: 900,
+  fontWeight: 950,
   fontSize: 12,
-  color: "rgba(0,0,0,0.60)",
-  fontFamily: FONT
+  color: "rgba(255,255,255,0.62)",
+  fontFamily: FONT,
+  transition: "all 140ms ease"
 }
 
 const segBtnActive = {
-  background: "rgba(20,92,67,0.12)",
-  color: "#145c43"
+  background: "rgba(31,174,122,0.16)",
+  border: "1px solid rgba(31,174,122,0.26)",
+  color: "rgba(255,255,255,0.90)",
+  boxShadow: "0 12px 26px rgba(0,0,0,0.18)"
 }
 
+/* ---- Chart wrap ---- */
+
 const chartWrap = {
+  position: "relative",
+  zIndex: 2,
   marginTop: 14,
-  borderRadius: 14,
-  border: "1px solid rgba(15,61,46,0.10)",
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,0.12)",
   background: `
-    repeating-linear-gradient(
-      0deg,
-      rgba(15,61,46,0.045) 0px,
-      rgba(15,61,46,0.045) 1px,
-      transparent 1px,
-      transparent 18px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(15,61,46,0.035) 0px,
-      rgba(15,61,46,0.035) 1px,
-      transparent 1px,
-      transparent 18px
-    ),
-    rgba(255,255,255,0.55)
+    radial-gradient(700px 240px at 50% 0%, rgba(31,174,122,0.10), transparent 60%),
+    rgba(0,0,0,0.18)
   `,
   padding: 14
 }
 
 const axisFont = {
   fontFamily: FONT,
-  fontWeight: 800,
+  fontWeight: 900,
   fontSize: 12
 }
 
 const tooltipStyle = {
-  borderRadius: 12,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.92)",
-  backdropFilter: "blur(12px)",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(0,0,0,0.55)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  color: "rgba(255,255,255,0.92)",
+  boxShadow: "0 18px 40px rgba(0,0,0,0.30)",
   fontFamily: FONT
 }
-
-const tooltipLabel = { fontWeight: 900, fontFamily: FONT }
-const tooltipItem = { fontWeight: 800, fontFamily: FONT }
+const tooltipLabel = { fontWeight: 950, fontFamily: FONT, color: "rgba(255,255,255,0.92)" }
+const tooltipItem = { fontWeight: 850, fontFamily: FONT, color: "rgba(255,255,255,0.82)" }
 
 const activeBarStyle = {
-  stroke: "rgba(255,255,255,0.95)",
+  stroke: "rgba(255,255,255,0.85)",
   strokeWidth: 2,
   fillOpacity: 1
 }
 
-/* ✅ Activity panel body con scroll interno y sin “hueco” */
+/* ---- Activity ---- */
+
 const activityPanelBody = {
+  position: "relative",
+  zIndex: 2,
   marginTop: 14,
   flex: 1,
-  minHeight: 320,        // ✅ igual que el chart (altura del área)
+  minHeight: 320,
   maxHeight: 320,
   overflowY: "auto",
   paddingRight: 6
@@ -724,89 +862,120 @@ const tasksList = {
 }
 
 const taskRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0,0,0,0.18)",
   padding: 12,
-  borderRadius: 12,
-  border: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.70)",
-  fontFamily: FONT
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)"
 }
 
 const taskLeft = { minWidth: 0, flex: 1 }
 
 const taskTopLine = {
   display: "flex",
-  alignItems: "baseline",
+  alignItems: "center",
   justifyContent: "space-between",
   gap: 10
 }
 
+const taskTypeWrap = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  minWidth: 0
+}
+
+const taskTypeDot = {
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  background: T.accent,
+  boxShadow: "0 10px 18px rgba(31,174,122,0.20)"
+}
+
 const taskType = {
-  fontWeight: 950,
-  color: "#0f3d2e",
+  fontWeight: 980,
+  color: "rgba(255,255,255,0.86)",
   fontSize: 12,
   textTransform: "uppercase",
-  letterSpacing: "0.3px",
-  fontFamily: FONT
+  letterSpacing: "0.35px"
+}
+
+const taskDatePill = {
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.08)",
+  color: "rgba(255,255,255,0.78)",
+  fontWeight: 900,
+  fontSize: 11,
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)"
 }
 
 const taskContact = {
-  fontWeight: 900,
-  color: "rgba(0,0,0,0.60)",
-  fontSize: 12,
+  marginTop: 8,
+  fontWeight: 950,
+  color: "rgba(255,255,255,0.78)",
+  fontSize: 13,
   whiteSpace: "nowrap",
-  fontFamily: FONT
+  overflow: "hidden",
+  textOverflow: "ellipsis"
 }
 
 const taskNote = {
   marginTop: 6,
-  fontWeight: 700,
-  color: "rgba(0,0,0,0.70)",
+  fontWeight: 750,
+  color: "rgba(255,255,255,0.62)",
   fontSize: 13,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis",
-  fontFamily: FONT
-}
-
-const taskDate = {
-  fontWeight: 900,
-  color: "rgba(0,0,0,0.55)",
-  fontSize: 12,
-  whiteSpace: "nowrap",
-  fontFamily: FONT
+  textOverflow: "ellipsis"
 }
 
 const emptyText = {
   marginTop: 12,
-  fontWeight: 800,
-  color: "rgba(0,0,0,0.55)",
+  fontWeight: 850,
+  color: "rgba(255,255,255,0.62)",
   fontSize: 13,
   fontFamily: FONT
 }
 
+/* ---- Buttons / Errors ---- */
+
 const btnGhost = {
   padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(0,0,0,0.10)",
-  background: "rgba(255,255,255,0.70)",
-  backdropFilter: "blur(14px)",
-  fontWeight: 900,
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.08)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  fontWeight: 950,
   cursor: "pointer",
   fontSize: 12,
-  fontFamily: FONT
+  fontFamily: FONT,
+  color: "rgba(255,255,255,0.88)",
+  boxShadow: "0 16px 36px rgba(0,0,0,0.22)"
 }
 
 const errBox = {
   marginTop: 10,
   padding: 12,
-  borderRadius: 12,
-  background: "rgba(255,0,0,0.08)",
-  color: "#7a1d1d",
-  border: "1px solid rgba(255,0,0,0.12)",
-  fontWeight: 800,
+  borderRadius: 14,
+  background: "rgba(255,60,60,0.10)",
+  color: "rgba(255,255,255,0.90)",
+  border: "1px solid rgba(255,60,60,0.22)",
+  fontWeight: 850,
   fontFamily: FONT
+}
+
+/* ---- Helpers ---- */
+
+function dotByOutcome(outcome) {
+  const o = String(outcome || "").toLowerCase()
+  if (o.includes("call")) return { background: "#2BDA9A" }
+  if (o.includes("email")) return { background: "#7CF0B4" }
+  if (o.includes("meeting")) return { background: "#145C43" }
+  if (o.includes("linkedin")) return { background: "#3BE3A2" }
+  return { background: "#1FAE7A" }
 }
