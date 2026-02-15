@@ -21,7 +21,7 @@ export default function Dashboard() {
 
   const [chartFilter, setChartFilter] = useState("All")
 
-  /* ---------------- Helpers (SIN CAMBIOS de lógica) ---------------- */
+  /* ---------------- Helpers ---------------- */
 
   const readJson = async (res) => {
     try {
@@ -112,7 +112,7 @@ export default function Dashboard() {
     return "Contact"
   }
 
-  /* ---------------- Load (MISMA conexión a endpoints) ---------------- */
+  /* ---------------- Load (ENDPOINTS intactos) ---------------- */
 
   useEffect(() => {
     let alive = true
@@ -185,7 +185,7 @@ export default function Dashboard() {
     }
   }, [])
 
-  /* ---------------- Derived data (SIN CAMBIOS) ---------------- */
+  /* ---------------- Derived data ---------------- */
 
   const todayISO = useMemo(() => toISODate(new Date()), [])
   const calendarSafe = calendar || []
@@ -260,15 +260,9 @@ export default function Dashboard() {
 
   const yTicks = useMemo(() => {
     let maxVal = 0
-
     if (chartFilter === "All") {
       for (const d of weeklyChartData) {
-        maxVal = Math.max(
-          maxVal,
-          Number(d.calls || 0),
-          Number(d.emails || 0),
-          Number(d.meetings || 0)
-        )
+        maxVal = Math.max(maxVal, Number(d.calls || 0), Number(d.emails || 0), Number(d.meetings || 0))
       }
     } else {
       maxVal = Math.max(0, ...weeklyChartData.map((d) => Number(d.value || 0)))
@@ -282,15 +276,15 @@ export default function Dashboard() {
 
   /* ---------------- UI states ---------------- */
 
-  if (loading) return <div style={ui.loading}>Loading…</div>
+  if (loading) return <div style={U.loading}>Loading…</div>
 
   if (err) {
     return (
-      <div style={ui.page}>
-        <div style={ui.errorCard}>
-          <div style={ui.errorTitle}>Something went wrong</div>
-          <div style={ui.errorText}>{err}</div>
-          <button type="button" style={ui.primaryBtn} onClick={() => window.location.reload()}>
+      <div style={U.page}>
+        <div style={U.errorCard}>
+          <div style={U.errorTitle}>Something went wrong</div>
+          <div style={U.errorText}>{err}</div>
+          <button type="button" style={U.primaryBtn} onClick={() => window.location.reload()}>
             Retry
           </button>
         </div>
@@ -298,50 +292,46 @@ export default function Dashboard() {
     )
   }
 
-  if (!stats || !user || !calendar) return <div style={ui.loading}>Loading…</div>
+  if (!stats || !user || !calendar) return <div style={U.loading}>Loading…</div>
 
   /* ---------------- Render ---------------- */
 
   return (
-    <div style={ui.page}>
-      <div style={ui.headerRow}>
+    <div style={U.page}>
+      <div style={U.header}>
         <div>
-          <div style={ui.kicker}>Overview</div>
-          <h1 style={ui.h1}>Dashboard</h1>
-          <div style={ui.sub}>Welcome back, {getName(user.email)}.</div>
+          <div style={U.kicker}>Overview</div>
+          <h1 style={U.h1}>Dashboard</h1>
+          <div style={U.sub}>Welcome back, {getName(user.email)}.</div>
         </div>
-
-        <div style={ui.headerActions}>
-          <button type="button" style={ui.ghostBtn} onClick={() => window.location.reload()}>
-            Refresh
-          </button>
-        </div>
+        <button type="button" style={U.ghostBtn} onClick={() => window.location.reload()}>
+          Refresh
+        </button>
       </div>
 
-      <div style={ui.statsGrid}>
-        <StatCard title="Total leads" value={stats.totalLeads ?? 0} tone="solid" />
+      <div style={U.statsGrid}>
+        <StatCard title="Total leads" value={stats.totalLeads ?? 0} variant="solid" />
         <StatCard title="Calls today" value={callsToday} />
         <StatCard title="Emails today" value={emailsToday} />
         <StatCard title="Meetings today" value={meetingsToday} />
       </div>
 
-      <div style={ui.mainGrid}>
-        {/* Left: Chart */}
-        <div style={ui.panel}>
-          <div style={ui.panelHead}>
+      <div style={U.grid}>
+        <section style={U.panel}>
+          <div style={U.panelHead}>
             <div>
-              <div style={ui.panelTitle}>Weekly activity</div>
-              <div style={ui.panelSub}>Last 7 days</div>
+              <div style={U.panelTitle}>Weekly activity</div>
+              <div style={U.panelSub}>Last 7 days</div>
             </div>
 
-            <div style={ui.segmented}>
+            <div style={U.segmented}>
               {["All", "Call", "Email", "Meeting"].map((k) => {
                 const active = chartFilter === k
                 return (
                   <button
                     key={k}
                     type="button"
-                    style={{ ...ui.segBtn, ...(active ? ui.segBtnActive : null) }}
+                    style={{ ...U.segBtn, ...(active ? U.segBtnActive : null) }}
                     onClick={() => setChartFilter(k)}
                   >
                     {k}
@@ -351,66 +341,62 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div style={ui.chartShell}>
-            <div style={{ width: "100%", height: 320 }}>
+          <div style={U.chartShell}>
+            <div style={{ width: "100%", height: 330 }}>
               <ResponsiveContainer>
                 <BarChart data={weeklyChartData} margin={{ top: 10, right: 14, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(15,77,58,0.10)" strokeDasharray="0" />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} stroke="rgba(0,0,0,0.35)" style={ui.axisFont} />
-                  <YAxis tickLine={false} axisLine={false} stroke="rgba(0,0,0,0.35)" ticks={yTicks} domain={[0, yTicks[yTicks.length - 1] || 10]} style={ui.axisFont} />
-                  <Tooltip cursor={false} contentStyle={ui.tooltip} labelStyle={ui.tooltipLabel} itemStyle={ui.tooltipItem} />
+                  <CartesianGrid stroke="rgba(14,75,57,0.10)" strokeDasharray="0" />
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} stroke="rgba(0,0,0,0.35)" style={U.axisFont} />
+                  <YAxis tickLine={false} axisLine={false} stroke="rgba(0,0,0,0.35)" ticks={yTicks} domain={[0, yTicks[yTicks.length - 1] || 10]} style={U.axisFont} />
+                  <Tooltip cursor={false} contentStyle={U.tooltip} labelStyle={U.tooltipLabel} itemStyle={U.tooltipItem} />
 
                   {chartFilter === "All" ? (
                     <>
-                      <Bar dataKey="calls" name="Calls" fill="url(#pfCalls)" radius={[10, 10, 0, 0]} barSize={10} />
-                      <Bar dataKey="emails" name="Emails" fill="url(#pfEmails)" radius={[10, 10, 0, 0]} barSize={10} />
-                      <Bar dataKey="meetings" name="Meetings" fill="url(#pfMeetings)" radius={[10, 10, 0, 0]} barSize={10} />
+                      <Bar dataKey="calls" name="Calls" fill="url(#pfCalls)" radius={[12, 12, 0, 0]} barSize={10} />
+                      <Bar dataKey="emails" name="Emails" fill="url(#pfEmails)" radius={[12, 12, 0, 0]} barSize={10} />
+                      <Bar dataKey="meetings" name="Meetings" fill="url(#pfMeetings)" radius={[12, 12, 0, 0]} barSize={10} />
                     </>
                   ) : (
-                    <Bar dataKey="value" name={chartFilter} fill="url(#pfSingle)" radius={[10, 10, 0, 0]} barSize={12} />
+                    <Bar dataKey="value" name={chartFilter} fill="url(#pfSingle)" radius={[12, 12, 0, 0]} barSize={12} />
                   )}
 
                   <defs>
                     <linearGradient id="pfCalls" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#12694c" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#0f4d3a" stopOpacity={0.95} />
+                      <stop offset="0%" stopColor="#0E4B39" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#0A3A2C" stopOpacity={0.95} />
                     </linearGradient>
-
                     <linearGradient id="pfEmails" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#27a06d" stopOpacity={0.90} />
-                      <stop offset="100%" stopColor="#12694c" stopOpacity={0.90} />
+                      <stop offset="0%" stopColor="#22A06B" stopOpacity={0.88} />
+                      <stop offset="100%" stopColor="#0E4B39" stopOpacity={0.88} />
                     </linearGradient>
-
                     <linearGradient id="pfMeetings" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0b1a14" stopOpacity={0.88} />
-                      <stop offset="100%" stopColor="#0f4d3a" stopOpacity={0.88} />
+                      <stop offset="0%" stopColor="#0B1511" stopOpacity={0.85} />
+                      <stop offset="100%" stopColor="#0E4B39" stopOpacity={0.85} />
                     </linearGradient>
-
                     <linearGradient id="pfSingle" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#12694c" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#0f4d3a" stopOpacity={0.95} />
+                      <stop offset="0%" stopColor="#0E4B39" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#0A3A2C" stopOpacity={0.95} />
                     </linearGradient>
                   </defs>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Right: Recent activity */}
-        <div style={ui.panel}>
-          <div style={ui.panelHead}>
+        <aside style={U.panel}>
+          <div style={U.panelHead}>
             <div>
-              <div style={ui.panelTitle}>Recent activity</div>
-              <div style={ui.panelSub}>Latest logged interactions</div>
+              <div style={U.panelTitle}>Recent activity</div>
+              <div style={U.panelSub}>Latest logged interactions</div>
             </div>
           </div>
 
-          <div style={ui.activityBody}>
+          <div style={U.activityBody}>
             {!recentActivities.length ? (
-              <div style={ui.empty}>No activity yet</div>
+              <div style={U.empty}>No activity yet</div>
             ) : (
-              <div style={ui.list}>
+              <div style={U.list}>
                 {recentActivities.map((a) => {
                   const f = a?.fields || {}
                   const outcome = normalizeOutcome(a) || "Activity"
@@ -419,114 +405,86 @@ export default function Dashboard() {
                   const dateOnly = formatDateOnly(f["Activity Date"])
 
                   return (
-                    <div key={a.id} style={ui.row}>
-                      <div style={ui.rowLeft}>
-                        <div style={ui.rowTop}>
-                          <span style={ui.badge}>{outcome}</span>
-                          <span style={ui.contact}>{contact}</span>
+                    <div key={a.id} style={U.row}>
+                      <div style={U.rowLeft}>
+                        <div style={U.rowTop}>
+                          <span style={U.badge}>{outcome}</span>
+                          <span style={U.contact}>{contact}</span>
                         </div>
-                        <div style={ui.note}>{note || "—"}</div>
+                        <div style={U.note}>{note || "—"}</div>
                       </div>
-                      <div style={ui.date}>{dateOnly}</div>
+                      <div style={U.date}>{dateOnly}</div>
                     </div>
                   )
                 })}
               </div>
             )}
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   )
 }
 
-function StatCard({ title, value, tone }) {
+function StatCard({ title, value, variant }) {
   return (
-    <div style={{ ...ui.card, ...(tone === "solid" ? ui.cardSolid : null) }}>
-      <div style={{ ...ui.cardLabel, ...(tone === "solid" ? ui.cardLabelSolid : null) }}>{title}</div>
-      <div style={{ ...ui.cardValue, ...(tone === "solid" ? ui.cardValueSolid : null) }}>{value}</div>
-      <div style={{ height: 8 }} />
+    <div style={{ ...U.card, ...(variant === "solid" ? U.cardSolid : null) }}>
+      <div style={{ ...U.cardLabel, ...(variant === "solid" ? U.cardLabelSolid : null) }}>{title}</div>
+      <div style={{ ...U.cardValue, ...(variant === "solid" ? U.cardValueSolid : null) }}>{value}</div>
+      <div style={{ height: 10 }} />
     </div>
   )
 }
 
-/* ===================== UI STYLES ===================== */
+/* ================= UI THEME ================= */
 
+const GREEN = "#0E4B39"
+const GREEN2 = "#0A3A2C"
+const INK = "#0B1511"
+const MUTED = "rgba(11,21,17,0.58)"
+const BORDER = "rgba(14,75,57,0.14)"
+const SHADOW = "0 18px 50px rgba(14,75,57,0.14)"
 const FONT = "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
-const GREEN = "#0f4d3a"
-const GREEN_2 = "#12694c"
-const TEXT = "#0b1a14"
-const BORDER = "rgba(15,77,58,0.14)"
 
-const ui = {
+const U = {
   page: { width: "100%", fontFamily: FONT },
 
-  loading: {
-    padding: 20,
-    fontWeight: 950,
-    color: GREEN,
-    fontFamily: FONT
-  },
+  loading: { padding: 20, fontWeight: 950, color: GREEN },
 
-  headerRow: {
+  header: {
     display: "flex",
     alignItems: "flex-end",
     justifyContent: "space-between",
     gap: 18,
     flexWrap: "wrap",
-    marginBottom: 18
+    marginBottom: 16
   },
 
-  kicker: {
-    fontSize: 11,
-    fontWeight: 950,
-    letterSpacing: 0.35,
-    textTransform: "uppercase",
-    color: GREEN
-  },
-
-  h1: {
-    margin: "6px 0 0",
-    fontSize: 36,
-    fontWeight: 950,
-    letterSpacing: -0.2,
-    color: TEXT
-  },
-
-  sub: {
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: 750,
-    color: "rgba(0,0,0,0.60)"
-  },
-
-  headerActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10
-  },
+  kicker: { fontSize: 11, fontWeight: 950, letterSpacing: 0.35, textTransform: "uppercase", color: GREEN },
+  h1: { margin: "6px 0 0", fontSize: 36, fontWeight: 950, letterSpacing: -0.2, color: INK },
+  sub: { marginTop: 8, fontSize: 13, fontWeight: 750, color: MUTED },
 
   ghostBtn: {
     padding: "12px 14px",
-    borderRadius: 16,
+    borderRadius: 18,
     border: `1px solid ${BORDER}`,
-    background: "#ffffff",
+    background: "#fff",
     fontWeight: 950,
     cursor: "pointer",
     fontSize: 12,
-    boxShadow: "0 12px 26px rgba(15,77,58,0.10)"
+    boxShadow: "0 12px 26px rgba(14,75,57,0.10)"
   },
 
   primaryBtn: {
     padding: "12px 14px",
-    borderRadius: 16,
+    borderRadius: 18,
     border: "1px solid rgba(0,0,0,0.06)",
-    background: `linear-gradient(135deg, ${GREEN_2}, ${GREEN})`,
-    color: "#ffffff",
+    background: `linear-gradient(135deg, ${GREEN} 0%, ${GREEN2} 100%)`,
+    color: "#fff",
     fontWeight: 950,
     cursor: "pointer",
     fontSize: 12,
-    boxShadow: "0 18px 40px rgba(15,77,58,0.22)"
+    boxShadow: "0 18px 46px rgba(14,75,57,0.22)"
   },
 
   statsGrid: {
@@ -537,44 +495,26 @@ const ui = {
   },
 
   card: {
-    background: "#ffffff",
+    background: "#fff",
     border: `1px solid ${BORDER}`,
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 18,
-    boxShadow: "0 18px 46px rgba(15,77,58,0.10)"
+    boxShadow: SHADOW
   },
 
   cardSolid: {
-    background: `linear-gradient(135deg, ${GREEN_2} 0%, ${GREEN} 100%)`,
+    background: `linear-gradient(135deg, ${GREEN} 0%, ${GREEN2} 100%)`,
     borderColor: "rgba(0,0,0,0.06)",
-    boxShadow: "0 22px 54px rgba(15,77,58,0.26)"
+    boxShadow: "0 22px 54px rgba(14,75,57,0.26)"
   },
 
-  cardLabel: {
-    fontSize: 11,
-    fontWeight: 950,
-    letterSpacing: 0.35,
-    textTransform: "uppercase",
-    color: GREEN
-  },
+  cardLabel: { fontSize: 11, fontWeight: 950, letterSpacing: 0.35, textTransform: "uppercase", color: GREEN },
+  cardLabelSolid: { color: "rgba(255,255,255,0.84)" },
 
-  cardLabelSolid: {
-    color: "rgba(255,255,255,0.86)"
-  },
+  cardValue: { marginTop: 10, fontSize: 38, fontWeight: 950, color: INK, lineHeight: 1.06 },
+  cardValueSolid: { color: "#fff" },
 
-  cardValue: {
-    marginTop: 10,
-    fontSize: 38,
-    fontWeight: 950,
-    color: TEXT,
-    lineHeight: 1.06
-  },
-
-  cardValueSolid: {
-    color: "#ffffff"
-  },
-
-  mainGrid: {
+  grid: {
     display: "grid",
     gridTemplateColumns: "2fr 1fr",
     gap: 14,
@@ -583,14 +523,14 @@ const ui = {
   },
 
   panel: {
-    background: "#ffffff",
+    background: "#fff",
     border: `1px solid ${BORDER}`,
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 18,
-    boxShadow: "0 18px 46px rgba(15,77,58,0.10)",
+    boxShadow: SHADOW,
     display: "flex",
     flexDirection: "column",
-    minHeight: 440
+    minHeight: 460
   },
 
   panelHead: {
@@ -601,85 +541,64 @@ const ui = {
     flexWrap: "wrap"
   },
 
-  panelTitle: {
-    fontSize: 13,
-    fontWeight: 950,
-    color: TEXT
-  },
-
-  panelSub: {
-    marginTop: 4,
-    fontSize: 12,
-    fontWeight: 750,
-    color: "rgba(0,0,0,0.55)"
-  },
+  panelTitle: { fontSize: 13, fontWeight: 950, color: INK },
+  panelSub: { marginTop: 4, fontSize: 12, fontWeight: 750, color: MUTED },
 
   segmented: {
     display: "flex",
     gap: 6,
     padding: 4,
-    borderRadius: 16,
+    borderRadius: 18,
     border: `1px solid ${BORDER}`,
-    background: "rgba(18,105,76,0.06)"
+    background: "rgba(14,75,57,0.06)"
   },
 
   segBtn: {
     border: "none",
     background: "transparent",
     padding: "10px 12px",
-    borderRadius: 14,
+    borderRadius: 16,
     cursor: "pointer",
     fontWeight: 950,
     fontSize: 12,
-    color: "rgba(0,0,0,0.62)"
+    color: "rgba(0,0,0,0.64)"
   },
 
   segBtnActive: {
-    background: `linear-gradient(135deg, ${GREEN_2}, ${GREEN})`,
-    color: "#ffffff",
-    boxShadow: "0 14px 30px rgba(15,77,58,0.20)"
+    background: `linear-gradient(135deg, ${GREEN} 0%, ${GREEN2} 100%)`,
+    color: "#fff",
+    boxShadow: "0 14px 30px rgba(14,75,57,0.20)"
   },
 
   chartShell: {
     marginTop: 14,
-    borderRadius: 18,
+    borderRadius: 20,
     border: `1px solid ${BORDER}`,
-    background: `
-      linear-gradient(180deg, rgba(18,105,76,0.06) 0%, rgba(255,255,255,1) 100%)
-    `,
+    background: "linear-gradient(180deg, rgba(14,75,57,0.06) 0%, rgba(255,255,255,1) 100%)",
     padding: 14
   },
 
-  axisFont: {
-    fontFamily: FONT,
-    fontWeight: 850,
-    fontSize: 12
-  },
+  axisFont: { fontFamily: FONT, fontWeight: 850, fontSize: 12 },
 
   tooltip: {
-    borderRadius: 16,
+    borderRadius: 18,
     border: `1px solid ${BORDER}`,
     background: "rgba(255,255,255,0.96)",
     backdropFilter: "blur(14px)"
   },
-
   tooltipLabel: { fontWeight: 950, fontFamily: FONT },
   tooltipItem: { fontWeight: 850, fontFamily: FONT },
 
   activityBody: {
     marginTop: 14,
     flex: 1,
-    minHeight: 320,
-    maxHeight: 320,
+    minHeight: 330,
+    maxHeight: 330,
     overflowY: "auto",
     paddingRight: 6
   },
 
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10
-  },
+  list: { display: "flex", flexDirection: "column", gap: 10 },
 
   row: {
     display: "flex",
@@ -687,83 +606,52 @@ const ui = {
     alignItems: "flex-start",
     gap: 12,
     padding: 12,
-    borderRadius: 18,
+    borderRadius: 20,
     border: `1px solid ${BORDER}`,
-    background: "rgba(18,105,76,0.05)"
+    background: "rgba(14,75,57,0.05)"
   },
 
   rowLeft: { minWidth: 0, flex: 1 },
 
-  rowTop: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10
-  },
+  rowTop: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
 
   badge: {
     display: "inline-flex",
     alignItems: "center",
     padding: "8px 10px",
     borderRadius: 999,
-    background: `linear-gradient(135deg, ${GREEN_2}, ${GREEN})`,
-    color: "#ffffff",
+    background: `linear-gradient(135deg, ${GREEN} 0%, ${GREEN2} 100%)`,
+    color: "#fff",
     fontWeight: 950,
     fontSize: 11,
     letterSpacing: 0.3,
     textTransform: "uppercase"
   },
 
-  contact: {
-    fontWeight: 900,
-    fontSize: 12,
-    color: "rgba(0,0,0,0.62)",
-    whiteSpace: "nowrap"
-  },
+  contact: { fontWeight: 900, fontSize: 12, color: MUTED, whiteSpace: "nowrap" },
 
   note: {
     marginTop: 8,
     fontWeight: 750,
-    color: "rgba(0,0,0,0.75)",
+    color: "rgba(0,0,0,0.78)",
     fontSize: 13,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis"
   },
 
-  date: {
-    fontWeight: 900,
-    color: "rgba(0,0,0,0.55)",
-    fontSize: 12,
-    whiteSpace: "nowrap"
-  },
+  date: { fontWeight: 900, color: MUTED, fontSize: 12, whiteSpace: "nowrap" },
 
-  empty: {
-    marginTop: 12,
-    fontWeight: 850,
-    color: "rgba(0,0,0,0.55)",
-    fontSize: 13
-  },
+  empty: { marginTop: 12, fontWeight: 850, color: MUTED, fontSize: 13 },
 
   errorCard: {
     maxWidth: 520,
     padding: 18,
-    borderRadius: 22,
+    borderRadius: 24,
     border: "1px solid rgba(255,0,0,0.18)",
     background: "rgba(255,0,0,0.06)",
-    boxShadow: "0 18px 46px rgba(0,0,0,0.08)"
+    boxShadow: "0 18px 46px rgba(0,0,0,0.10)"
   },
-
-  errorTitle: {
-    fontWeight: 950,
-    color: "#7a1d1d",
-    fontSize: 14
-  },
-
-  errorText: {
-    marginTop: 8,
-    fontWeight: 800,
-    color: "rgba(122,29,29,0.92)",
-    fontSize: 13
-  }
+  errorTitle: { fontWeight: 950, color: "#7a1d1d", fontSize: 14 },
+  errorText: { marginTop: 8, fontWeight: 800, color: "rgba(122,29,29,0.92)", fontSize: 13 }
 }
