@@ -3,41 +3,51 @@ import Sidebar from "../components/Sidebar"
 
 export default function Layout({ children }) {
   const [isMobile, setIsMobile] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
     const onResize = () => {
       const mobile = window.innerWidth <= 1024
       setIsMobile(mobile)
-      setMenuOpen(false)
+      setSidebarOpen(!mobile) // desktop abierto, mobile cerrado
     }
     onResize()
     window.addEventListener("resize", onResize)
     return () => window.removeEventListener("resize", onResize)
   }, [])
 
-  const contentPad = useMemo(() => (isMobile ? 16 : 22), [isMobile])
+  const shellStyle = useMemo(() => {
+    return {
+      ...shell,
+      padding: isMobile ? 14 : 18
+    }
+  }, [isMobile])
 
   return (
     <div style={app}>
-      {/* Fondo: verde inglés NOTORIO, con difuminados precisos */}
+      {/* Fondo soft azul/gris como la referencia */}
       <div aria-hidden="true" style={bg} />
-      <div aria-hidden="true" style={bgVignette} />
+      <div aria-hidden="true" style={bgGlow} />
       <div aria-hidden="true" style={bgNoise} />
 
-      {/* Topbar pill (no sidebar burbuja) */}
-      <Sidebar
-        isMobile={isMobile}
-        open={menuOpen}
-        onOpen={() => setMenuOpen(true)}
-        onClose={() => setMenuOpen(false)}
-        onToggle={() => setMenuOpen((v) => !v)}
-      />
+      <div style={shellStyle}>
+        <Sidebar
+          isMobile={isMobile}
+          open={sidebarOpen}
+          onOpen={() => setSidebarOpen(true)}
+          onClose={() => setSidebarOpen(false)}
+          onToggle={() => setSidebarOpen((v) => !v)}
+        />
 
-      {/* Content full screen */}
-      <main style={{ ...content, padding: `${92}px ${contentPad}px ${contentPad}px` }}>
-        {children}
-      </main>
+        <main
+          style={{
+            ...main,
+            marginLeft: isMobile ? 0 : sidebarOpen ? 280 : 96
+          }}
+        >
+          <div style={contentCard}>{children}</div>
+        </main>
+      </div>
     </div>
   )
 }
@@ -46,59 +56,75 @@ export default function Layout({ children }) {
 
 const FONT = "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 
-/* Verde inglés notorio pero elegante */
 const app = {
   position: "relative",
   height: "100vh",
   width: "100vw",
   overflow: "hidden",
   fontFamily: FONT,
-  color: "#0f3d2e",
-  background: "#0b2a20" // base profunda (verde inglés)
+  color: "#0f172a"
 }
 
-/* Fondo con difuminados “premium” (sin plástico) */
 const bg = {
   position: "absolute",
   inset: 0,
   pointerEvents: "none",
   background: `
-    radial-gradient(1200px 650px at 18% 18%, rgba(43,218,154,0.26), transparent 60%),
-    radial-gradient(1100px 700px at 78% 30%, rgba(31,174,122,0.20), transparent 62%),
-    radial-gradient(900px 600px at 60% 92%, rgba(20,92,67,0.26), transparent 60%),
-    linear-gradient(180deg, rgba(10,35,27,1) 0%, rgba(10,45,34,1) 45%, rgba(11,42,32,1) 100%)
+    radial-gradient(900px 600px at 22% 18%, rgba(96,165,250,0.35), transparent 60%),
+    radial-gradient(900px 650px at 78% 22%, rgba(148,163,184,0.35), transparent 62%),
+    radial-gradient(900px 650px at 52% 88%, rgba(59,130,246,0.18), transparent 60%),
+    linear-gradient(180deg, #cbd5e1 0%, #dbeafe 30%, #e5e7eb 100%)
   `
 }
 
-/* viñeta suave para look “device / estudio” */
-const bgVignette = {
+const bgGlow = {
   position: "absolute",
   inset: 0,
   pointerEvents: "none",
-  background:
-    "radial-gradient(1200px 800px at 50% 30%, rgba(255,255,255,0.06), transparent 62%)",
-  opacity: 0.9
+  background: "radial-gradient(700px 380px at 50% 6%, rgba(255,255,255,0.55), transparent 65%)",
+  opacity: 0.95
 }
 
-/* ruido MUY leve para evitar look plástico */
+/* ruido sutil para que no quede “plástico” */
 const bgNoise = {
   position: "absolute",
   inset: 0,
   pointerEvents: "none",
   opacity: 0.06,
-  mixBlendMode: "overlay",
+  mixBlendMode: "multiply",
   backgroundImage: `
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 1px, transparent 1px, transparent 3px),
-    repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px)
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0.08) 1px, transparent 1px, transparent 3px)
   `
 }
 
-/* Content: scroll vertical, sin overflow horizontal */
-const content = {
+const shell = {
   position: "relative",
   height: "100%",
   width: "100%",
-  overflowY: "auto",
-  overflowX: "hidden",
   boxSizing: "border-box"
+}
+
+/* main ocupa el resto del viewport */
+const main = {
+  position: "absolute",
+  top: 18,
+  right: 18,
+  bottom: 18,
+  left: 18,
+  transition: "margin-left 180ms ease",
+  overflow: "hidden"
+}
+
+/* el “panel” grande claro donde vive el contenido, como en la ref */
+const contentCard = {
+  height: "100%",
+  width: "100%",
+  borderRadius: 28,
+  background: "rgba(255,255,255,0.72)",
+  border: "1px solid rgba(15,23,42,0.08)",
+  boxShadow: "0 24px 80px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.70)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+  overflow: "hidden"
 }
