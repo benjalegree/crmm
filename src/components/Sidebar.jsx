@@ -14,36 +14,35 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
 
   const activePath = location.pathname
 
-  const shellStyle = useMemo(() => {
-    return isMobile ? topbarMobileShell : topbarShell
-  }, [isMobile])
+  const topStyle = useMemo(() => (isMobile ? topbarMobile : topbar), [isMobile])
 
   return (
     <>
-      {/* Topbar */}
-      <div style={shellStyle}>
-        <div style={topbarInner}>
-          <div style={brandRow}>
+      {/* Topbar pill (dentro del Stage) */}
+      <div style={topStyle}>
+        <div style={pill}>
+          <div style={left}>
             {isMobile ? (
               <button
                 type="button"
                 style={iconBtn}
                 onClick={() => (open ? onClose?.() : onOpen?.())}
-                aria-label="Open menu"
+                aria-label="Menu"
                 title="Menu"
               >
                 ☰
               </button>
             ) : null}
 
-            <div style={brandMark} aria-hidden="true" />
-            <div style={brandText}>
-              <div style={brandName}>PsicoFunnel</div>
-              <div style={brandSub}>CRM</div>
+            <div style={brand}>
+              <div style={brandDot} aria-hidden="true" />
+              <div style={brandText}>
+                <div style={brandName}>PsicoFunnel</div>
+                <div style={brandSub}>CRM</div>
+              </div>
             </div>
           </div>
 
-          {/* Links desktop */}
           {!isMobile ? (
             <nav style={nav}>
               {links.map((l) => {
@@ -53,8 +52,8 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
                     key={l.path}
                     to={l.path}
                     style={{
-                      ...navLink,
-                      ...(active ? navLinkActive : null)
+                      ...tab,
+                      ...(active ? tabActive : null)
                     }}
                   >
                     {l.label}
@@ -66,13 +65,12 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
             <div style={{ flex: 1 }} />
           )}
 
-          {/* Acciones derecha */}
-          <div style={rightActions}>
+          <div style={right}>
             <button type="button" style={iconBtn} aria-label="Search" title="Search">
               ⌕
             </button>
-            <button type="button" style={iconBtn} aria-label="Theme" title="Theme">
-              ◐
+            <button type="button" style={iconBtn} aria-label="Settings" title="Settings">
+              ⚙
             </button>
             <div style={avatar} title="Profile" />
           </div>
@@ -93,7 +91,7 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
             aria-modal="true"
           >
             <div style={drawerHead}>
-              <div style={drawerTitle}>Menu</div>
+              <div style={drawerTitle}>Navigation</div>
               <button type="button" style={iconBtn} onClick={onClose} aria-label="Close">
                 ✕
               </button>
@@ -124,118 +122,136 @@ export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
   )
 }
 
-/* ================= STYLES ================= */
+/* ================= TOKENS ================= */
 
-const topbarShell = {
-  position: "fixed",
-  top: 0,
+const C = {
+  ink: "#0f3d2e",
+  ink2: "rgba(15,61,46,0.70)",
+  stroke: "rgba(15,61,46,0.12)",
+  glassA: "rgba(255,255,255,0.72)",
+  glassB: "rgba(255,255,255,0.52)",
+  shadow: "0 18px 50px rgba(0,0,0,0.10)",
+  highlightInset: "inset 0 1px 0 rgba(255,255,255,0.60)"
+}
+
+/* ================= TOPBAR ================= */
+
+const topbar = {
+  position: "absolute",
   left: 0,
   right: 0,
-  zIndex: 60,
-  height: 72,
-  padding: "12px 18px",
-  background:
-    "linear-gradient(180deg, rgba(244,251,248,0.80), rgba(244,251,248,0.60))",
-  borderBottom: "1px solid rgba(15,61,46,0.10)",
+  top: 14,
+  padding: "0 18px",
+  zIndex: 20
+}
+
+const topbarMobile = {
+  ...topbar,
+  top: 12,
+  padding: "0 14px"
+}
+
+/* pill interna como refs */
+const pill = {
+  height: 60,
+  borderRadius: 999,
+  background: `linear-gradient(180deg, ${C.glassA}, ${C.glassB})`,
+  border: `1px solid ${C.stroke}`,
+  boxShadow: C.shadow,
   backdropFilter: "blur(14px)",
-  WebkitBackdropFilter: "blur(14px)"
-}
-
-const topbarMobileShell = {
-  ...topbarShell,
-  height: 68,
-  padding: "10px 12px"
-}
-
-const topbarInner = {
-  height: "100%",
-  maxWidth: 1200,
-  margin: "0 auto",
-  borderRadius: 16,
-  background:
-    "linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.45))",
-  border: "1px solid rgba(15,61,46,0.10)",
-  boxShadow: "0 18px 50px rgba(15,61,46,0.10)",
+  WebkitBackdropFilter: "blur(14px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   padding: "10px 12px",
-  gap: 12
+  gap: 12,
+  boxSizing: "border-box",
+  boxShadow: `${C.shadow}, ${C.highlightInset}`
 }
 
-const brandRow = {
+const left = {
   display: "flex",
   alignItems: "center",
   gap: 10,
-  minWidth: 220
+  minWidth: 240
 }
 
-const brandMark = {
-  width: 28,
-  height: 28,
+const right = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8
+}
+
+const brand = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10
+}
+
+const brandDot = {
+  width: 26,
+  height: 26,
   borderRadius: 10,
   background:
-    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0) 55%), rgba(20,92,67,0.22)",
-  border: "1px solid rgba(20,92,67,0.18)"
+    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0) 55%), rgba(20,92,67,0.20)",
+  border: "1px solid rgba(20,92,67,0.16)"
 }
 
-const brandText = { display: "flex", flexDirection: "column", lineHeight: 1.1 }
+const brandText = { display: "flex", flexDirection: "column", lineHeight: 1.05 }
+
 const brandName = {
-  fontWeight: 900,
+  fontWeight: 950,
   letterSpacing: 0.2,
-  color: "#0f3d2e",
-  fontSize: 14
+  color: C.ink,
+  fontSize: 13
 }
+
 const brandSub = {
-  fontWeight: 800,
+  fontWeight: 850,
   color: "rgba(15,61,46,0.55)",
   fontSize: 11,
   marginTop: 2
 }
 
+/* tabs */
 const nav = {
   display: "flex",
   alignItems: "center",
   gap: 6,
-  padding: 6,
+  padding: 5,
   borderRadius: 999,
-  background: "rgba(15,61,46,0.06)",
+  background: "rgba(15,61,46,0.05)",
   border: "1px solid rgba(15,61,46,0.08)"
 }
 
-const navLink = {
+const tab = {
   textDecoration: "none",
   color: "rgba(15,61,46,0.70)",
-  fontWeight: 900,
+  fontWeight: 950,
   fontSize: 12,
   padding: "9px 12px",
   borderRadius: 999,
   transition: "background 160ms ease, color 160ms ease"
 }
 
-const navLinkActive = {
-  background: "rgba(20,92,67,0.14)",
-  color: "#0f3d2e"
+const tabActive = {
+  background: "rgba(20,92,67,0.12)",
+  color: C.ink
 }
 
-const rightActions = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8
-}
-
+/* botones soft (sin “plástico”) */
 const iconBtn = {
   width: 38,
   height: 38,
   borderRadius: 12,
-  border: "1px solid rgba(15,61,46,0.10)",
-  background: "rgba(255,255,255,0.55)",
+  border: "1px solid rgba(15,61,46,0.12)",
+  background: "rgba(255,255,255,0.58)",
   cursor: "pointer",
-  fontWeight: 900,
+  fontWeight: 950,
   color: "rgba(15,61,46,0.85)",
   backdropFilter: "blur(10px)",
   WebkitBackdropFilter: "blur(10px)",
-  boxShadow: "0 10px 24px rgba(15,61,46,0.08)",
+  boxShadow: "0 12px 30px rgba(15,61,46,0.10)",
   transition: "transform 120ms ease"
 }
 
@@ -243,38 +259,37 @@ const avatar = {
   width: 34,
   height: 34,
   borderRadius: 999,
-  border: "1px solid rgba(15,61,46,0.12)",
+  border: "1px solid rgba(15,61,46,0.14)",
   background:
-    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0) 55%), rgba(20,92,67,0.18)"
+    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0) 55%), rgba(20,92,67,0.18)"
 }
 
-/* Drawer */
+/* ================= DRAWER MOBILE ================= */
 
 const overlay = {
-  position: "fixed",
+  position: "absolute",
   inset: 0,
-  background: "rgba(0,0,0,0.30)",
+  background: "rgba(0,0,0,0.28)",
   backdropFilter: "blur(3px)",
   WebkitBackdropFilter: "blur(3px)",
-  zIndex: 65
+  zIndex: 25
 }
 
 const drawer = {
-  position: "fixed",
-  top: 84,
-  left: 12,
-  width: 280,
-  maxWidth: "calc(100vw - 24px)",
+  position: "absolute",
+  top: 86,
+  left: 16,
+  width: 300,
+  maxWidth: "calc(100% - 32px)",
   borderRadius: 18,
-  zIndex: 70,
   padding: 12,
-  background:
-    "linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.52))",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.56))",
   border: "1px solid rgba(15,61,46,0.12)",
-  boxShadow: "0 22px 60px rgba(0,0,0,0.22)",
+  boxShadow: "0 22px 60px rgba(0,0,0,0.20)",
   backdropFilter: "blur(14px)",
   WebkitBackdropFilter: "blur(14px)",
-  transition: "transform 200ms ease"
+  transition: "transform 200ms ease",
+  zIndex: 30
 }
 
 const drawerHead = {
@@ -288,7 +303,7 @@ const drawerHead = {
 
 const drawerTitle = {
   fontWeight: 950,
-  color: "#0f3d2e"
+  color: C.ink
 }
 
 const drawerList = {
@@ -301,7 +316,7 @@ const drawerList = {
 const drawerLink = {
   textDecoration: "none",
   color: "rgba(15,61,46,0.80)",
-  fontWeight: 900,
+  fontWeight: 950,
   fontSize: 13,
   padding: "10px 12px",
   borderRadius: 14,
@@ -311,6 +326,6 @@ const drawerLink = {
 
 const drawerLinkActive = {
   background: "rgba(20,92,67,0.12)",
-  border: "1px solid rgba(20,92,67,0.18)",
-  color: "#0f3d2e"
+  border: "1px solid rgba(20,92,67,0.16)",
+  color: C.ink
 }
