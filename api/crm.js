@@ -35,15 +35,13 @@ export default async function handler(req, res) {
       }
     }
 
+    const normalizeEmail = (v) => String(v || "").trim().toLowerCase()
+
     const getSessionEmail = () => {
       const cookie = req.headers.cookie
       if (!cookie) return null
       if (!cookie.includes("session=")) return null
-      return cookie
-        .split("session=")[1]
-        ?.split(";")[0]
-        ?.trim()
-        ?.toLowerCase()
+      return normalizeEmail(cookie.split("session=")[1]?.split(";")[0])
     }
 
     const requireAuth = () => {
@@ -107,66 +105,106 @@ export default async function handler(req, res) {
       return out
     }
 
-    const forbidIfNotOwner = (record, email) => {
-      if (!record?.fields) return false
-      return record.fields["Responsible Email"] !== email
+    const isOwner = (record, email) => {
+      const owner = normalizeEmail(record?.fields?.["Responsible Email"])
+      return owner && owner === normalizeEmail(email)
     }
 
-    const pickExistingFieldName = (existingFields, candidates = []) => {
-      const keys = new Set(Object.keys(existingFields || {}))
-      for (const c of candidates) {
-        if (keys.has(c)) return c
+    /* =====================================================
+       PATCH robusto: manda SIEMPRE Notes aunque esté vacío
+       y usa fallbacks si el nombre real del campo es distinto
+    ====================================================== */
+
+    const patchWithFieldFallbacks = async (table, id, fields) => {
+      const attempt = async (payloadFields) => {
+        const r = await fetch(`https://api.airtable.com/v0/${baseId}/${table}/${id}`, {
+          method: "PATCH",
+          headers: AIRTABLE_HEADERS,
+          body: JSON.stringify({ fields: payloadFields })
+        })
+        const data = await readJson(r)
+        return { ok: r.ok, status: r.status, data }
       }
-      return null
+
+      // 1) intento directo
+      let r1 = await attempt(fields)
+      if (r1.ok) return r1
+
+      const errType = r1.data?.error?.type
+      if (errType !== "UNKNOWN_FIELD_NAME") return r1
+
+      const variants = []
+
+      // Notes variants
+      if (Object.prototype.hasOwnProperty.call(fields, "Notes")) {
+        const base = { ...fields }
+        const val = base.Notes
+        delete base.Notes
+        variants.push({ ...base, "Notas": val })
+        variants.push({ ...base, "Observaciones": val })
+        variants.push({ ...base, "Notas (general)": val })
+        variants.push({ ...base, "Notes (general)": val })
+        variants.push({ ...base, "Permanent Notes": val })
+        variants.push({ ...base, "Contact Notes": val })
+      }
+
+      // Phone variants
+      if (Object.prototype.hasOwnProperty.call(fields, "Phone")) {
+        const base = { ...fields }
+        const val = base.Phone
+        delete base.Phone
+        variants.push({ ...base, "Numero de telefono": val })
+        variants.push({ ...base, "Número de teléfono": val })
+        variants.push({ ...base, "Telefono": val })
+        variants.push({ ...base, "Teléfono": val })
+      }
+
+      // LinkedIn variants
+      if (Object.prototype.hasOwnProperty.call(fields, "LinkedIn URL")) {
+        const base = { ...fields }
+        const val = base["LinkedIn URL"]
+        delete base["LinkedIn URL"]
+        variants.push({ ...base, LinkedIn: val })
+        variants.push({ ...base, Linkedin: val })
+      }
+
+      // Status variants
+      if (Object.prototype.hasOwnProperty.call(fields, "Status")) {
+        const base = { ...fields }
+        const val = base.Status
+        delete base.Status
+        variants.push({ ...base, Estado: val })
+      }
+
+      // Position variants
+      if (Object.prototype.hasOwnProperty.call(fields, "Position")) {
+        const base = { ...fields }
+        const val = base.Position
+        delete base.Position
+        variants.push({ ...base, Puesto: val })
+        variants.push({ ...base, Cargo: val })
+      }
+
+      // Email variants
+      if (Object.prototype.hasOwnProperty.call(fields, "Email")) {
+        const base = { ...fields }
+        const val = base.Email
+        delete base.Email
+        variants.push({ ...base, "E-mail": val })
+        variants.push({ ...base, Mail: val })
+      }
+
+      for (const v of variants) {
+        const rx = await attempt(v)
+        if (rx.ok) return rx
+      }
+
+      return r1
     }
 
-    const buildSafeContactPatchFields = (existingFields, incoming = {}) => {
-      const out = {}
-
-      if ("Email" in incoming) {
-        const k = pickExistingFieldName(existingFields, ["Email", "E-mail", "Mail"])
-        if (k) out[k] = String(incoming.Email || "")
-      }
-
-      if ("Position" in incoming) {
-        const k = pickExistingFieldName(existingFields, ["Position", "Puesto", "Cargo"])
-        if (k) out[k] = String(incoming.Position || "")
-      }
-
-      if ("Status" in incoming) {
-        const k = pickExistingFieldName(existingFields, ["Status", "Estado"])
-        if (k) out[k] = String(incoming.Status || "")
-      }
-
-      if ("Notes" in incoming) {
-        const k = pickExistingFieldName(existingFields, [
-          "Notes",
-          "Notas",
-          "Observaciones",
-          "Contact Notes",
-          "Permanent Notes"
-        ])
-        if (k) out[k] = String(incoming.Notes || "")
-      }
-
-      if ("Phone" in incoming) {
-        const k = pickExistingFieldName(existingFields, [
-          "Numero de telefono",
-          "Número de teléfono",
-          "Phone",
-          "Telefono",
-          "Teléfono"
-        ])
-        if (k) out[k] = String(incoming.Phone || "")
-      }
-
-      if ("LinkedIn URL" in incoming) {
-        const k = pickExistingFieldName(existingFields, ["LinkedIn URL", "LinkedIn", "Linkedin"])
-        if (k) out[k] = String(incoming["LinkedIn URL"] || "")
-      }
-
-      return out
-    }
+    /* =====================================================
+       CREATE (POST) con fallbacks (ACTIVITIES)
+    ====================================================== */
 
     const createWithFallbacks = async (table, fields) => {
       const attempt = async (payloadFields) => {
@@ -185,26 +223,26 @@ export default async function handler(req, res) {
       const type = r1.data?.error?.type
       const variants = []
 
-      if (Object.prototype.hasOwnProperty.call(fields, "Outcome")) {
+      if ("Outcome" in fields) {
         const base = { ...fields }
         const val = base.Outcome
         delete base.Outcome
         variants.push({ ...base, "Activity Type": val })
       }
-      if (Object.prototype.hasOwnProperty.call(fields, "Activity Type")) {
+      if ("Activity Type" in fields) {
         const base = { ...fields }
         const val = base["Activity Type"]
         delete base["Activity Type"]
         variants.push({ ...base, Outcome: val })
       }
 
-      if (Object.prototype.hasOwnProperty.call(fields, "Activity Date")) {
+      if ("Activity Date" in fields) {
         const base = { ...fields }
         base["Activity Date"] = normalizeDate(base["Activity Date"])
         variants.push(base)
       }
 
-      if (Object.prototype.hasOwnProperty.call(fields, "Notes")) {
+      if ("Notes" in fields) {
         const base = { ...fields }
         const val = base.Notes
         delete base.Notes
@@ -238,7 +276,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Email required" })
       }
 
-      const normalized = email.trim().toLowerCase()
+      const normalized = normalizeEmail(email)
 
       const allowedUsers = [
         "benjamin.alegre@psicofunnel.com",
@@ -261,38 +299,11 @@ export default async function handler(req, res) {
     }
 
     /* =====================================================
-       ME (NO AUTH REQUIRED)
-    ====================================================== */
-
-    if (action === "me") {
-      const email = getSessionEmail()
-      if (!email) return res.status(401).json({ authenticated: false })
-      return res.status(200).json({ authenticated: true, email })
-    }
-
-    /* =====================================================
        AUTH REQUIRED BELOW
     ====================================================== */
 
     const email = requireAuth()
     if (!email) return
-
-    /* =====================================================
-       GET COMPANIES
-    ====================================================== */
-
-    if (action === "getCompanies") {
-      try {
-        const formula = `{Responsible Email}="${email}"`
-        const records = await fetchAllAirtableRecords("Companies", { filterByFormula: formula })
-        return res.status(200).json({ records })
-      } catch (e) {
-        return res.status(e.status || 500).json({
-          error: "Failed to fetch companies",
-          details: e.details || String(e.message || e)
-        })
-      }
-    }
 
     /* =====================================================
        GET CONTACT
@@ -308,13 +319,13 @@ export default async function handler(req, res) {
       const data = await readJson(r)
 
       if (!r.ok) return res.status(r.status).json({ error: "Contact not found", details: data })
-      if (forbidIfNotOwner(data, email)) return res.status(403).json({ error: "Forbidden" })
+      if (!isOwner(data, email)) return res.status(403).json({ error: "Forbidden" })
 
       return res.status(200).json(data)
     }
 
     /* =====================================================
-       UPDATE CONTACT ✅
+       UPDATE CONTACT ✅✅ arreglado (Notes vacío)
     ====================================================== */
 
     if (action === "updateContact") {
@@ -325,38 +336,42 @@ export default async function handler(req, res) {
         headers: AIRTABLE_HEADERS
       })
       const existing = await readJson(check)
-      if (!check.ok) return res.status(check.status).json({ error: "Contact not found", details: existing })
-      if (forbidIfNotOwner(existing, email)) return res.status(403).json({ error: "Forbidden" })
 
-      const safePatchFields = buildSafeContactPatchFields(existing.fields || {}, fields)
-
-      if (!Object.keys(safePatchFields).length) {
-        return res.status(200).json(existing)
+      if (!check.ok) {
+        return res.status(check.status).json({ error: "Contact not found", details: existing })
       }
 
-      const r = await fetch(`https://api.airtable.com/v0/${baseId}/Contacts/${id}`, {
-        method: "PATCH",
-        headers: AIRTABLE_HEADERS,
-        body: JSON.stringify({ fields: safePatchFields })
-      })
-      const data = await readJson(r)
+      if (!isOwner(existing, email)) {
+        return res.status(403).json({ error: "Forbidden" })
+      }
 
-      if (!r.ok) return res.status(r.status).json({ error: "Failed to update contact", details: data })
-      return res.status(200).json(data)
+      // ✅ Mandamos SIEMPRE el campo Notes (aunque sea string vacío)
+      const safeFields = {
+        Email: fields.Email ?? "",
+        Position: fields.Position ?? "",
+        Status: fields.Status ?? "Not Contacted",
+        Notes: String(fields.Notes ?? ""),
+        Phone: fields.Phone ?? "",
+        "LinkedIn URL": fields["LinkedIn URL"] ?? ""
+      }
+
+      const r = await patchWithFieldFallbacks("Contacts", id, safeFields)
+
+      if (!r.ok) {
+        return res.status(r.status).json({ error: "Failed to update contact", details: r.data })
+      }
+
+      return res.status(200).json(r.data)
     }
 
     /* =====================================================
-       CREATE ACTIVITY ✅ (Outcome + date-only)
+       CREATE ACTIVITY
     ====================================================== */
 
     if (action === "createActivity") {
       const { contactId, type, notes, nextFollowUp } = body
+      if (!contactId || !type) return res.status(400).json({ error: "Missing required fields" })
 
-      if (!contactId || !type) {
-        return res.status(400).json({ error: "Missing required fields" })
-      }
-
-      // validar ownership
       const contactRes = await fetch(
         `https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`,
         { headers: AIRTABLE_HEADERS }
@@ -370,9 +385,7 @@ export default async function handler(req, res) {
         })
       }
 
-      if (contactData.fields?.["Responsible Email"] !== email) {
-        return res.status(403).json({ error: "Forbidden" })
-      }
+      if (!isOwner(contactData, email)) return res.status(403).json({ error: "Forbidden" })
 
       const rawCompany = contactData.fields?.Company
       const candidate = Array.isArray(rawCompany) && rawCompany.length > 0 ? rawCompany[0] : null
@@ -382,31 +395,25 @@ export default async function handler(req, res) {
         Outcome: String(type),
         "Related Contact": [contactId],
         "Activity Date": normalizeDate(new Date()),
-        "Owner Email": email,
+        "Owner Email": normalizeEmail(email),
         Notes: String(notes || "")
       }
 
       const nfu = normalizeDate(nextFollowUp)
       if (nfu) fieldsToSend["Next Follow-up Date"] = nfu
-
       if (linkedCompanyId) fieldsToSend["Related Company"] = [linkedCompanyId]
 
       const r = await createWithFallbacks("Activities", fieldsToSend)
 
       if (!r.ok) {
-        return res.status(r.status).json({
-          error: "Failed to create activity",
-          details: r.data
-        })
+        return res.status(r.status).json({ error: "Failed to create activity", details: r.data })
       }
 
       return res.status(200).json(r.data)
     }
 
     /* =====================================================
-       GET ACTIVITIES ✅✅ SUPER ROBUSTO
-       - Trae por Owner Email y filtra en backend por contacto
-       - Evita el bug de filterByFormula con ARRAYJOIN / lookups
+       GET ACTIVITIES (robusto)
     ====================================================== */
 
     if (action === "getActivities") {
@@ -414,7 +421,6 @@ export default async function handler(req, res) {
       if (!contactId) return res.status(400).json({ error: "Missing contact ID" })
 
       try {
-        // 1) Traemos el contacto (para validar owner y tener nombre como fallback)
         const contactRes = await fetch(`https://api.airtable.com/v0/${baseId}/Contacts/${contactId}`, {
           headers: AIRTABLE_HEADERS
         })
@@ -423,9 +429,8 @@ export default async function handler(req, res) {
         if (!contactRes.ok) {
           return res.status(contactRes.status).json({ error: "Contact not found", details: contactData })
         }
-        if (contactData.fields?.["Responsible Email"] !== email) {
-          return res.status(403).json({ error: "Forbidden" })
-        }
+
+        if (!isOwner(contactData, email)) return res.status(403).json({ error: "Forbidden" })
 
         const contactName =
           contactData.fields?.["Full Name"] ||
@@ -433,29 +438,19 @@ export default async function handler(req, res) {
           contactData.fields?.["Contact Name"] ||
           ""
 
-        // 2) Traemos TODAS las activities del owner
-        const ownerFormula = `{Owner Email}="${email}"`
+        const ownerFormula = `{Owner Email}="${normalizeEmail(email)}"`
         const all = await fetchAllAirtableRecords("Activities", { filterByFormula: ownerFormula })
 
-        // 3) Filtramos por contacto en backend (ID y fallback por nombre)
         const filtered = (all || []).filter((rec) => {
           const f = rec.fields || {}
           const rel = f["Related Contact"]
-
-          // Caso normal: Airtable devuelve array de recordIds ["rec..."]
           if (Array.isArray(rel) && rel.includes(contactId)) return true
-
-          // Fallback: a veces es lookup / string / otro formato
           const relStr = Array.isArray(rel) ? rel.join(" ") : String(rel || "")
           if (relStr.includes(contactId)) return true
-
-          // Fallback por nombre (si tu view devuelve nombres)
           if (contactName && relStr.toLowerCase().includes(String(contactName).toLowerCase())) return true
-
           return false
         })
 
-        // 4) Orden: más nuevas primero (por Activity Date date-only)
         filtered.sort((a, b) => {
           const da = new Date(a.fields?.["Activity Date"] || 0).getTime()
           const db = new Date(b.fields?.["Activity Date"] || 0).getTime()
@@ -466,40 +461,6 @@ export default async function handler(req, res) {
       } catch (e) {
         return res.status(e.status || 500).json({
           error: "Failed to fetch activities",
-          details: e.details || String(e.message || e)
-        })
-      }
-    }
-
-    /* =====================================================
-       GET CONTACTS (si lo usás)
-    ====================================================== */
-
-    if (action === "getContacts") {
-      try {
-        const formula = `{Responsible Email}="${email}"`
-        const contacts = await fetchAllAirtableRecords("Contacts", { filterByFormula: formula })
-        return res.status(200).json({ records: contacts })
-      } catch (e) {
-        return res.status(e.status || 500).json({
-          error: "Failed to fetch contacts",
-          details: e.details || String(e.message || e)
-        })
-      }
-    }
-
-    /* =====================================================
-       GET CALENDAR (si lo usás)
-    ====================================================== */
-
-    if (action === "getCalendar") {
-      try {
-        const formula = `{Owner Email}="${email}"`
-        const records = await fetchAllAirtableRecords("Activities", { filterByFormula: formula })
-        return res.status(200).json({ records })
-      } catch (e) {
-        return res.status(e.status || 500).json({
-          error: "Failed to fetch calendar",
           details: e.details || String(e.message || e)
         })
       }
