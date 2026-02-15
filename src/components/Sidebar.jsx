@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom"
 import { useMemo } from "react"
 
-export default function Sidebar({ isMobile, open, onToggle, onClose }) {
+export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
   const location = useLocation()
 
   const links = [
@@ -12,21 +12,22 @@ export default function Sidebar({ isMobile, open, onToggle, onClose }) {
     { path: "/calendar", label: "Calendar", icon: "🗓️" }
   ]
 
+  // En desktop: open=true => grande, open=false => colapsada
   const isCollapsedDesktop = !isMobile && !open
 
   const wrapperStyle = useMemo(() => {
-    // Mobile: drawer overlay
     if (isMobile) {
+      // Mobile: drawer overlay
       return {
         ...sidebarWrapperMobile,
         transform: open ? "translateX(0)" : "translateX(-110%)"
       }
     }
 
-    // Desktop: normal / collapsed
+    // Desktop: ancho del wrapper depende de colapsado
     return {
       ...sidebarWrapper,
-      width: isCollapsedDesktop ? "110px" : "300px"
+      width: isCollapsedDesktop ? "120px" : "300px"
     }
   }, [isMobile, open, isCollapsedDesktop])
 
@@ -35,17 +36,15 @@ export default function Sidebar({ isMobile, open, onToggle, onClose }) {
 
     return {
       ...sidebar,
-      width: isCollapsedDesktop ? "90px" : "260px",
+      width: isCollapsedDesktop ? "96px" : "260px",
       padding: isCollapsedDesktop ? "26px 14px" : "40px 25px"
     }
   }, [isMobile, isCollapsedDesktop])
 
   return (
     <>
-      {/* Overlay (solo mobile) */}
-      {isMobile && open ? (
-        <div style={overlay} onClick={onClose} aria-hidden="true" />
-      ) : null}
+      {/* Overlay (solo mobile cuando está abierto) */}
+      {isMobile && open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
 
       <div style={wrapperStyle}>
         <div style={panelStyle}>
@@ -55,13 +54,19 @@ export default function Sidebar({ isMobile, open, onToggle, onClose }) {
               {!isCollapsedDesktop ? <div style={logo}>PsicoFunnel</div> : null}
             </div>
 
-            {/* Close en mobile / toggle en desktop */}
+            {/* Botón control: desktop colapsa/expande, mobile cierra */}
             {isMobile ? (
               <button type="button" style={iconBtn} onClick={onClose} aria-label="Close menu">
                 ✕
               </button>
             ) : (
-              <button type="button" style={iconBtn} onClick={onToggle} aria-label="Toggle sidebar">
+              <button
+                type="button"
+                style={iconBtn}
+                onClick={() => (isCollapsedDesktop ? onOpen?.() : onToggle?.())}
+                aria-label="Toggle sidebar"
+                title={isCollapsedDesktop ? "Expand" : "Collapse"}
+              >
                 {isCollapsedDesktop ? "→" : "←"}
               </button>
             )}
@@ -98,7 +103,7 @@ export default function Sidebar({ isMobile, open, onToggle, onClose }) {
           {!isCollapsedDesktop ? (
             <div style={footerHint}>
               <div style={hintTitle}>Tip</div>
-              <div style={hintText}>En iPad podés abrir/cerrar el menú para ganar espacio.</div>
+              <div style={hintText}>Podés colapsar el menú para ganar más espacio.</div>
             </div>
           ) : null}
         </div>
