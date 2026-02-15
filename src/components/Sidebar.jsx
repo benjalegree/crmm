@@ -1,241 +1,193 @@
 import { Link, useLocation } from "react-router-dom"
 
-export default function Sidebar({ collapsed = false, onToggle }) {
+export default function Sidebar({ hidden = false, onToggle }) {
   const location = useLocation()
 
   const links = [
-    { path: "/dashboard", label: "Overview", emoji: "✨" },
-    { path: "/companies", label: "Companies", emoji: "🏢" },
-    { path: "/leads", label: "Leads", emoji: "👥" },
-    { path: "/pipeline", label: "Pipeline", emoji: "🧠" },
-    { path: "/calendar", label: "Calendar", emoji: "📅" }
+    { path: "/dashboard", label: "Overview", icon: "✨" },
+    { path: "/companies", label: "Companies", icon: "🏢" },
+    { path: "/leads", label: "Leads", icon: "👥" },
+    { path: "/pipeline", label: "Pipeline", icon: "🧠" },
+    { path: "/calendar", label: "Calendar", icon: "📅" }
   ]
 
   return (
-    <aside
-      style={{
-        ...wrap,
-        width: collapsed ? 88 : 280
-      }}
-    >
-      <div style={panel}>
-        <div style={top}>
-          <button
-            type="button"
-            onClick={onToggle}
-            style={toggleBtn}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? "→" : "←"}
-          </button>
+    <>
+      {/* Sidebar */}
+      <div
+        style={{
+          ...sidebarWrapper,
+          transform: hidden ? "translateX(-120%)" : "translateX(0)",
+          opacity: hidden ? 0 : 1,
+          pointerEvents: hidden ? "none" : "auto"
+        }}
+      >
+        <div style={sidebar}>
+          <div style={topRow}>
+            <div style={logo}>PsicoFunnel</div>
 
-          <div style={{ minWidth: 0 }}>
-            <div style={{ ...brand, opacity: collapsed ? 0 : 1 }}>
-              PsicoFunnel
-              <span style={brandDot}>CRM</span>
-            </div>
-            <div style={{ ...tagline, opacity: collapsed ? 0 : 1 }}>
-              Focused pipeline & follow-ups
-            </div>
+            <button
+              type="button"
+              onClick={onToggle}
+              style={toggleBtn}
+              title="Hide sidebar"
+            >
+              ⟨
+            </button>
+          </div>
+
+          <div style={{ marginTop: "26px" }}>
+            {links.map(link => {
+              const active = location.pathname === link.path
+
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  style={{
+                    ...item,
+                    background: active
+                      ? "linear-gradient(135deg, rgba(20,92,67,0.92), rgba(30,122,87,0.92))"
+                      : "transparent",
+                    color: active ? "#ffffff" : "#0f3d2e",
+                    border: active ? "1px solid rgba(255,255,255,0.14)" : "1px solid transparent",
+                    boxShadow: active
+                      ? "0 12px 26px rgba(15,61,46,0.22)"
+                      : "none"
+                  }}
+                >
+                  <span style={linkLeft}>
+                    <span style={emoji}>{link.icon}</span>
+                    <span>{link.label}</span>
+                  </span>
+                </Link>
+              )
+            })}
           </div>
         </div>
-
-        <nav style={nav}>
-          {links.map((link) => {
-            const active = location.pathname === link.path
-            return (
-              <Link
-                key={link.path}
-                to={link.path}
-                style={{
-                  ...item,
-                  ...(active ? itemActive : {}),
-                  justifyContent: collapsed ? "center" : "space-between"
-                }}
-                title={collapsed ? link.label : ""}
-              >
-                <span style={left}>
-                  <span
-                    style={{
-                      ...icon,
-                      ...(active ? iconActive : {})
-                    }}
-                  >
-                    {link.emoji}
-                  </span>
-
-                  <span style={{ ...label, display: collapsed ? "none" : "inline" }}>
-                    {link.label}
-                  </span>
-                </span>
-
-                {!collapsed ? (
-                  <span style={{ ...chev, opacity: active ? 1 : 0.35 }}>›</span>
-                ) : null}
-              </Link>
-            )
-          })}
-        </nav>
-
-        <div style={bottom}>
-          {!collapsed ? (
-            <div style={hint}>
-              Tip: colapsá el sidebar para más espacio en iPad
-            </div>
-          ) : null}
-        </div>
       </div>
-    </aside>
+
+      {/* Floating button when hidden (PC + iPad) */}
+      {hidden && (
+        <button
+          type="button"
+          onClick={onToggle}
+          style={floatingOpen}
+          title="Show sidebar"
+        >
+          ☰
+        </button>
+      )}
+    </>
   )
 }
 
-/* ============ STYLES ============ */
+/* =====================
+   Styles
+===================== */
 
-const wrap = {
-  position: "fixed",
-  left: 0,
-  top: 0,
-  height: "100%",
-  padding: "18px 14px",
-  boxSizing: "border-box",
-  transition: "width 280ms cubic-bezier(.2,.8,.2,1)",
-  zIndex: 50
-}
-
-const panel = {
-  height: "100%",
-  borderRadius: 18, // sutil
-  background: "rgba(255,255,255,0.55)",
-  backdropFilter: "blur(32px)",
-  WebkitBackdropFilter: "blur(32px)",
-  border: "1px solid rgba(15,61,46,0.08)",
-  boxShadow: "0 18px 48px rgba(15,61,46,0.14)",
-  padding: "14px",
+const sidebarWrapper = {
+  width: "300px",                 // ✅ EXACTO
+  padding: "40px 20px",           // ✅ EXACTO
   display: "flex",
-  flexDirection: "column",
-  gap: 12,
-  overflow: "hidden"
+  justifyContent: "center",
+  position: "fixed",
+  top: 0,
+  left: 0,
+  height: "100vh",
+  zIndex: 50,
+  transition: "transform 240ms ease, opacity 180ms ease"
 }
 
-const top = {
+const sidebar = {
+  width: "260px",                 // ✅ EXACTO
+  height: "100%",
+  padding: "40px 25px",           // ✅ EXACTO
+  borderRadius: "32px",           // ✅ EXACTO (no lo toco)
+  /* ↓↓↓ Menos “plástico”: menos blanco lechoso + blur más bajo + borde más real */
+  background: "rgba(255,255,255,0.42)",
+  backdropFilter: "blur(22px)",
+  WebkitBackdropFilter: "blur(22px)",
+  border: "1px solid rgba(15,61,46,0.10)",
+  boxShadow: `
+    0 22px 46px rgba(15,61,46,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.45)
+  `
+}
+
+const topRow = {
   display: "flex",
   alignItems: "center",
-  gap: 10,
-  padding: "6px 6px 10px 6px",
-  borderBottom: "1px solid rgba(15,61,46,0.08)"
+  justifyContent: "space-between",
+  gap: 12
+}
+
+const logo = {
+  fontSize: "18px",               // ↓ un poco más pro (antes 20)
+  fontWeight: "800",
+  letterSpacing: "-0.2px",
+  color: "#0f3d2e"
 }
 
 const toggleBtn = {
   width: 34,
   height: 34,
-  borderRadius: 12, // menos redondo
-  border: "1px solid rgba(0,0,0,0.10)",
-  background: "rgba(255,255,255,0.75)",
+  borderRadius: 14,
+  border: "1px solid rgba(15,61,46,0.14)",
+  background: "rgba(255,255,255,0.55)",
+  backdropFilter: "blur(10px)",
   cursor: "pointer",
   fontWeight: 900,
-  color: "rgba(0,0,0,0.70)",
+  color: "rgba(15,61,46,0.75)",
   display: "grid",
-  placeItems: "center"
-}
-
-const brand = {
-  fontSize: 16, // antes grande -> más pro
-  fontWeight: 900,
-  color: "#0f3d2e",
-  letterSpacing: "-0.2px",
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  transition: "opacity 180ms ease"
-}
-
-const brandDot = {
-  marginLeft: 8,
-  fontSize: 11,
-  fontWeight: 900,
-  padding: "4px 8px",
-  borderRadius: 999,
-  background: "rgba(20,92,67,0.10)",
-  border: "1px solid rgba(20,92,67,0.18)",
-  color: "#145c43"
-}
-
-const tagline = {
-  marginTop: 4,
-  fontSize: 11,
-  fontWeight: 700,
-  color: "rgba(0,0,0,0.48)",
-  transition: "opacity 180ms ease"
-}
-
-const nav = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-  paddingTop: 6
+  placeItems: "center",
+  boxShadow: "0 10px 20px rgba(15,61,46,0.10)"
 }
 
 const item = {
+  display: "block",
+  padding: "14px 18px",           // ✅ EXACTO
+  marginBottom: "14px",           // ✅ EXACTO
+  borderRadius: "18px",           // ✅ EXACTO
+  textDecoration: "none",
+  fontSize: "13px",               // ↓ un toque más pro (antes 14)
+  fontWeight: "700",
+  transition: "all 0.22s ease"
+}
+
+const linkLeft = {
   display: "flex",
   alignItems: "center",
-  gap: 12,
-  padding: "10px 10px",
-  borderRadius: 14, // sutil
-  textDecoration: "none",
-  border: "1px solid transparent",
-  color: "rgba(0,0,0,0.70)",
-  fontWeight: 800,
-  fontSize: 13,
-  transition: "transform 160ms ease, background 160ms ease, border 160ms ease, box-shadow 160ms ease"
+  gap: 10
 }
 
-const itemActive = {
-  background: "linear-gradient(135deg, rgba(20,92,67,0.14), rgba(30,122,87,0.10))",
-  border: "1px solid rgba(20,92,67,0.22)",
-  boxShadow: "0 10px 24px rgba(15,61,46,0.10)",
-  transform: "translateY(-1px)"
-}
-
-const left = { display: "flex", alignItems: "center", gap: 10, minWidth: 0 }
-
-const icon = {
-  width: 30,
-  height: 30,
-  borderRadius: 12,
+const emoji = {
+  width: 26,
+  height: 26,
   display: "grid",
   placeItems: "center",
-  background: "rgba(255,255,255,0.75)",
-  border: "1px solid rgba(0,0,0,0.08)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8)"
+  borderRadius: 10,
+  background: "rgba(255,255,255,0.35)",
+  border: "1px solid rgba(15,61,46,0.08)"
 }
 
-const iconActive = {
-  background: "rgba(20,92,67,0.12)",
-  border: "1px solid rgba(20,92,67,0.18)"
-}
-
-const label = {
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  color: "rgba(0,0,0,0.72)"
-}
-
-const chev = {
-  fontSize: 16,
+/* Botón flotante para abrir */
+const floatingOpen = {
+  position: "fixed",
+  top: 18,
+  left: 18,
+  zIndex: 60,
+  width: 44,
+  height: 44,
+  borderRadius: 16,
+  border: "1px solid rgba(15,61,46,0.14)",
+  background: "rgba(255,255,255,0.58)",
+  backdropFilter: "blur(18px)",
+  WebkitBackdropFilter: "blur(18px)",
+  boxShadow: "0 18px 40px rgba(15,61,46,0.14)",
+  cursor: "pointer",
   fontWeight: 900,
-  color: "rgba(0,0,0,0.40)"
-}
-
-const bottom = {
-  marginTop: "auto",
-  paddingTop: 10,
-  borderTop: "1px solid rgba(15,61,46,0.08)"
-}
-
-const hint = {
-  fontSize: 11,
-  fontWeight: 700,
-  color: "rgba(0,0,0,0.48)",
-  lineHeight: 1.3
+  color: "#0f3d2e",
+  display: "grid",
+  placeItems: "center"
 }
