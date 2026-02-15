@@ -12,7 +12,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   ]
 
   return (
-    <div style={{ ...wrap, width: collapsed ? 92 : 300 }}>
+    <aside style={wrap}>
       <div style={{ ...side, width: collapsed ? 72 : 260 }}>
         <div style={top}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -27,12 +27,18 @@ export default function Sidebar({ collapsed, onToggle }) {
             </div>
           </div>
 
-          <button type="button" style={toggleBtn} onClick={onToggle} title="Toggle sidebar">
+          <button
+            type="button"
+            style={toggleBtn}
+            onClick={onToggle}
+            title="Toggle sidebar"
+            aria-label="Toggle sidebar"
+          >
             {collapsed ? "⟩" : "⟨"}
           </button>
         </div>
 
-        <div style={{ marginTop: 18 }}>
+        <nav style={{ marginTop: 18 }}>
           {links.map((link) => {
             const active = location.pathname === link.path
 
@@ -67,16 +73,28 @@ export default function Sidebar({ collapsed, onToggle }) {
               </Link>
             )
           })}
-        </div>
+        </nav>
 
         <div style={bottom}>
           <div style={{ ...hint, display: collapsed ? "none" : "block" }}>
             Tips: usá “Customize” para columnas
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: collapsed ? "center" : "space-between" }}>
-            <div style={{ ...userPill, justifyContent: collapsed ? "center" : "space-between" }}>
-              <span style={avatar}>•</span>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "space-between"
+            }}
+          >
+            <div
+              style={{
+                ...userPill,
+                justifyContent: collapsed ? "center" : "space-between"
+              }}
+            >
+              <span style={avatar} />
               <span style={{ ...userText, display: collapsed ? "none" : "block" }}>
                 Online
               </span>
@@ -84,7 +102,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           </div>
         </div>
       </div>
-    </div>
+    </aside>
   )
 }
 
@@ -92,16 +110,23 @@ export default function Sidebar({ collapsed, onToggle }) {
    STYLES
 ===================== */
 
+/**
+ * CLAVE:
+ * - el wrap ocupa SIEMPRE el 100% de la columna del Layout
+ * - y el "side" se pega a la izquierda (no se centra raro)
+ */
 const wrap = {
+  width: "100%",
+  height: "100vh",
   padding: "18px 14px",
   display: "flex",
-  justifyContent: "center",
-  position: "relative",
-  zIndex: 2
+  alignItems: "stretch",
+  justifyContent: "flex-start", // <- FIX: no lo centres
+  boxSizing: "border-box"
 }
 
 const side = {
-  height: "calc(100vh - 36px)",
+  height: "100%",
   borderRadius: 20,
   background: "linear-gradient(180deg, rgba(16,24,22,0.72), rgba(12,18,17,0.78))",
   border: "1px solid rgba(255,255,255,0.10)",
@@ -110,7 +135,8 @@ const side = {
   WebkitBackdropFilter: "blur(16px)",
   padding: "16px 12px",
   display: "flex",
-  flexDirection: "column"
+  flexDirection: "column",
+  boxSizing: "border-box"
 }
 
 const top = {
