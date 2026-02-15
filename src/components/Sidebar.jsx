@@ -1,356 +1,316 @@
 import { Link, useLocation } from "react-router-dom"
 import { useMemo } from "react"
 
-const T = {
-  // Glass base
-  glassA: "rgba(255,255,255,0.12)",
-  glassB: "rgba(255,255,255,0.07)",
-  borderA: "rgba(255,255,255,0.18)",
-  borderB: "rgba(0,0,0,0.25)",
-  ink: "rgba(255,255,255,0.92)",
-  ink2: "rgba(255,255,255,0.78)",
-  ink3: "rgba(255,255,255,0.60)",
-
-  // Verde inglés (premium)
-  accent: "#1FAE7A",
-  accentDeep: "#145C43",
-  accentInk: "#0B241C",
-  accentSoft: "rgba(31,174,122,0.18)",
-  accentSoft2: "rgba(31,174,122,0.26)",
-
-  // Sombras (controladas)
-  shadow: "0 26px 70px rgba(0,0,0,0.35)",
-  shadow2: "0 14px 34px rgba(0,0,0,0.26)"
-}
-
 export default function Sidebar({ isMobile, open, onToggle, onClose, onOpen }) {
   const location = useLocation()
 
   const links = [
-    { path: "/dashboard", label: "Overview", icon: "🏠" },
-    { path: "/companies", label: "Companies", icon: "🏢" },
-    { path: "/leads", label: "Leads", icon: "👤" },
-    { path: "/pipeline", label: "Pipeline", icon: "📌" },
-    { path: "/calendar", label: "Calendar", icon: "🗓️" }
+    { path: "/dashboard", label: "Dashboard" },
+    { path: "/companies", label: "Companies" },
+    { path: "/leads", label: "Leads" },
+    { path: "/pipeline", label: "Pipeline" },
+    { path: "/calendar", label: "Calendar" }
   ]
 
-  const isCollapsedDesktop = !isMobile && !open
+  const activePath = location.pathname
 
-  const wrapperStyle = useMemo(() => {
-    if (isMobile) {
-      return {
-        ...sidebarWrapperMobile,
-        transform: open ? "translateX(0)" : "translateX(-110%)"
-      }
-    }
-    return { ...sidebarWrapper, width: isCollapsedDesktop ? "110px" : "282px" }
-  }, [isMobile, open, isCollapsedDesktop])
-
-  const panelStyle = useMemo(() => {
-    if (isMobile) return sidebarMobile
-    return {
-      ...sidebar,
-      width: isCollapsedDesktop ? "86px" : "258px",
-      padding: isCollapsedDesktop ? "18px 10px" : "20px 14px"
-    }
-  }, [isMobile, isCollapsedDesktop])
+  const shellStyle = useMemo(() => {
+    return isMobile ? topbarMobileShell : topbarShell
+  }, [isMobile])
 
   return (
     <>
-      {isMobile && open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
-
-      <div style={wrapperStyle}>
-        <div style={panelStyle}>
-          {/* Sheen line top */}
-          <div aria-hidden="true" style={sheenTop} />
-          {/* Inner grain */}
-          <div aria-hidden="true" style={innerGrain} />
-
-          <div style={topRow}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <div style={brandMark}>
-                <span style={brandDot} />
-              </div>
-
-              {!isCollapsedDesktop ? (
-                <div style={logoWrap}>
-                  <div style={logo}>PsicoFunnel</div>
-                  <div style={logoSub}>Sales Workspace</div>
-                </div>
-              ) : null}
-            </div>
-
+      {/* Topbar */}
+      <div style={shellStyle}>
+        <div style={topbarInner}>
+          <div style={brandRow}>
             {isMobile ? (
-              <button type="button" style={iconBtn} onClick={onClose} aria-label="Close menu">
-                ✕
-              </button>
-            ) : (
               <button
                 type="button"
                 style={iconBtn}
-                onClick={() => (isCollapsedDesktop ? onOpen?.() : onToggle?.())}
-                aria-label="Toggle sidebar"
-                title={isCollapsedDesktop ? "Expand" : "Collapse"}
+                onClick={() => (open ? onClose?.() : onOpen?.())}
+                aria-label="Open menu"
+                title="Menu"
               >
-                {isCollapsedDesktop ? "→" : "←"}
+                ☰
               </button>
-            )}
-          </div>
+            ) : null}
 
-          <div style={{ marginTop: isCollapsedDesktop ? 16 : 18 }}>
-            {links.map((link) => {
-              const active = location.pathname === link.path
-
-              return (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  onClick={() => {
-                    if (isMobile) onClose?.()
-                  }}
-                  style={{
-                    ...item,
-                    ...(isCollapsedDesktop ? itemCollapsed : {}),
-                    ...(active ? itemActive : {}),
-                    color: active ? T.ink : T.ink2
-                  }}
-                >
-                  <span style={{ ...itemIconWrap, ...(active ? itemIconWrapActive : {}) }}>
-                    <span style={itemIcon}>{link.icon}</span>
-                  </span>
-
-                  {!isCollapsedDesktop ? (
-                    <span style={itemLabel}>{link.label}</span>
-                  ) : null}
-                </Link>
-              )
-            })}
-          </div>
-
-          {!isCollapsedDesktop ? (
-            <div style={footerHint}>
-              <div style={hintTitle}>Tip</div>
-              <div style={hintText}>Arrastrá leads en Pipeline y usá el menú colapsado para foco.</div>
+            <div style={brandMark} aria-hidden="true" />
+            <div style={brandText}>
+              <div style={brandName}>PsicoFunnel</div>
+              <div style={brandSub}>CRM</div>
             </div>
-          ) : null}
+          </div>
+
+          {/* Links desktop */}
+          {!isMobile ? (
+            <nav style={nav}>
+              {links.map((l) => {
+                const active = activePath === l.path
+                return (
+                  <Link
+                    key={l.path}
+                    to={l.path}
+                    style={{
+                      ...navLink,
+                      ...(active ? navLinkActive : null)
+                    }}
+                  >
+                    {l.label}
+                  </Link>
+                )
+              })}
+            </nav>
+          ) : (
+            <div style={{ flex: 1 }} />
+          )}
+
+          {/* Acciones derecha */}
+          <div style={rightActions}>
+            <button type="button" style={iconBtn} aria-label="Search" title="Search">
+              ⌕
+            </button>
+            <button type="button" style={iconBtn} aria-label="Theme" title="Theme">
+              ◐
+            </button>
+            <div style={avatar} title="Profile" />
+          </div>
         </div>
       </div>
+
+      {/* Drawer mobile */}
+      {isMobile ? (
+        <>
+          {open ? <div style={overlay} onClick={onClose} aria-hidden="true" /> : null}
+
+          <div
+            style={{
+              ...drawer,
+              transform: open ? "translateX(0)" : "translateX(-110%)"
+            }}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div style={drawerHead}>
+              <div style={drawerTitle}>Menu</div>
+              <button type="button" style={iconBtn} onClick={onClose} aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            <div style={drawerList}>
+              {links.map((l) => {
+                const active = activePath === l.path
+                return (
+                  <Link
+                    key={l.path}
+                    to={l.path}
+                    onClick={() => onClose?.()}
+                    style={{
+                      ...drawerLink,
+                      ...(active ? drawerLinkActive : null)
+                    }}
+                  >
+                    {l.label}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      ) : null}
     </>
   )
 }
 
-/* ========== STYLES ========== */
+/* ================= STYLES ================= */
 
-const sidebarWrapper = {
-  padding: "18px 14px",
-  display: "flex",
-  justifyContent: "center",
-  transition: "width 220ms ease"
-}
-
-const sidebarWrapperMobile = {
+const topbarShell = {
   position: "fixed",
   top: 0,
   left: 0,
-  bottom: 0,
-  width: "320px",
-  padding: "14px 12px",
-  display: "flex",
-  justifyContent: "flex-start",
+  right: 0,
   zIndex: 60,
-  transition: "transform 220ms ease"
+  height: 72,
+  padding: "12px 18px",
+  background:
+    "linear-gradient(180deg, rgba(244,251,248,0.80), rgba(244,251,248,0.60))",
+  borderBottom: "1px solid rgba(15,61,46,0.10)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)"
 }
+
+const topbarMobileShell = {
+  ...topbarShell,
+  height: 68,
+  padding: "10px 12px"
+}
+
+const topbarInner = {
+  height: "100%",
+  maxWidth: 1200,
+  margin: "0 auto",
+  borderRadius: 16,
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.45))",
+  border: "1px solid rgba(15,61,46,0.10)",
+  boxShadow: "0 18px 50px rgba(15,61,46,0.10)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "10px 12px",
+  gap: 12
+}
+
+const brandRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  minWidth: 220
+}
+
+const brandMark = {
+  width: 28,
+  height: 28,
+  borderRadius: 10,
+  background:
+    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0) 55%), rgba(20,92,67,0.22)",
+  border: "1px solid rgba(20,92,67,0.18)"
+}
+
+const brandText = { display: "flex", flexDirection: "column", lineHeight: 1.1 }
+const brandName = {
+  fontWeight: 900,
+  letterSpacing: 0.2,
+  color: "#0f3d2e",
+  fontSize: 14
+}
+const brandSub = {
+  fontWeight: 800,
+  color: "rgba(15,61,46,0.55)",
+  fontSize: 11,
+  marginTop: 2
+}
+
+const nav = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: 6,
+  borderRadius: 999,
+  background: "rgba(15,61,46,0.06)",
+  border: "1px solid rgba(15,61,46,0.08)"
+}
+
+const navLink = {
+  textDecoration: "none",
+  color: "rgba(15,61,46,0.70)",
+  fontWeight: 900,
+  fontSize: 12,
+  padding: "9px 12px",
+  borderRadius: 999,
+  transition: "background 160ms ease, color 160ms ease"
+}
+
+const navLinkActive = {
+  background: "rgba(20,92,67,0.14)",
+  color: "#0f3d2e"
+}
+
+const rightActions = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8
+}
+
+const iconBtn = {
+  width: 38,
+  height: 38,
+  borderRadius: 12,
+  border: "1px solid rgba(15,61,46,0.10)",
+  background: "rgba(255,255,255,0.55)",
+  cursor: "pointer",
+  fontWeight: 900,
+  color: "rgba(15,61,46,0.85)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+  boxShadow: "0 10px 24px rgba(15,61,46,0.08)",
+  transition: "transform 120ms ease"
+}
+
+const avatar = {
+  width: 34,
+  height: 34,
+  borderRadius: 999,
+  border: "1px solid rgba(15,61,46,0.12)",
+  background:
+    "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0) 55%), rgba(20,92,67,0.18)"
+}
+
+/* Drawer */
 
 const overlay = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.42)",
-  backdropFilter: "blur(4px)",
-  WebkitBackdropFilter: "blur(4px)",
-  zIndex: 55
+  background: "rgba(0,0,0,0.30)",
+  backdropFilter: "blur(3px)",
+  WebkitBackdropFilter: "blur(3px)",
+  zIndex: 65
 }
 
-const sidebar = {
-  position: "relative",
-  height: "100%",
-  borderRadius: "24px",
-  background: `
-    linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06))
-  `,
-  border: "1px solid rgba(255,255,255,0.16)",
-  boxShadow: "0 28px 80px rgba(0,0,0,0.38)",
-  backdropFilter: "blur(22px)",
-  WebkitBackdropFilter: "blur(22px)",
-  transition: "width 220ms ease, padding 220ms ease",
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden"
+const drawer = {
+  position: "fixed",
+  top: 84,
+  left: 12,
+  width: 280,
+  maxWidth: "calc(100vw - 24px)",
+  borderRadius: 18,
+  zIndex: 70,
+  padding: 12,
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.52))",
+  border: "1px solid rgba(15,61,46,0.12)",
+  boxShadow: "0 22px 60px rgba(0,0,0,0.22)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  transition: "transform 200ms ease"
 }
 
-const sidebarMobile = {
-  ...sidebar,
-  width: "100%",
-  padding: "18px 14px"
-}
-
-const sheenTop = {
-  position: "absolute",
-  left: -60,
-  right: -60,
-  top: -60,
-  height: 140,
-  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)",
-  transform: "rotate(-10deg)",
-  opacity: 0.55,
-  pointerEvents: "none"
-}
-
-const innerGrain = {
-  position: "absolute",
-  inset: 0,
-  pointerEvents: "none",
-  opacity: 0.12,
-  backgroundImage: `
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 3px),
-    repeating-linear-gradient(90deg, rgba(0,0,0,0.018) 0, rgba(0,0,0,0.018) 1px, transparent 1px, transparent 3px)
-  `,
-  mixBlendMode: "overlay"
-}
-
-const topRow = {
-  position: "relative",
-  zIndex: 2,
+const drawerHead = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: 10
-}
-
-const brandMark = {
-  width: 30,
-  height: 30,
-  borderRadius: 12,
-  background: "rgba(31,174,122,0.14)",
-  border: "1px solid rgba(31,174,122,0.26)",
-  display: "grid",
-  placeItems: "center",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.22)"
-}
-
-const brandDot = {
-  width: 10,
-  height: 10,
-  borderRadius: 999,
-  background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(255,255,255,0.0) 55%), #1FAE7A",
-  boxShadow: "0 10px 18px rgba(31,174,122,0.26)"
-}
-
-const logoWrap = { minWidth: 0 }
-const logo = {
-  fontSize: 15,
-  fontWeight: 900,
-  letterSpacing: 0.25,
-  color: "rgba(255,255,255,0.92)",
-  lineHeight: 1.1
-}
-const logoSub = {
-  fontSize: 11,
-  fontWeight: 700,
-  color: "rgba(255,255,255,0.62)",
-  marginTop: 2,
-  letterSpacing: 0.2
-}
-
-const iconBtn = {
-  width: 36,
-  height: 36,
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(255,255,255,0.10)",
-  boxShadow: "0 14px 30px rgba(0,0,0,0.26)",
-  cursor: "pointer",
-  fontWeight: 900,
-  color: "rgba(255,255,255,0.90)",
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)"
-}
-
-const item = {
-  position: "relative",
-  zIndex: 2,
-  display: "flex",
-  alignItems: "center",
   gap: 10,
-  padding: "11px 12px",
-  marginBottom: "10px",
-  borderRadius: "14px",
+  paddingBottom: 10,
+  borderBottom: "1px solid rgba(15,61,46,0.10)"
+}
+
+const drawerTitle = {
+  fontWeight: 950,
+  color: "#0f3d2e"
+}
+
+const drawerList = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  paddingTop: 10
+}
+
+const drawerLink = {
   textDecoration: "none",
-  fontSize: "13px",
-  fontWeight: 800,
-  border: "1px solid rgba(255,255,255,0.0)",
-  background: "transparent",
-  transition: "transform 140ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease"
-}
-
-const itemCollapsed = {
-  justifyContent: "center",
-  padding: "11px 10px"
-}
-
-const itemActive = {
-  background: `
-    linear-gradient(180deg, rgba(31,174,122,0.18), rgba(31,174,122,0.10))
-  `,
-  borderColor: "rgba(31,174,122,0.26)",
-  boxShadow: "0 16px 36px rgba(0,0,0,0.18)"
-}
-
-const itemIconWrap = {
-  width: 34,
-  height: 34,
-  borderRadius: 12,
-  display: "grid",
-  placeItems: "center",
-  background: "rgba(255,255,255,0.08)",
-  border: "1px solid rgba(255,255,255,0.12)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)"
-}
-
-const itemIconWrapActive = {
-  background: "rgba(31,174,122,0.16)",
-  border: "1px solid rgba(31,174,122,0.26)"
-}
-
-const itemIcon = {
-  fontSize: 15,
-  filter: "saturate(1.05)",
-  transform: "translateY(-0.5px)"
-}
-
-const itemLabel = {
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis"
-}
-
-const footerHint = {
-  position: "relative",
-  zIndex: 2,
-  marginTop: "auto",
-  paddingTop: 14,
-  borderTop: "1px solid rgba(255,255,255,0.10)"
-}
-
-const hintTitle = {
-  fontSize: 11,
+  color: "rgba(15,61,46,0.80)",
   fontWeight: 900,
-  color: "rgba(31,174,122,0.92)",
-  marginBottom: 6,
-  letterSpacing: 0.25
+  fontSize: 13,
+  padding: "10px 12px",
+  borderRadius: 14,
+  border: "1px solid transparent",
+  background: "transparent"
 }
 
-const hintText = {
-  fontSize: 12,
-  color: "rgba(255,255,255,0.62)",
-  lineHeight: 1.35
+const drawerLinkActive = {
+  background: "rgba(20,92,67,0.12)",
+  border: "1px solid rgba(20,92,67,0.18)",
+  color: "#0f3d2e"
 }
