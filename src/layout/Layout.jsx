@@ -1,104 +1,70 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Sidebar from "../components/Sidebar"
 
 export default function Layout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
 
-  // En pantallas chicas arrancamos cerrado para dar espacio (iPad incluido)
+  // Auto-colapsa en pantallas chicas (iPad), pero en desktop se puede toggle igual
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1024px)")
-    const apply = () => setSidebarOpen(!mq.matches)
-    apply()
-    mq.addEventListener?.("change", apply)
-    return () => mq.removeEventListener?.("change", apply)
+    const onResize = () => {
+      const w = window.innerWidth
+      if (w <= 980) setCollapsed(true)
+    }
+    onResize()
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
   }, [])
+
+  const sidebarWidth = collapsed ? 88 : 280
+
+  const contentStyle = useMemo(
+    () => ({
+      ...content,
+      padding: collapsed ? "44px 34px" : "52px 56px"
+    }),
+    [collapsed]
+  )
 
   return (
     <div style={app}>
-      <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((s) => !s)} />
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
 
       <div
         style={{
-          ...content,
-          paddingLeft: sidebarOpen ? 28 : 18
+          ...shell,
+          paddingLeft: sidebarWidth
         }}
       >
-        {/* Top bar minimal para toggle también en desktop */}
-        <div style={topBar}>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((s) => !s)}
-            style={iconBtn}
-            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-          >
-            {sidebarOpen ? "⟨" : "⟩"}
-          </button>
-
-          <div style={topHint}>CRM</div>
-        </div>
-
-        <div style={pageWrap}>{children}</div>
+        <div style={contentStyle}>{children}</div>
       </div>
     </div>
   )
 }
 
 const app = {
-  display: "flex",
+  position: "relative",
   height: "100vh",
   width: "100vw",
   overflow: "hidden",
   fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
   background: `
-    radial-gradient(circle at 10% 10%, rgba(30,122,87,0.12), transparent 40%),
-    radial-gradient(circle at 90% 90%, rgba(15,61,46,0.12), transparent 40%),
-    linear-gradient(135deg, #f7fbf9 0%, #eef7f2 50%, #f7fbf9 100%)
+    radial-gradient(circle at 10% 10%, rgba(30,122,87,0.18), transparent 42%),
+    radial-gradient(circle at 90% 90%, rgba(15,61,46,0.16), transparent 44%),
+    linear-gradient(135deg, #f4fbf8 0%, #e9f6f0 50%, #f4fbf8 100%)
   `
 }
 
+// “capa” para permitir sidebar fixed y contenido fluido
+const shell = {
+  position: "relative",
+  height: "100%",
+  width: "100%",
+  overflow: "hidden",
+  transition: "padding-left 280ms cubic-bezier(.2,.8,.2,1)"
+}
+
 const content = {
-  flex: 1,
+  height: "100%",
   overflowY: "auto",
-  padding: "22px 28px",
-  transition: "padding 220ms ease"
-}
-
-const topBar = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  position: "sticky",
-  top: 0,
-  zIndex: 20,
-  padding: "10px 0 14px 0",
-  background: "transparent"
-}
-
-const iconBtn = {
-  width: 36,
-  height: 32,
-  borderRadius: 12, // ✅ sutil
-  border: "1px solid rgba(0,0,0,0.10)",
-  background: "rgba(255,255,255,0.65)",
-  backdropFilter: "blur(18px)",
-  WebkitBackdropFilter: "blur(18px)",
-  fontWeight: 800,
-  cursor: "pointer",
-  color: "rgba(0,0,0,0.70)",
-  lineHeight: "32px"
-}
-
-const topHint = {
-  fontSize: 12,
-  fontWeight: 800,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "rgba(0,0,0,0.45)"
-}
-
-const pageWrap = {
-  maxWidth: 1200,
-  margin: "0 auto",
-  paddingBottom: 22
+  transition: "padding 280ms cubic-bezier(.2,.8,.2,1)"
 }
