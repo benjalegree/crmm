@@ -4,126 +4,49 @@ import Sidebar from "../components/Sidebar"
 export default function Layout({ children }) {
   const [collapsed, setCollapsed] = useState(false)
 
-  // En pantallas chicas arrancamos colapsado (iPad / laptops chicas)
+  // Auto-collapse en pantallas chicas (iPad)
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1100px)")
-    const apply = () => setCollapsed(mq.matches)
-    apply()
-    mq.addEventListener?.("change", apply)
-    return () => mq.removeEventListener?.("change", apply)
+    const onResize = () => {
+      const w = window.innerWidth
+      if (w < 1100) setCollapsed(true)
+    }
+    onResize()
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
   }, [])
 
   return (
     <div style={app}>
-      {/* Sidebar ocupa espacio REAL */}
-      <div style={{ ...sidebarCol, width: collapsed ? 92 : 300 }}>
-        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((s) => !s)} />
-      </div>
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((s) => !s)} />
 
-      {/* Content centrado */}
-      <div style={contentCol}>
-        <div style={topbar}>
-          <button
-            type="button"
-            onClick={() => setCollapsed((s) => !s)}
-            style={iconBtn}
-            aria-label="Toggle sidebar"
-            title="Toggle sidebar"
-          >
-            {collapsed ? "☰" : "⟨"}
-          </button>
-
-          <div style={topbarRight}>
-            <span style={topHint}>PsicoFunnel CRM</span>
-          </div>
-        </div>
-
-        <div style={scrollArea}>
-          <div style={pageWrap}>
-            {children}
-          </div>
-        </div>
-      </div>
+      <main
+        style={{
+          ...content,
+          paddingLeft: collapsed ? 26 : 8
+        }}
+      >
+        {children}
+      </main>
     </div>
   )
 }
 
-/* =====================
-   STYLES
-===================== */
-
 const app = {
-  position: "relative",
-  zIndex: 1,
   display: "flex",
   height: "100vh",
   width: "100vw",
   overflow: "hidden",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
+  background: `
+    radial-gradient(circle at 15% 10%, rgba(30,122,87,0.10), transparent 45%),
+    radial-gradient(circle at 85% 90%, rgba(15,61,46,0.10), transparent 45%),
+    linear-gradient(180deg, #f6fbf8 0%, #eef7f2 55%, #f6fbf8 100%)
+  `
 }
 
-/* Columna sidebar */
-const sidebarCol = {
-  height: "100vh",
-  flex: "0 0 auto"
-}
-
-/* Columna contenido */
-const contentCol = {
+const content = {
   flex: 1,
-  height: "100vh",
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden"
-}
-
-const topbar = {
-  height: 58,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "0 18px",
-  borderBottom: "1px solid var(--line)",
-  background: "rgba(10,14,13,0.55)",
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)"
-}
-
-const topbarRight = {
-  display: "flex",
-  alignItems: "center",
-  gap: 12
-}
-
-const topHint = {
-  fontSize: 12,
-  fontWeight: 800,
-  color: "var(--muted)"
-}
-
-const iconBtn = {
-  width: 38,
-  height: 38,
-  borderRadius: 12,
-  border: "1px solid var(--line)",
-  background: "rgba(255,255,255,0.04)",
-  color: "var(--text)",
-  cursor: "pointer",
-  fontWeight: 900,
-  lineHeight: "38px",
-  textAlign: "center",
-  boxShadow: "0 10px 26px rgba(0,0,0,0.25)"
-}
-
-const scrollArea = {
-  flex: 1,
-  overflow: "auto",
-  padding: "26px 26px 34px"
-}
-
-/* Centro real (esto es lo que te faltaba) */
-const pageWrap = {
-  maxWidth: 1280,
-  width: "100%",
-  margin: "0 auto"
+  padding: "56px 64px",
+  overflowY: "auto",
+  boxSizing: "border-box"
 }
