@@ -51,7 +51,6 @@ export default function Dashboard() {
   const normalizeOutcome = (a) => {
     const f = a?.fields || {}
     const raw = (f.Outcome ?? f["Activity Type"] ?? "").toString().trim().toLowerCase()
-
     if (raw.includes("call")) return "Call"
     if (raw.includes("email")) return "Email"
     if (raw.includes("meeting")) return "Meeting"
@@ -97,7 +96,6 @@ export default function Dashboard() {
       f["Lead"],
       f["Full Name"]
     ]
-
     for (const c of candidates) {
       if (!c) continue
       if (Array.isArray(c) && c.length) return String(c[0] || "").trim() || "Contact"
@@ -201,7 +199,9 @@ export default function Dashboard() {
 
   const recentActivities = useMemo(() => {
     const list = [...calendarSafe]
-    list.sort((a, b) => parseDateMs(b?.fields?.["Activity Date"]) - parseDateMs(a?.fields?.["Activity Date"]))
+    list.sort(
+      (a, b) => parseDateMs(b?.fields?.["Activity Date"]) - parseDateMs(a?.fields?.["Activity Date"])
+    )
     return list
   }, [calendarSafe])
 
@@ -248,6 +248,7 @@ export default function Dashboard() {
     } else {
       maxVal = Math.max(0, ...weeklyChartData.map((d) => Number(d.value || 0)))
     }
+
     const top = Math.max(10, Math.ceil(maxVal / 5) * 5)
     const ticks = []
     for (let t = 0; t <= top; t += 5) ticks.push(t)
@@ -327,12 +328,7 @@ export default function Dashboard() {
                   barCategoryGap={14}
                   barGap={6}
                 >
-                  <CartesianGrid
-                    stroke="rgba(15,61,46,0.10)"
-                    strokeDasharray="0"
-                    vertical
-                    horizontal
-                  />
+                  <CartesianGrid stroke="rgba(15,61,46,0.10)" strokeDasharray="0" vertical horizontal />
 
                   <XAxis
                     dataKey="name"
@@ -351,12 +347,7 @@ export default function Dashboard() {
                     style={axisFont}
                   />
 
-                  <Tooltip
-                    cursor={false}
-                    contentStyle={tooltipStyle}
-                    labelStyle={tooltipLabel}
-                    itemStyle={tooltipItem}
-                  />
+                  <Tooltip cursor={false} contentStyle={tooltipStyle} labelStyle={tooltipLabel} itemStyle={tooltipItem} />
 
                   {chartFilter === "All" ? (
                     <>
@@ -417,15 +408,12 @@ export default function Dashboard() {
 
                   return (
                     <div key={a.id} style={taskRow}>
-                      <div style={taskLeft}>
-                        <div style={taskTopLine}>
-                          <div style={taskType}>{outcome}</div>
-                          <div style={taskDate}>{dateOnly}</div>
-                        </div>
-
-                        <div style={taskContact}>{contact}</div>
-                        <div style={taskNote}>{note || "—"}</div>
+                      <div style={taskTopLine}>
+                        <div style={taskType}>{outcome}</div>
+                        <div style={taskDate}>{dateOnly}</div>
                       </div>
+                      <div style={taskContact}>{contact}</div>
+                      <div style={taskNote}>{note || "—"}</div>
                     </div>
                   )
                 })}
@@ -451,14 +439,9 @@ function StatCard({ title, value }) {
 
 const FONT = "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
 
-const page = { width: "100%", fontFamily: FONT, color: "#0f3d2e" }
+const page = { width: "100%", fontFamily: FONT }
 
-const loadingText = {
-  padding: 20,
-  fontWeight: 900,
-  color: "#0f3d2e",
-  fontFamily: FONT
-}
+const loadingText = { padding: 20, fontWeight: 900, color: "#0f3d2e", fontFamily: FONT }
 
 const topRow = {
   display: "flex",
@@ -469,104 +452,42 @@ const topRow = {
   marginBottom: 16
 }
 
-const title = {
-  margin: 0,
-  fontSize: 32,
-  fontWeight: 950,
-  color: "#0f3d2e",
-  fontFamily: FONT,
-  letterSpacing: 0.2
-}
+const title = { margin: 0, fontSize: 30, fontWeight: 950, color: "#0f3d2e", letterSpacing: 0.2, fontFamily: FONT }
 
-const subtitle = {
-  marginTop: 6,
-  color: "rgba(15,61,46,0.55)",
-  fontWeight: 750,
-  fontFamily: FONT
-}
+const subtitle = { marginTop: 6, color: "rgba(15,61,46,0.55)", fontWeight: 750, fontFamily: FONT }
 
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: 14,
-  marginTop: 12
-}
+const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginTop: 12 }
 
-const bottomGrid = {
-  display: "grid",
-  gridTemplateColumns: "2fr 1fr",
-  gap: 14,
-  marginTop: 14,
-  alignItems: "stretch"
-}
+const bottomGrid = { display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, marginTop: 14, alignItems: "stretch" }
 
-/* Glass sutil (NO plástico): blur moderado + borde finito + sombra suave */
+/* soft-glass (clave: blur moderado + bordes dobles suaves) */
 const glass = {
-  background: "linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.44))",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.66), rgba(255,255,255,0.46))",
   border: "1px solid rgba(15,61,46,0.10)",
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)",
-  boxShadow: "0 18px 50px rgba(15,61,46,0.10)"
+  boxShadow: "0 18px 50px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.60)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)"
 }
 
-const card = {
-  ...glass,
-  borderRadius: 18,
-  padding: 18,
-  fontFamily: FONT,
-  minHeight: 92
-}
+const card = { ...glass, borderRadius: 18, padding: 18, minHeight: 92 }
 
 const cardLabel = {
   fontSize: 12,
   fontWeight: 950,
   color: "rgba(15,61,46,0.70)",
   textTransform: "uppercase",
-  letterSpacing: "0.35px",
-  fontFamily: FONT
+  letterSpacing: "0.35px"
 }
 
-const cardValue = {
-  marginTop: 10,
-  fontSize: 36,
-  fontWeight: 980,
-  color: "#0f3d2e",
-  lineHeight: 1.05,
-  fontFamily: FONT
-}
+const cardValue = { marginTop: 10, fontSize: 36, fontWeight: 980, color: "#0f3d2e", lineHeight: 1.05 }
 
-const panel = {
-  ...glass,
-  borderRadius: 18,
-  padding: 18,
-  fontFamily: FONT,
-  display: "flex",
-  flexDirection: "column",
-  minHeight: 420
-}
+const panel = { ...glass, borderRadius: 18, padding: 18, display: "flex", flexDirection: "column", minHeight: 420 }
 
-const panelHead = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap"
-}
+const panelHead = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }
 
-const panelTitle = {
-  fontSize: 13,
-  fontWeight: 980,
-  color: "#0f3d2e",
-  fontFamily: FONT
-}
+const panelTitle = { fontSize: 13, fontWeight: 980, color: "#0f3d2e" }
 
-const panelSub = {
-  marginTop: 4,
-  fontSize: 12,
-  fontWeight: 750,
-  color: "rgba(15,61,46,0.55)",
-  fontFamily: FONT
-}
+const panelSub = { marginTop: 4, fontSize: 12, fontWeight: 750, color: "rgba(15,61,46,0.55)" }
 
 const segmented = {
   display: "flex",
@@ -586,29 +507,14 @@ const segBtn = {
   fontWeight: 950,
   fontSize: 12,
   color: "rgba(15,61,46,0.65)",
-  fontFamily: FONT,
   transition: "all 160ms ease"
 }
 
-const segBtnActive = {
-  background: "rgba(20,92,67,0.12)",
-  border: "1px solid rgba(20,92,67,0.14)",
-  color: "#0f3d2e"
-}
+const segBtnActive = { background: "rgba(20,92,67,0.12)", border: "1px solid rgba(20,92,67,0.14)", color: "#0f3d2e" }
 
-const chartWrap = {
-  marginTop: 14,
-  borderRadius: 16,
-  border: "1px solid rgba(15,61,46,0.10)",
-  background: "rgba(255,255,255,0.40)",
-  padding: 14
-}
+const chartWrap = { marginTop: 14, borderRadius: 16, border: "1px solid rgba(15,61,46,0.10)", background: "rgba(255,255,255,0.40)", padding: 14 }
 
-const axisFont = {
-  fontFamily: FONT,
-  fontWeight: 900,
-  fontSize: 12
-}
+const axisFont = { fontFamily: FONT, fontWeight: 900, fontSize: 12 }
 
 const tooltipStyle = {
   borderRadius: 14,
@@ -616,86 +522,28 @@ const tooltipStyle = {
   background: "rgba(255,255,255,0.92)",
   backdropFilter: "blur(10px)",
   WebkitBackdropFilter: "blur(10px)",
-  color: "#0f3d2e",
-  boxShadow: "0 18px 40px rgba(15,61,46,0.12)",
-  fontFamily: FONT
+  boxShadow: "0 18px 40px rgba(15,61,46,0.12)"
 }
-const tooltipLabel = { fontWeight: 950, fontFamily: FONT }
-const tooltipItem = { fontWeight: 850, fontFamily: FONT }
+const tooltipLabel = { fontWeight: 950 }
+const tooltipItem = { fontWeight: 850 }
 
-const activityPanelBody = {
-  marginTop: 14,
-  flex: 1,
-  minHeight: 320,
-  maxHeight: 320,
-  overflowY: "auto",
-  paddingRight: 6
-}
+const activityPanelBody = { marginTop: 14, flex: 1, minHeight: 320, maxHeight: 320, overflowY: "auto", paddingRight: 6 }
 
-const tasksList = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 10
-}
+const tasksList = { display: "flex", flexDirection: "column", gap: 10 }
 
-const taskRow = {
-  borderRadius: 16,
-  border: "1px solid rgba(15,61,46,0.10)",
-  background: "rgba(255,255,255,0.52)",
-  padding: 12
-}
+const taskRow = { borderRadius: 16, border: "1px solid rgba(15,61,46,0.10)", background: "rgba(255,255,255,0.52)", padding: 12 }
 
-const taskLeft = { minWidth: 0, flex: 1 }
+const taskTopLine = { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }
 
-const taskTopLine = {
-  display: "flex",
-  alignItems: "baseline",
-  justifyContent: "space-between",
-  gap: 10
-}
+const taskType = { fontWeight: 980, color: "#0f3d2e", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.35px" }
 
-const taskType = {
-  fontWeight: 980,
-  color: "#0f3d2e",
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: "0.35px"
-}
+const taskContact = { marginTop: 8, fontWeight: 900, color: "rgba(15,61,46,0.70)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
 
-const taskContact = {
-  marginTop: 8,
-  fontWeight: 900,
-  color: "rgba(15,61,46,0.70)",
-  fontSize: 13,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis"
-}
+const taskNote = { marginTop: 6, fontWeight: 750, color: "rgba(15,61,46,0.65)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
 
-const taskNote = {
-  marginTop: 6,
-  fontWeight: 750,
-  color: "rgba(15,61,46,0.65)",
-  fontSize: 13,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis"
-}
+const taskDate = { fontWeight: 900, color: "rgba(15,61,46,0.55)", fontSize: 12, whiteSpace: "nowrap" }
 
-const taskDate = {
-  fontWeight: 900,
-  color: "rgba(15,61,46,0.55)",
-  fontSize: 12,
-  whiteSpace: "nowrap"
-}
-
-const emptyText = {
-  marginTop: 12,
-  fontWeight: 850,
-  color: "rgba(15,61,46,0.55)",
-  fontSize: 13,
-  fontFamily: FONT
-}
+const emptyText = { marginTop: 12, fontWeight: 850, color: "rgba(15,61,46,0.55)", fontSize: 13 }
 
 const btnGhost = {
   padding: "10px 12px",
@@ -707,9 +555,8 @@ const btnGhost = {
   fontWeight: 950,
   cursor: "pointer",
   fontSize: 12,
-  fontFamily: FONT,
-  color: "rgba(15,61,46,0.85)",
-  boxShadow: "0 14px 34px rgba(15,61,46,0.10)"
+  boxShadow: "0 14px 34px rgba(15,61,46,0.10)",
+  color: "rgba(15,61,46,0.85)"
 }
 
 const errBox = {
@@ -719,6 +566,5 @@ const errBox = {
   background: "rgba(255,60,60,0.10)",
   color: "#7a1d1d",
   border: "1px solid rgba(255,60,60,0.18)",
-  fontWeight: 850,
-  fontFamily: FONT
+  fontWeight: 850
 }
