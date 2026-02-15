@@ -14,11 +14,14 @@ export default function Dashboard() {
   const [calendar, setCalendar] = useState(null)
   const [user, setUser] = useState(null)
 
+  // ✅ Para resolver Related Contact (recXXXX) -> "Full Name"
+  const [contactsMap, setContactsMap] = useState({})
+
   const [err, setErr] = useState("")
   const [loading, setLoading] = useState(true)
 
   // All | Call | Email | Meeting
-  const [chartFilter, setChartFilter] = useState("Call")
+  const [chartFilter, setChartFilter] = useState("All")
 
   /* ---------------- Helpers ---------------- */
 
@@ -63,6 +66,66 @@ export default function Dashboard() {
     return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : ""
   }
 
+  // ✅ Date parse robusta (Activity Date puede ser date-only o datetime)
+  const parseDateMs = (val) => {
+    const s = String(val || "").trim()
+    if (!s) return 0
+    const t = new Date(s).getTime()
+    if (!Number.isFinite(t)) return 0
+    return t
+  }
+
+  // ✅ Formato amigable para UI
+  const formatDateTime = (val) => {
+    const ms = parseDateMs(val)
+    if (!ms) return "—"
+    const d = new Date(ms)
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    const dd = String(d.getDate()).padStart(2, "0")
+    const hh = String(d.getHours()).padStart(2, "0")
+    const mi = String(d.getMinutes()).padStart(2, "0")
+    // Si viene date-only, hora quedará 00:00, igual es aceptable.
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
+  }
+
+  // ✅ Contacto desde Related Contact (link field -> ids), resuelto con contactsMap
+  const getActivityContact = (a) => {
+    const f = a?.fields || {}
+
+    // 1) Preferimos Related Contact (array de recordIds)
+    const rel = f["Related Contact"]
+    if (Array.isArray(rel) && rel.length) {
+      const first = rel[0]
+      // si es id recXXXX, lo resolvemos
+      if (String(first || "").startsWith("rec")) {
+        return contactsMap[first] || "Contact"
+      }
+      // si por algún motivo viene como nombre
+      const s = String(first || "").trim()
+      if (s) return s
+    }
+
+    // 2) Fallbacks por lookups si existieran
+    const candidates = [
+      f["Contact Name"],
+      f["Contact Name..."],
+      f["Contact Name (from Related Contact)"],
+      f["Related Contact Name"],
+      f["Contact"],
+      f["Lead"],
+      f["Full Name"]
+    ]
+    for (const c of candidates) {
+      if (!c) continue
+      if (Array.isArray(c) && c.length) return String(c[0] || "").trim() || "Contact"
+      const s = String(c).trim()
+      if (s && !s.startsWith("rec")) return s
+    }
+
+    return "Contact"
+  }
+
   /* ---------------- Load ---------------- */
 
   useEffect(() => {
@@ -73,15 +136,17 @@ export default function Dashboard() {
       setLoading(true)
       setErr("")
       try {
-        const [meRes, statsRes, calRes] = await Promise.all([
+        const [meRes, statsRes, calRes, contactsRes] = await Promise.all([
           fetch("/api/crm?action=me", { credentials: "include", signal: ctrl.signal }),
           fetch("/api/crm?action=getDashboardStats", { credentials: "include", signal: ctrl.signal }),
-          fetch("/api/crm?action=getCalendar", { credentials: "include", signal: ctrl.signal })
+          fetch("/api/crm?action=getCalendar", { credentials: "include", signal: ctrl.signal }),
+          fetch("/api/crm?action=getContacts", { credentials: "include", signal: ctrl.signal })
         ])
 
         const meData = await readJson(meRes)
         const statsData = await readJson(statsRes)
         const calData = await readJson(calRes)
+        const contactsData = await readJson(contactsRes)
 
         if (!alive) return
 
@@ -100,7 +165,22 @@ export default function Dashboard() {
           setLoading(false)
           return
         }
+        if (!contactsRes.ok) {
+          // no hacemos crash: dashboard puede funcionar igual sin resolver nombres
+          // pero avisamos suave
+          console.warn("Failed to load contacts for map:", contactsData)
+        }
 
+        const records = contactsData?.records || []
+        const map = {}
+        for (const r of records) {
+          const id = r?.id
+          const f = r?.fields || {}
+          const name = f["Full Name"] || `${f["First Name"] || ""} ${f["Last Name"] || ""}`.trim() || f.Name
+          if (id && name) map[id] = name
+        }
+
+        setContactsMap(map)
         setUser(meData)
         setStats(statsData)
         setCalendar(calData.records || [])
@@ -147,23 +227,18 @@ export default function Dashboard() {
     [todayActivities]
   )
 
-  const upcoming = useMemo(() => {
-    return calendarSafe
-      .filter((a) => {
-        const next = a?.fields?.["Next Follow-up Date"]
-        if (!next) return false
-        return String(next).slice(0, 10) >= todayISO
-      })
-      .sort((a, b) => {
-        const da = new Date(String(a?.fields?.["Next Follow-up Date"] || "")).getTime()
-        const db = new Date(String(b?.fields?.["Next Follow-up Date"] || "")).getTime()
-        return da - db
-      })
-  }, [calendarSafe, todayISO])
+  // ✅ Actividad reciente (NO follow-ups): ordenado por Activity Date desc
+  const recentActivities = useMemo(() => {
+    const list = [...calendarSafe]
+    list.sort((a, b) => {
+      const da = parseDateMs(a?.fields?.["Activity Date"])
+      const db = parseDateMs(b?.fields?.["Activity Date"])
+      return db - da
+    })
+    return list
+  }, [calendarSafe])
 
-  // ---------------- Weekly chart data
-  // Cuando chartFilter === "All": {calls, emails, meetings}
-  // Si no: {value}
+  // ✅ Chart weekly data (7 días)
   const weeklyChartData = useMemo(() => {
     const days = []
     for (let i = 6; i >= 0; i--) {
@@ -201,7 +276,7 @@ export default function Dashboard() {
     return days
   }, [calendarSafe, chartFilter])
 
-  // ticks cada 5 (5,10,15,...)
+  // ✅ Y ticks 0/5/10...
   const yTicks = useMemo(() => {
     let maxVal = 0
 
@@ -218,7 +293,7 @@ export default function Dashboard() {
       maxVal = Math.max(0, ...weeklyChartData.map((d) => Number(d.value || 0)))
     }
 
-    const top = Math.max(5, Math.ceil(maxVal / 5) * 5)
+    const top = Math.max(10, Math.ceil(maxVal / 5) * 5)
     const ticks = []
     for (let t = 0; t <= top; t += 5) ticks.push(t)
     return ticks
@@ -258,15 +333,6 @@ export default function Dashboard() {
 
       <div style={grid}>
         <StatCard title="Total leads" value={stats.totalLeads ?? 0} />
-        <StatCard
-          title="Upcoming follow-ups"
-          value={upcoming.length}
-          sub={
-            upcoming.length
-              ? `Next: ${String(upcoming[0]?.fields?.["Next Follow-up Date"] || "").slice(0, 10)}`
-              : "—"
-          }
-        />
         <StatCard title="Calls today" value={callsToday} />
         <StatCard title="Emails today" value={emailsToday} />
         <StatCard title="Meetings today" value={meetingsToday} />
@@ -297,7 +363,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 👇 Fondo cuadriculado + hover solo en barra (cursor=false) */}
           <div style={chartWrap}>
             <div style={{ width: "100%", height: 320 }}>
               <ResponsiveContainer>
@@ -327,24 +392,17 @@ export default function Dashboard() {
                     axisLine={false}
                     stroke="rgba(0,0,0,0.35)"
                     ticks={yTicks}
-                    domain={[0, yTicks[yTicks.length - 1] || 5]}
+                    domain={[0, yTicks[yTicks.length - 1] || 10]}
                     style={axisFont}
                   />
 
                   <Tooltip
-                    cursor={false} // ✅ NO sombrea el cuadrado
+                    cursor={false}
                     contentStyle={tooltipStyle}
-                    labelStyle={{
-                      fontWeight: 900,
-                      fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
-                    }}
-                    itemStyle={{
-                      fontWeight: 800,
-                      fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
-                    }}
+                    labelStyle={tooltipLabel}
+                    itemStyle={tooltipItem}
                   />
 
-                  {/* ALL = 3 barras por día */}
                   {chartFilter === "All" ? (
                     <>
                       <Bar
@@ -352,7 +410,7 @@ export default function Dashboard() {
                         name="Calls"
                         fill="url(#pfCalls)"
                         radius={[6, 6, 0, 0]}
-                        barSize={8} // 👈 delgado
+                        barSize={8}
                         maxBarSize={10}
                         activeBar={activeBarStyle}
                       />
@@ -376,7 +434,6 @@ export default function Dashboard() {
                       />
                     </>
                   ) : (
-                    /* Filtro individual = 1 barra */
                     <Bar
                       dataKey="value"
                       name={chartFilter}
@@ -389,7 +446,6 @@ export default function Dashboard() {
                   )}
 
                   <defs>
-                    {/* Tonalidades como en tu referencia: mismo “mood” verde con variaciones */}
                     <linearGradient id="pfCalls" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#2aa06e" stopOpacity={0.95} />
                       <stop offset="100%" stopColor="#1f7a57" stopOpacity={0.95} />
@@ -416,31 +472,36 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* ✅ CAMBIO: Activity reciente (NO follow-ups) */}
         <div style={panel}>
           <div style={panelHead}>
             <div>
-              <div style={panelTitle}>Next follow-ups</div>
-              <div style={panelSub}>Upcoming tasks</div>
+              <div style={panelTitle}>Recent activity</div>
+              <div style={panelSub}>Latest logged interactions</div>
             </div>
           </div>
 
-          {!upcoming.length ? (
-            <div style={emptyText}>No upcoming tasks</div>
+          {!recentActivities.length ? (
+            <div style={emptyText}>No activity yet</div>
           ) : (
             <div style={tasksList}>
-              {upcoming.slice(0, 6).map((a) => {
-                const f = a.fields || {}
-                const when = String(f["Next Follow-up Date"] || "").slice(0, 10)
-                const outcome = normalizeOutcome(a) || "Follow-up"
+              {recentActivities.slice(0, 8).map((a) => {
+                const f = a?.fields || {}
+                const when = f["Activity Date"]
+                const outcome = normalizeOutcome(a) || "Activity"
                 const note = String(f.Notes || "").trim()
+                const contact = getActivityContact(a)
 
                 return (
                   <div key={a.id} style={taskRow}>
                     <div style={taskLeft}>
-                      <div style={taskType}>{outcome}</div>
+                      <div style={taskTopLine}>
+                        <div style={taskType}>{outcome}</div>
+                        <div style={taskContact}>{contact}</div>
+                      </div>
                       <div style={taskNote}>{note || "—"}</div>
                     </div>
-                    <div style={taskDate}>{when}</div>
+                    <div style={taskDate}>{formatDateTime(when)}</div>
                   </div>
                 )
               })}
@@ -454,25 +515,27 @@ export default function Dashboard() {
 
 /* ---------------- Components ---------------- */
 
-function StatCard({ title, value, sub }) {
+function StatCard({ title, value }) {
   return (
     <div style={card}>
       <div style={cardLabel}>{title}</div>
       <div style={cardValue}>{value}</div>
-      {sub ? <div style={cardSub}>{sub}</div> : <div style={cardSub}> </div>}
+      <div style={cardSub}> </div>
     </div>
   )
 }
 
 /* ================= STYLES ================= */
 
-const page = { width: "100%" }
+const FONT = "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+
+const page = { width: "100%", fontFamily: FONT }
 
 const loadingText = {
   padding: 20,
   fontWeight: 800,
   color: "#0f3d2e",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const topRow = {
@@ -489,14 +552,14 @@ const title = {
   fontSize: 34,
   fontWeight: 900,
   color: "#0f3d2e",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const subtitle = {
   marginTop: 6,
   color: "rgba(0,0,0,0.55)",
   fontWeight: 700,
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const grid = {
@@ -518,7 +581,8 @@ const card = {
   border: "1px solid rgba(0,0,0,0.06)",
   borderRadius: 14,
   padding: 18,
-  boxShadow: "0 10px 30px rgba(15,61,46,0.08)"
+  boxShadow: "0 10px 30px rgba(15,61,46,0.08)",
+  fontFamily: FONT
 }
 
 const cardLabel = {
@@ -527,7 +591,7 @@ const cardLabel = {
   color: "rgba(20,92,67,0.85)",
   textTransform: "uppercase",
   letterSpacing: "0.3px",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const cardValue = {
@@ -536,7 +600,7 @@ const cardValue = {
   fontWeight: 950,
   color: "#0f3d2e",
   lineHeight: 1.1,
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const cardSub = {
@@ -545,7 +609,7 @@ const cardSub = {
   color: "rgba(0,0,0,0.55)",
   fontWeight: 700,
   minHeight: 16,
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const panel = {
@@ -553,7 +617,8 @@ const panel = {
   border: "1px solid rgba(0,0,0,0.06)",
   borderRadius: 14,
   padding: 18,
-  boxShadow: "0 10px 30px rgba(15,61,46,0.08)"
+  boxShadow: "0 10px 30px rgba(15,61,46,0.08)",
+  fontFamily: FONT
 }
 
 const panelHead = {
@@ -568,7 +633,7 @@ const panelTitle = {
   fontSize: 13,
   fontWeight: 950,
   color: "#0f3d2e",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const panelSub = {
@@ -576,7 +641,7 @@ const panelSub = {
   fontSize: 12,
   fontWeight: 700,
   color: "rgba(0,0,0,0.50)",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const segmented = {
@@ -585,7 +650,8 @@ const segmented = {
   padding: 4,
   borderRadius: 12,
   border: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.70)"
+  background: "rgba(255,255,255,0.70)",
+  fontFamily: FONT
 }
 
 const segBtn = {
@@ -597,7 +663,7 @@ const segBtn = {
   fontWeight: 900,
   fontSize: 12,
   color: "rgba(0,0,0,0.60)",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const segBtnActive = {
@@ -630,7 +696,7 @@ const chartWrap = {
 }
 
 const axisFont = {
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif",
+  fontFamily: FONT,
   fontWeight: 800,
   fontSize: 12
 }
@@ -639,10 +705,14 @@ const tooltipStyle = {
   borderRadius: 12,
   border: "1px solid rgba(0,0,0,0.08)",
   background: "rgba(255,255,255,0.92)",
-  backdropFilter: "blur(12px)"
+  backdropFilter: "blur(12px)",
+  fontFamily: FONT
 }
 
-// ✅ Hover: solo brilla la barra (sin sombrear el cuadro)
+const tooltipLabel = { fontWeight: 900, fontFamily: FONT }
+const tooltipItem = { fontWeight: 800, fontFamily: FONT }
+
+// ✅ solo brilla la barra activa (sin sombrear el cuadro)
 const activeBarStyle = {
   stroke: "rgba(255,255,255,0.95)",
   strokeWidth: 2,
@@ -659,10 +729,18 @@ const taskRow = {
   padding: 12,
   borderRadius: 12,
   border: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.70)"
+  background: "rgba(255,255,255,0.70)",
+  fontFamily: FONT
 }
 
 const taskLeft = { minWidth: 0, flex: 1 }
+
+const taskTopLine = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 10
+}
 
 const taskType = {
   fontWeight: 950,
@@ -670,7 +748,15 @@ const taskType = {
   fontSize: 12,
   textTransform: "uppercase",
   letterSpacing: "0.3px",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
+}
+
+const taskContact = {
+  fontWeight: 900,
+  color: "rgba(0,0,0,0.60)",
+  fontSize: 12,
+  whiteSpace: "nowrap",
+  fontFamily: FONT
 }
 
 const taskNote = {
@@ -681,7 +767,7 @@ const taskNote = {
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const taskDate = {
@@ -689,7 +775,7 @@ const taskDate = {
   color: "rgba(0,0,0,0.55)",
   fontSize: 12,
   whiteSpace: "nowrap",
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const emptyText = {
@@ -697,7 +783,7 @@ const emptyText = {
   fontWeight: 800,
   color: "rgba(0,0,0,0.55)",
   fontSize: 13,
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const btnGhost = {
@@ -709,7 +795,7 @@ const btnGhost = {
   fontWeight: 900,
   cursor: "pointer",
   fontSize: 12,
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
 
 const errBox = {
@@ -720,5 +806,5 @@ const errBox = {
   color: "#7a1d1d",
   border: "1px solid rgba(255,0,0,0.12)",
   fontWeight: 800,
-  fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+  fontFamily: FONT
 }
