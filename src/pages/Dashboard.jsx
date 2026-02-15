@@ -13,8 +13,15 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [calendar, setCalendar] = useState(null)
   const [user, setUser] = useState(null)
-
   const [err, setErr] = useState("")
+  const [isNarrow, setIsNarrow] = useState(false)
+
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 980)
+    onResize()
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -22,7 +29,6 @@ export default function Dashboard() {
     const run = async () => {
       try {
         setErr("")
-
         const [meRes, statsRes, calRes] = await Promise.all([
           fetch("/api/crm?action=me", { credentials: "include" }),
           fetch("/api/crm?action=getDashboardStats", { credentials: "include" }),
@@ -36,7 +42,7 @@ export default function Dashboard() {
         if (cancelled) return
 
         if (!meRes.ok) throw new Error(me?.error || "Failed to load session")
-        if (!statsRes.ok) throw new Error(st?.error || "Failed to load stats")
+        if (!statsRes.ok) throw new Error(st?.error || "Failed to load dashboard stats")
         if (!calRes.ok) throw new Error(cal?.error || "Failed to load calendar")
 
         setUser(me)
@@ -58,11 +64,7 @@ export default function Dashboard() {
     return (
       <div style={page}>
         <div style={errBox}>{err}</div>
-        <button
-          style={btn}
-          type="button"
-          onClick={() => window.location.reload()}
-        >
+        <button style={ghostBtn} type="button" onClick={() => window.location.reload()}>
           Retry
         </button>
       </div>
@@ -70,153 +72,156 @@ export default function Dashboard() {
   }
 
   if (!stats || !calendar || !user) {
-    return <div style={{ color: "#0f3d2e" }}>Loading...</div>
+    return <div style={{ color: "#0f3d2e", fontWeight: 900 }}>Loading...</div>
   }
 
-  const todayStr = toISODate(new Date())
+  const todayISO = toISODate(new Date())
 
-  // ====== normalize calendar rows
+  // ===== normalize Activities coming from Airtable
   const normalized = useMemo(() => {
-    return (calendar || [])
-      .map((r) => {
-        const f = r?.fields || {}
-        const activityDate = toISODate(parseAnyDate(f["Activity Date"]))
-        const nfu = f["Next Follow-up Date"] ? toISODate(parseAnyDate(f["Next Follow-up Date"])) : ""
-        const outcome = f.Outcome ?? f["Activity Type"] ?? ""
-        return {
-          id: r.id,
-          outcome: String(outcome || ""),
-          activityDate,
-          nextFollowUp: nfu,
-          notes: String(f.Notes || "")
-        }
-      })
-      .filter((x) => x.activityDate) // needs date
+    const list = (calendar || []).map((r) => {
+      const f = r?.fields || {}
+
+      // Activity Date could be ISO or date-only
+      const activityDate = toISODate(parseAnyDate(f["Activity Date"]))
+      const nextFU = f["Next Follow-up Date"] ? toISODate(parseAnyDate(f["Next Follow-up Date"])) : ""
+
+      // Your Activities table sometimes uses Outcome, sometimes Activity Type
+      const outcomeRaw = f.Outcome ?? f["Activity Type"] ?? ""
+      const outcome = normalizeOutcome(outcomeRaw)
+
+      const notes = String(f.Notes || f.Notas || f.Observaciones || "")
+
+      return {
+        id: r.id,
+        activityDate,
+        nextFollowUp: nextFU,
+        outcome,
+        notes
+      }
+    })
+
+    // keep only valid dates (otherwise charts break)
+    return list.filter((x) => x.activityDate)
   }, [calendar])
 
+  // ===== today activity
   const todayActivities = useMemo(() => {
-    return normalized.filter((a) => a.activityDate === todayStr)
-  }, [normalized, todayStr])
+    return normalized.filter((a) => a.activityDate === todayISO)
+  }, [normalized, todayISO])
 
+  // ===== upcoming follow-ups (from Next Follow-up Date)
   const upcoming = useMemo(() => {
     return normalized
-      .filter((a) => a.nextFollowUp && a.nextFollowUp >= todayStr)
+      .filter((a) => a.nextFollowUp && a.nextFollowUp >= todayISO)
       .sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp))
-  }, [normalized, todayStr])
+  }, [normalized, todayISO])
 
-  // ====== weekly chart (last 7 days)
+  // ===== weekly chart last 7 days (bars)
   const weeklyData = useMemo(() => {
     const days = lastNDays(7).map((d) => toISODate(d))
-    const countsByDay = new Map(days.map((d) => [d, 0]))
+    const counts = new Map(days.map((d) => [d, 0]))
 
     for (const a of normalized) {
-      if (countsByDay.has(a.activityDate)) {
-        countsByDay.set(a.activityDate, (countsByDay.get(a.activityDate) || 0) + 1)
+      if (counts.has(a.activityDate)) {
+        counts.set(a.activityDate, (counts.get(a.activityDate) || 0) + 1)
       }
     }
 
     return days.map((iso) => ({
-      day: formatDayShort(iso),
       iso,
-      activities: countsByDay.get(iso) || 0
+      day: formatDayShort(iso),
+      activities: counts.get(iso) || 0
     }))
   }, [normalized])
 
-  // ====== breakdown chart (type/outcome) for current week
-  const breakdownData = useMemo(() => {
-    const start = startOfDay(new Date())
-    const weekStart = new Date(start)
-    weekStart.setDate(weekStart.getDate() - 6)
-    const weekStartISO = toISODate(weekStart)
+  // ===== breakdown for this week by outcome
+  const weekBreakdown = useMemo(() => {
+    const days = lastNDays(7).map((d) => toISODate(d))
+    const weekStartISO = days[0]
 
     const bucket = new Map()
     for (const a of normalized) {
       if (a.activityDate >= weekStartISO) {
-        const key = normalizeOutcome(a.outcome)
-        bucket.set(key, (bucket.get(key) || 0) + 1)
+        bucket.set(a.outcome, (bucket.get(a.outcome) || 0) + 1)
       }
     }
 
     const order = ["Call", "Email", "LinkedIn", "Meeting", "Positive response", "Other"]
-    return order
-      .map((name) => ({ name, value: bucket.get(name) || 0 }))
-      .filter((x) => x.value > 0 || order.length <= 3)
+    return order.map((name) => ({ name, value: bucket.get(name) || 0 }))
   }, [normalized])
 
-  const name = getName(user?.email)
+  const weeklyTotal = weeklyData.reduce((sum, d) => sum + (d.activities || 0), 0)
 
   const productivity = Math.min(100, todayActivities.length * 20)
+
+  const username = getName(user?.email)
 
   return (
     <div style={page}>
       <div style={topRow}>
         <div>
-          <h1 style={greeting}>Good Morning {name}</h1>
-          <div style={subtle}>Here’s your activity and follow-ups for this week.</div>
+          <h1 style={greeting}>Good Morning {username}</h1>
+          <div style={subtle}>Your funnel activity overview (last 7 days).</div>
         </div>
 
-        <button
-          type="button"
-          style={ghostBtn}
-          onClick={() => window.location.reload()}
-        >
+        <button style={ghostBtn} type="button" onClick={() => window.location.reload()}>
           Refresh
         </button>
       </div>
 
       {/* KPI CARDS */}
       <div style={grid}>
-        <KpiCard
-          title="Today Activity"
-          value={todayActivities.length}
-          footer={
-            <div style={progressBar}>
-              <div style={{ ...progressFill, width: `${productivity}%` }} />
-            </div>
-          }
-        />
+        <div style={glassCard}>
+          <div style={cardTitle}>Today Activity</div>
+          <div style={bigNumber}>{todayActivities.length}</div>
+          <div style={progressBar}>
+            <div style={{ ...progressFill, width: `${productivity}%` }} />
+          </div>
+          <div style={miniHint}>
+            {todayActivities.length >= 5 ? "Great pace" : "Aim for 5 touchpoints"}
+          </div>
+        </div>
 
-        <KpiCard
-          title="Upcoming Follow-ups"
-          value={upcoming.length}
-          footer={<div style={miniHint}>From today onward</div>}
-        />
+        <div style={glassCard}>
+          <div style={cardTitle}>Upcoming Follow-ups</div>
+          <div style={bigNumber}>{upcoming.length}</div>
+          <div style={miniHint}>Tasks scheduled from today</div>
+        </div>
 
-        <KpiCard
-          title="Total Leads"
-          value={stats.totalLeads ?? 0}
-          footer={
-            <div style={miniHint}>
-              Active: <b>{stats.activeLeads ?? 0}</b> · Won: <b>{stats.closedWon ?? 0}</b>
-            </div>
-          }
-        />
+        <div style={glassCard}>
+          <div style={cardTitle}>Total Leads</div>
+          <div style={bigNumber}>{stats.totalLeads ?? 0}</div>
+          <div style={miniHint}>
+            Active: <b>{stats.activeLeads ?? 0}</b>
+          </div>
+        </div>
 
-        <KpiCard
-          title="Conversion"
-          value={`${stats.conversionRate ?? 0}%`}
-          footer={
-            <div style={miniHint}>
-              Win rate: <b>{stats.winRate ?? 0}%</b>
-            </div>
-          }
-        />
+        <div style={glassCard}>
+          <div style={cardTitle}>Conversion</div>
+          <div style={bigNumber}>{String(stats.conversionRate ?? 0)}%</div>
+          <div style={miniHint}>
+            Win rate: <b>{String(stats.winRate ?? 0)}%</b>
+          </div>
+        </div>
       </div>
 
       {/* CHARTS + TASKS */}
-      <div style={bottomGrid}>
+      <div
+        style={{
+          ...bottomGrid,
+          gridTemplateColumns: isNarrow ? "1fr" : "2fr 1fr"
+        }}
+      >
         <div style={largeGlass}>
-          <div style={cardHead}>
+          <div style={chartHead}>
             <div>
               <div style={cardTitle}>Weekly Activity</div>
-              <div style={cardSubtitle}>Last 7 days · total {weeklyData.reduce((a, b) => a + b.activities, 0)}</div>
-            </div>
-            <div style={pillRow}>
-              <span style={pillChip}>Bars = activities/day</span>
+              <div style={chartSub}>Last 7 days · total {weeklyTotal}</div>
             </div>
           </div>
 
-          <div style={{ width: "100%", height: 320 }}>
+          <div style={{ width: "100%", height: 280 }}>
             <ResponsiveContainer>
               <BarChart data={weeklyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
@@ -228,48 +233,24 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          {/* Small breakdown */}
-          <div style={splitRow}>
-            <div style={miniChartWrap}>
-              <div style={miniTitle}>This week by type</div>
-              <div style={{ width: "100%", height: 190 }}>
-                <ResponsiveContainer>
-                  <BarChart data={breakdownData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
-                    <XAxis dataKey="name" stroke="rgba(15,61,46,0.65)" tickLine={false} axisLine={false} />
-                    <YAxis allowDecimals={false} stroke="rgba(15,61,46,0.45)" tickLine={false} axisLine={false} />
-                    <Tooltip content={<NiceTooltip />} />
-                    <Bar dataKey="value" fill="#145c43" radius={[12, 12, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+          <div style={divider} />
 
-            <div style={miniStats}>
-              <div style={miniTitle}>Risk</div>
-              <div style={miniLine}>
-                At risk (7+ days): <b>{stats.atRiskLeads ?? 0}</b>
-              </div>
-              <div style={miniLine}>
-                Cooling (5–6 days): <b>{stats.coolingLeads ?? 0}</b>
-              </div>
-              <div style={miniLine}>
-                No follow-up set: <b>{stats.leadsWithoutFollowUp ?? 0}</b>
-              </div>
-              <div style={miniLine}>
-                Avg days w/o contact: <b>{stats.avgDaysWithoutContact ?? 0}</b>
-              </div>
-            </div>
+          <div style={cardTitle}>This week by type</div>
+          <div style={{ width: "100%", height: 220 }}>
+            <ResponsiveContainer>
+              <BarChart data={weekBreakdown} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
+                <XAxis dataKey="name" stroke="rgba(15,61,46,0.65)" tickLine={false} axisLine={false} />
+                <YAxis allowDecimals={false} stroke="rgba(15,61,46,0.45)" tickLine={false} axisLine={false} />
+                <Tooltip content={<NiceTooltip />} />
+                <Bar dataKey="value" fill="#145c43" radius={[12, 12, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
         <div style={largeGlass}>
-          <div style={cardHead}>
-            <div>
-              <div style={cardTitle}>Next Follow-ups</div>
-              <div style={cardSubtitle}>Closest tasks first</div>
-            </div>
-          </div>
+          <div style={cardTitle}>Next Follow-ups</div>
 
           {upcoming.length === 0 ? (
             <div style={subText}>No upcoming tasks</div>
@@ -278,7 +259,7 @@ export default function Dashboard() {
               {upcoming.slice(0, 8).map((a) => (
                 <div key={a.id} style={taskItem}>
                   <div style={taskTop}>
-                    <span style={taskType}>{a.outcome || "Activity"}</span>
+                    <span style={taskType}>{a.outcome}</span>
                     <span style={taskDate}>{a.nextFollowUp}</span>
                   </div>
                   {a.notes ? <div style={taskNote}>{a.notes}</div> : null}
@@ -286,13 +267,31 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+
+          <div style={divider} />
+
+          <div style={cardTitle}>Risk</div>
+          <div style={riskLine}>
+            At risk (7+ days): <b>{stats.atRiskLeads ?? 0}</b>
+          </div>
+          <div style={riskLine}>
+            Cooling (5–6 days): <b>{stats.coolingLeads ?? 0}</b>
+          </div>
+          <div style={riskLine}>
+            No follow-up set: <b>{stats.leadsWithoutFollowUp ?? 0}</b>
+          </div>
+          <div style={riskLine}>
+            Avg days w/o contact: <b>{stats.avgDaysWithoutContact ?? 0}</b>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-/* ================= Helpers ================= */
+/* =========================
+   Helpers
+========================= */
 
 async function safeJson(res) {
   try {
@@ -319,18 +318,18 @@ function normalizeOutcome(v) {
   return "Other"
 }
 
-function startOfDay(d) {
-  const x = new Date(d)
-  x.setHours(0, 0, 0, 0)
-  return x
-}
-
 function parseAnyDate(v) {
   if (!v) return null
   if (v instanceof Date) return v
   const s = String(v).trim()
+  if (!s) return null
 
-  // Airtable can return ISO, sometimes date-only
+  // date-only "YYYY-MM-DD" -> keep local stable
+  if (s.length >= 10 && s[4] === "-" && s[7] === "-") {
+    return new Date(`${s.slice(0, 10)}T00:00:00`)
+  }
+
+  // Airtable ISO "YYYY-MM-DDTHH:mm:ss"
   const d = new Date(s)
   if (!Number.isNaN(d.getTime())) return d
 
@@ -353,7 +352,8 @@ function toISODate(d) {
 
 function lastNDays(n) {
   const out = []
-  const now = startOfDay(new Date())
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(now)
     d.setDate(d.getDate() - i)
@@ -363,23 +363,14 @@ function lastNDays(n) {
 }
 
 function formatDayShort(iso) {
-  // iso YYYY-MM-DD
   const d = new Date(`${iso}T00:00:00`)
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
   return days[d.getDay()]
 }
 
-/* ================= UI ================= */
-
-function KpiCard({ title, value, footer }) {
-  return (
-    <div style={glassCard}>
-      <div style={cardTitle}>{title}</div>
-      <div style={bigNumber}>{value}</div>
-      {footer ? <div style={{ marginTop: 14 }}>{footer}</div> : null}
-    </div>
-  )
-}
+/* =========================
+   UI bits
+========================= */
 
 function NiceTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null
@@ -392,7 +383,9 @@ function NiceTooltip({ active, payload, label }) {
   )
 }
 
-/* ================= STYLES ================= */
+/* =========================
+   Styles
+========================= */
 
 const page = { width: "100%" }
 
@@ -402,7 +395,7 @@ const topRow = {
   alignItems: "flex-end",
   gap: 16,
   flexWrap: "wrap",
-  marginBottom: 30
+  marginBottom: 34
 }
 
 const greeting = {
@@ -427,7 +420,6 @@ const grid = {
 
 const bottomGrid = {
   display: "grid",
-  gridTemplateColumns: "2fr 1fr",
   gap: "22px",
   marginTop: "26px"
 }
@@ -438,8 +430,7 @@ const glassCard = {
   borderRadius: "26px",
   padding: "26px",
   border: "1px solid rgba(255,255,255,0.4)",
-  boxShadow: "0 20px 60px rgba(15,61,46,0.12)",
-  transition: "transform .2s ease, box-shadow .2s ease"
+  boxShadow: "0 20px 60px rgba(15,61,46,0.12)"
 }
 
 const largeGlass = {
@@ -451,26 +442,26 @@ const largeGlass = {
   boxShadow: "0 20px 60px rgba(15,61,46,0.12)"
 }
 
-const cardHead = {
+const chartHead = {
   display: "flex",
-  alignItems: "flex-end",
   justifyContent: "space-between",
+  alignItems: "baseline",
   gap: 12,
   flexWrap: "wrap",
-  marginBottom: 14
+  marginBottom: 10
+}
+
+const chartSub = {
+  fontSize: 13,
+  fontWeight: 800,
+  color: "rgba(15,61,46,0.55)"
 }
 
 const cardTitle = {
   fontSize: "14px",
   fontWeight: "900",
   color: "#1e7a57",
-  marginBottom: 6
-}
-
-const cardSubtitle = {
-  fontSize: 13,
-  fontWeight: 800,
-  color: "rgba(15,61,46,0.55)"
+  marginBottom: "8px"
 }
 
 const bigNumber = {
@@ -479,28 +470,21 @@ const bigNumber = {
   color: "#0f3d2e"
 }
 
+const miniHint = {
+  marginTop: 10,
+  fontSize: 12,
+  fontWeight: 900,
+  color: "rgba(0,0,0,0.50)"
+}
+
 const subText = {
   fontSize: "14px",
   fontWeight: 800,
   color: "rgba(15,61,46,0.65)"
 }
 
-const taskList = { display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }
-
-const taskItem = {
-  padding: 12,
-  borderRadius: 18,
-  border: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.65)"
-}
-
-const taskTop = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }
-const taskType = { fontWeight: 950, color: "rgba(0,0,0,0.80)", fontSize: 13 }
-const taskDate = { fontWeight: 900, color: "rgba(0,0,0,0.55)", fontSize: 12 }
-const taskNote = { marginTop: 8, fontSize: 13, color: "rgba(0,0,0,0.70)", lineHeight: 1.35 }
-
 const progressBar = {
-  marginTop: "10px",
+  marginTop: "14px",
   height: "10px",
   background: "rgba(0,0,0,0.06)",
   borderRadius: "999px",
@@ -514,40 +498,27 @@ const progressFill = {
   transition: "width .35s ease"
 }
 
-const pillRow = { display: "flex", gap: 10, flexWrap: "wrap" }
-const pillChip = {
-  fontSize: 12,
-  fontWeight: 900,
-  padding: "8px 12px",
-  borderRadius: 999,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.55)",
-  color: "rgba(0,0,0,0.55)"
-}
+const taskList = { display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }
 
-const splitRow = {
-  display: "grid",
-  gridTemplateColumns: "1.2fr 0.8fr",
-  gap: 16,
-  marginTop: 16
-}
-
-const miniChartWrap = {
-  borderRadius: 20,
+const taskItem = {
+  padding: 12,
+  borderRadius: 18,
   border: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.55)",
-  padding: 14
+  background: "rgba(255,255,255,0.65)"
 }
 
-const miniStats = {
-  borderRadius: 20,
-  border: "1px solid rgba(0,0,0,0.06)",
-  background: "rgba(255,255,255,0.55)",
-  padding: 14
-}
+const taskTop = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }
+const taskType = { fontWeight: 950, color: "rgba(0,0,0,0.80)", fontSize: 13 }
+const taskDate = { fontWeight: 900, color: "rgba(0,0,0,0.55)", fontSize: 12 }
+const taskNote = { marginTop: 8, fontSize: 13, color: "rgba(0,0,0,0.70)", lineHeight: 1.35 }
 
-const miniTitle = { fontSize: 12, fontWeight: 950, color: "rgba(15,61,46,0.65)", marginBottom: 10 }
-const miniLine = { fontSize: 13, color: "rgba(0,0,0,0.70)", marginTop: 10, fontWeight: 800 }
+const riskLine = { marginTop: 10, fontSize: 13, color: "rgba(0,0,0,0.70)", fontWeight: 800 }
+
+const divider = {
+  height: 1,
+  background: "rgba(0,0,0,0.06)",
+  margin: "18px 0"
+}
 
 const tooltipBox = {
   padding: 12,
@@ -577,20 +548,3 @@ const errBox = {
   color: "#7a1d1d",
   border: "1px solid rgba(255,0,0,0.12)"
 }
-
-const btn = {
-  marginTop: 12,
-  padding: 14,
-  borderRadius: 14,
-  border: "none",
-  background: "#111",
-  color: "#fff",
-  fontWeight: 900,
-  cursor: "pointer"
-}
-
-/* Optional responsive tweak (keeps your inline-style approach) */
-const _responsiveNote = `
-If your Layout has padding, this will look great.
-If you want the right column to stack on mobile, keep bottomGrid as-is and adjust in Layout media queries.
-`
