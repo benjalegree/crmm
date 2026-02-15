@@ -12,15 +12,18 @@ import {
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [calendar, setCalendar] = useState(null)
-  const [user, setUser] = useState(null)
+  const [me, setMe] = useState(null)
   const [err, setErr] = useState("")
   const [isNarrow, setIsNarrow] = useState(false)
 
+  // ✅ nunca tocar window fuera del effect
   useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < 980)
+    const onResize = () => setIsNarrow(typeof window !== "undefined" ? window.innerWidth < 980 : false)
     onResize()
-    window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", onResize)
+      return () => window.removeEventListener("resize", onResize)
+    }
   }, [])
 
   useEffect(() => {
@@ -29,25 +32,26 @@ export default function Dashboard() {
     const run = async () => {
       try {
         setErr("")
+
         const [meRes, statsRes, calRes] = await Promise.all([
           fetch("/api/crm?action=me", { credentials: "include" }),
           fetch("/api/crm?action=getDashboardStats", { credentials: "include" }),
           fetch("/api/crm?action=getCalendar", { credentials: "include" })
         ])
 
-        const me = await safeJson(meRes)
-        const st = await safeJson(statsRes)
-        const cal = await safeJson(calRes)
+        const meData = await safeJson(meRes)
+        const statsData = await safeJson(statsRes)
+        const calData = await safeJson(calRes)
 
         if (cancelled) return
 
-        if (!meRes.ok) throw new Error(me?.error || "Failed to load session")
-        if (!statsRes.ok) throw new Error(st?.error || "Failed to load dashboard stats")
-        if (!calRes.ok) throw new Error(cal?.error || "Failed to load calendar")
+        if (!meRes.ok) throw new Error(meData?.error || "Failed to load session")
+        if (!statsRes.ok) throw new Error(statsData?.error || "Failed to load stats")
+        if (!calRes.ok) throw new Error(calData?.error || "Failed to load calendar")
 
-        setUser(me)
-        setStats(st)
-        setCalendar(cal.records || [])
+        setMe(meData) // {authenticated, email}
+        setStats(statsData)
+        setCalendar(calData.records || [])
       } catch (e) {
         if (cancelled) return
         setErr(String(e?.message || "Failed to load dashboard"))
@@ -71,63 +75,46 @@ export default function Dashboard() {
     )
   }
 
-  if (!stats || !calendar || !user) {
+  if (!stats || !calendar || !me) {
     return <div style={{ color: "#0f3d2e", fontWeight: 900 }}>Loading...</div>
   }
 
+  const email = me?.email || ""
+  const username = getName(email)
+
   const todayISO = toISODate(new Date())
 
-  // ===== normalize Activities coming from Airtable
+  // ✅ normalizamos records (evita NaN / undefined)
   const normalized = useMemo(() => {
     const list = (calendar || []).map((r) => {
       const f = r?.fields || {}
-
-      // Activity Date could be ISO or date-only
       const activityDate = toISODate(parseAnyDate(f["Activity Date"]))
       const nextFU = f["Next Follow-up Date"] ? toISODate(parseAnyDate(f["Next Follow-up Date"])) : ""
-
-      // Your Activities table sometimes uses Outcome, sometimes Activity Type
-      const outcomeRaw = f.Outcome ?? f["Activity Type"] ?? ""
-      const outcome = normalizeOutcome(outcomeRaw)
-
+      const rawOutcome = f.Outcome ?? f["Activity Type"] ?? ""
+      const outcome = normalizeOutcome(rawOutcome)
       const notes = String(f.Notes || f.Notas || f.Observaciones || "")
-
-      return {
-        id: r.id,
-        activityDate,
-        nextFollowUp: nextFU,
-        outcome,
-        notes
-      }
+      return { id: r?.id, activityDate, nextFollowUp: nextFU, outcome, notes }
     })
-
-    // keep only valid dates (otherwise charts break)
-    return list.filter((x) => x.activityDate)
+    return list.filter((x) => x.id && x.activityDate)
   }, [calendar])
 
-  // ===== today activity
   const todayActivities = useMemo(() => {
     return normalized.filter((a) => a.activityDate === todayISO)
   }, [normalized, todayISO])
 
-  // ===== upcoming follow-ups (from Next Follow-up Date)
   const upcoming = useMemo(() => {
     return normalized
       .filter((a) => a.nextFollowUp && a.nextFollowUp >= todayISO)
       .sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp))
   }, [normalized, todayISO])
 
-  // ===== weekly chart last 7 days (bars)
+  // last 7 days bars
   const weeklyData = useMemo(() => {
     const days = lastNDays(7).map((d) => toISODate(d))
     const counts = new Map(days.map((d) => [d, 0]))
-
     for (const a of normalized) {
-      if (counts.has(a.activityDate)) {
-        counts.set(a.activityDate, (counts.get(a.activityDate) || 0) + 1)
-      }
+      if (counts.has(a.activityDate)) counts.set(a.activityDate, (counts.get(a.activityDate) || 0) + 1)
     }
-
     return days.map((iso) => ({
       iso,
       day: formatDayShort(iso),
@@ -135,8 +122,10 @@ export default function Dashboard() {
     }))
   }, [normalized])
 
-  // ===== breakdown for this week by outcome
-  const weekBreakdown = useMemo(() => {
+  const weeklyTotal = weeklyData.reduce((sum, d) => sum + (d.activities || 0), 0)
+
+  // breakdown week by type/outcome
+  const breakdownData = useMemo(() => {
     const days = lastNDays(7).map((d) => toISODate(d))
     const weekStartISO = days[0]
 
@@ -151,18 +140,14 @@ export default function Dashboard() {
     return order.map((name) => ({ name, value: bucket.get(name) || 0 }))
   }, [normalized])
 
-  const weeklyTotal = weeklyData.reduce((sum, d) => sum + (d.activities || 0), 0)
-
   const productivity = Math.min(100, todayActivities.length * 20)
-
-  const username = getName(user?.email)
 
   return (
     <div style={page}>
       <div style={topRow}>
         <div>
           <h1 style={greeting}>Good Morning {username}</h1>
-          <div style={subtle}>Your funnel activity overview (last 7 days).</div>
+          <div style={subtle}>Last 7 days · Total activities: {weeklyTotal}</div>
         </div>
 
         <button style={ghostBtn} type="button" onClick={() => window.location.reload()}>
@@ -170,7 +155,6 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* KPI CARDS */}
       <div style={grid}>
         <div style={glassCard}>
           <div style={cardTitle}>Today Activity</div>
@@ -178,22 +162,20 @@ export default function Dashboard() {
           <div style={progressBar}>
             <div style={{ ...progressFill, width: `${productivity}%` }} />
           </div>
-          <div style={miniHint}>
-            {todayActivities.length >= 5 ? "Great pace" : "Aim for 5 touchpoints"}
-          </div>
+          <div style={miniHint}>{todayActivities.length >= 5 ? "Great pace" : "Aim for 5 touchpoints"}</div>
         </div>
 
         <div style={glassCard}>
           <div style={cardTitle}>Upcoming Follow-ups</div>
           <div style={bigNumber}>{upcoming.length}</div>
-          <div style={miniHint}>Tasks scheduled from today</div>
+          <div style={miniHint}>Scheduled from today</div>
         </div>
 
         <div style={glassCard}>
           <div style={cardTitle}>Total Leads</div>
           <div style={bigNumber}>{stats.totalLeads ?? 0}</div>
           <div style={miniHint}>
-            Active: <b>{stats.activeLeads ?? 0}</b>
+            Active: <b>{stats.activeLeads ?? 0}</b> · Won: <b>{stats.closedWon ?? 0}</b>
           </div>
         </div>
 
@@ -206,7 +188,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* CHARTS + TASKS */}
       <div
         style={{
           ...bottomGrid,
@@ -217,35 +198,40 @@ export default function Dashboard() {
           <div style={chartHead}>
             <div>
               <div style={cardTitle}>Weekly Activity</div>
-              <div style={chartSub}>Last 7 days · total {weeklyTotal}</div>
+              <div style={chartSub}>Bars = activities/day</div>
             </div>
           </div>
 
+          {/* ✅ Recharts needs explicit height */}
           <div style={{ width: "100%", height: 280 }}>
-            <ResponsiveContainer>
-              <BarChart data={weeklyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
-                <XAxis dataKey="day" stroke="rgba(15,61,46,0.65)" tickLine={false} axisLine={false} />
-                <YAxis allowDecimals={false} stroke="rgba(15,61,46,0.45)" tickLine={false} axisLine={false} />
-                <Tooltip content={<NiceTooltip />} />
-                <Bar dataKey="activities" fill="#1e7a57" radius={[12, 12, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <SafeChart>
+              <ResponsiveContainer>
+                <BarChart data={weeklyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
+                  <XAxis dataKey="day" tickLine={false} axisLine={false} stroke="rgba(15,61,46,0.65)" />
+                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} stroke="rgba(15,61,46,0.45)" />
+                  <Tooltip content={<NiceTooltip />} />
+                  <Bar dataKey="activities" fill="#1e7a57" radius={[12, 12, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </SafeChart>
           </div>
 
           <div style={divider} />
 
           <div style={cardTitle}>This week by type</div>
           <div style={{ width: "100%", height: 220 }}>
-            <ResponsiveContainer>
-              <BarChart data={weekBreakdown} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
-                <XAxis dataKey="name" stroke="rgba(15,61,46,0.65)" tickLine={false} axisLine={false} />
-                <YAxis allowDecimals={false} stroke="rgba(15,61,46,0.45)" tickLine={false} axisLine={false} />
-                <Tooltip content={<NiceTooltip />} />
-                <Bar dataKey="value" fill="#145c43" radius={[12, 12, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <SafeChart>
+              <ResponsiveContainer>
+                <BarChart data={breakdownData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="4 6" stroke="rgba(0,0,0,0.08)" />
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} stroke="rgba(15,61,46,0.65)" />
+                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} stroke="rgba(15,61,46,0.45)" />
+                  <Tooltip content={<NiceTooltip />} />
+                  <Bar dataKey="value" fill="#145c43" radius={[12, 12, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </SafeChart>
           </div>
         </div>
 
@@ -290,6 +276,21 @@ export default function Dashboard() {
 }
 
 /* =========================
+   Error-proof wrapper (prevents blank screen if Recharts crashes)
+========================= */
+function SafeChart({ children }) {
+  try {
+    return children
+  } catch {
+    return (
+      <div style={chartFallback}>
+        Chart failed to render (data/size). Refresh or check container height.
+      </div>
+    )
+  }
+}
+
+/* =========================
    Helpers
 ========================= */
 
@@ -324,16 +325,12 @@ function parseAnyDate(v) {
   const s = String(v).trim()
   if (!s) return null
 
-  // date-only "YYYY-MM-DD" -> keep local stable
-  if (s.length >= 10 && s[4] === "-" && s[7] === "-") {
-    return new Date(`${s.slice(0, 10)}T00:00:00`)
-  }
+  // date-only YYYY-MM-DD
+  if (s.length >= 10 && s[4] === "-" && s[7] === "-") return new Date(`${s.slice(0, 10)}T00:00:00`)
 
-  // Airtable ISO "YYYY-MM-DDTHH:mm:ss"
   const d = new Date(s)
   if (!Number.isNaN(d.getTime())) return d
 
-  // dd/mm/yyyy
   const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
   if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00`)
 
@@ -367,10 +364,6 @@ function formatDayShort(iso) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
   return days[d.getDay()]
 }
-
-/* =========================
-   UI bits
-========================= */
 
 function NiceTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null
@@ -514,11 +507,7 @@ const taskNote = { marginTop: 8, fontSize: 13, color: "rgba(0,0,0,0.70)", lineHe
 
 const riskLine = { marginTop: 10, fontSize: 13, color: "rgba(0,0,0,0.70)", fontWeight: 800 }
 
-const divider = {
-  height: 1,
-  background: "rgba(0,0,0,0.06)",
-  margin: "18px 0"
-}
+const divider = { height: 1, background: "rgba(0,0,0,0.06)", margin: "18px 0" }
 
 const tooltipBox = {
   padding: 12,
@@ -529,6 +518,15 @@ const tooltipBox = {
 }
 const tooltipLabel = { fontSize: 12, fontWeight: 900, color: "rgba(0,0,0,0.55)" }
 const tooltipValue = { marginTop: 6, fontSize: 18, fontWeight: 950, color: "#0f3d2e" }
+
+const chartFallback = {
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid rgba(0,0,0,0.08)",
+  background: "rgba(255,255,255,0.7)",
+  color: "rgba(0,0,0,0.65)",
+  fontWeight: 900
+}
 
 const ghostBtn = {
   padding: "12px 14px",
